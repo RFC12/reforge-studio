@@ -1,0 +1,617 @@
+ReForge Studio 1.29.0 — juegos de varios discos, DLC y contenido instalado
+
+NOVEDADES 1.29.0
+- 💿 Discos, DLC y contenido instalado (Taller → «💿 Discos y DLC», y automático al crear el proyecto):
+  · Paquetes de contenido (DLC, pases de temporada y la «instalación» del disco 2 de juegos como Call of
+    Duty AW o GTA V): se extraen junto al proyecto (content/) con su cabecera y licencia, y en Documentos/<juego>
+    queda un enlace de carpeta (no ocupan el disco C:). El juego los ve como contenido instalado.
+  · Actualización (title update) del mismo juego: se instala con sus archivos de datos (update:).
+  · Juegos de varios discos: al crear el proyecto con el disco 1 (ISO «… Disc 1», «Disco 1», «CD1»…) se
+    unen solos los datos de los demás discos que estén al lado; si un disco trae paquetes de contenido, se
+    instalan como tales. También se pueden añadir después con «💿 Discos y DLC».
+- Actualizaciones que cambian el código: cada versión del ejecutable (juego base, actualización X) tiene su
+  propia lista de funciones declaradas. Al instalar una actualización, ReForge guarda la del juego base y
+  empieza una limpia (las direcciones antiguas romperían el código nuevo: COD AW con su TU 0.0.17.16 se
+  cerraba al arrancar); al quitarla, vuelve la del juego base. También se vuelven a detectar setjmp/longjmp
+  (cambian de dirección con la actualización).
+- 🛡 Guardián de imagen (dentro del juego): mira la imagen cada pocos segundos; si sale casi toda blanca
+  (exposición automática rota), activa en caliente la lectura de resolves de rexglue (some → fast → full),
+  lo anota en el log y ReForge lo usa desde el arranque en las siguientes partidas. No cuesta FPS.
+- Ruta de render inteligente: si un juego en ROV (preciso) va lento o el guardián ve la imagen blanca, la
+  próxima partida prueba RTV (rápido); si con RTV falla o se cuelga, vuelve solo a ROV y queda fijo.
+  COD Advanced Warfare: en ROV imagen blanca y ~40 FPS → en RTV 60 FPS y bien.
+- Compilación de pipelines sin frenazos (parche del SDK «asyncpso»): con la compilación asíncrona, rexglue
+  ya no espera a todos los pipelines pendientes al final de cada envío a la GPU (eso causaba tirones de
+  300-600 ms seguidos al entrar en zonas nuevas).
+- Fallos localizados: el SDK de ReForge escribe en el log dónde cae un acceso inválido
+  («[ReForge] Fallo en juego.exe+0x…») y cada juego se compila con su mapa del enlazador, así que el Taller
+  dice en qué función del juego ocurrió (sub_XXXXXXXX).
+- Funciones online vacías del runtime (XamGetToken, XHttp…, XamBackgroundDownloadSetMode) responden como
+  una consola sin conexión; y las opciones se escriben también en los arranques vigilados.
+
+ReForge Studio 1.28.0 — iconos de PlayStation en cualquier juego (en la GPU), funciones partidas y SCSKiller
+
+NOVEDADES 1.28.0
+- Iconos de botones universales: el SDK de ReForge lleva un parche en la caché de texturas de rexglue
+  (rexgpu-xenos.dll, se copia junto a cada juego: no hace falta recompilar los juegos).
+  · Mientras juegas, la GPU guarda las texturas pequeñas que el juego usa; ReForge las mira solo cada pocos
+    segundos y reconoce los botones de Xbox: por el nombre si vienen de un .xpr, y si no por su aspecto
+    (círculos verde/rojo/azul/amarillo con su letra, sueltos o en hojas de iconos). No toca archivos del juego.
+  · Genera la versión PlayStation (✕ ○ □ △…) con el mismo formato y la GPU la cambia al subir la textura.
+  · En caliente: menú Guía → Personalizar → «Iconos de botones» (Xbox/PlayStation) cambia los iconos al
+    momento, sin reiniciar. En ReForge: 🎮 Opciones → Controles → «Iconos de botones» (Automático = según el
+    mando conectado).
+  · Límites: los botones grises (LB, RT, Start…) solo se reconocen por nombre (.xpr); los de colores, en
+    cualquier juego. Si una textura queda mal, se puede excluir (reforge_textures/excluir.txt).
+- Funciones partidas («Unresolved branch from … to …»): el análisis profundo declaraba como función
+  direcciones redondas de 64 KB (fallo al leer «ori») y partía funciones reales (COD Advanced Warfare: 21
+  casos). Ahora ReForge quita solo esas entradas al generar el código, las anota para no repetirlas
+  (reforge_not_functions.txt) y, si el juego se cierra con ese error, repara, recompila y vuelve a probar.
+  Si una dirección ya declarada sigue fallando, hace un mantenimiento completo antes de rendirse.
+- SCSKiller (precompilar shaders antes de jugar): rexglue ya guarda los shaders y pipelines de cada juego y
+  los precompila al arrancar; el informe de rendimiento ahora lo muestra («🧊 Shaders precompilados…»).
+
+ReForge Studio 1.27.1
+- Corregido: juegos con manejadores de excepciones (los activa ReForge tras un fallo de acceso a memoria,
+  p. ej. Call of Duty: Advanced Warfare) no compilaban: «use of undeclared identifier 'SEH_TRY'». Es un
+  fallo del SDK de rexglue (el código generado usa SEH_TRY/GetExceptionCode sin incluir sus encabezados).
+  ReForge añade rex/platform/exceptions.h y <excpt.h> al precompilado del código recompilado, borra el
+  precompilado viejo y vuelve a compilar solo.
+
+ReForge Studio 1.27.0 — packs, texturas e iconos de PlayStation
+
+NOVEDADES 1.27.0
+- Iconos de botones según tu mando (🎮 Opciones → Controles → «Iconos de botones»):
+  · Automático (por defecto): si hay un DualSense o DualShock conectado (USB o Bluetooth, también a través de
+    DS4Windows/DSX/Steam, que lo presentan al juego como «Mando Xbox 360»), los botones del juego pasan a
+    ✕ ○ □ △, L1/R1, L2/R2, OPTIONS y PS. Con mando de Xbox, los originales.
+  · Funciona con las texturas del juego en archivos .xpr (formato de Xbox 360 que usan muchos juegos):
+    botones sueltos por su nombre (A, BTN_B, LT, Start…) y diagramas del mando (repinta los 4 botones de
+    colores y el botón Guía donde estaban; las líneas y textos del juego quedan igual).
+  · El menú Guía de ReForge también muestra ✕ ○ △ (requiere recompilar: se hace solo al pulsar ▶ Jugar).
+- 🎨 Packs y texturas (mismo sitio, botón «Packs y texturas…»): carpeta «mods» del proyecto.
+  · Un pack es una carpeta o un .zip con la misma estructura que «assets»: un archivo con la misma ruta
+    reemplaza al original; un PNG en «MEDIA/uiresource.xpr/A.png» reemplaza la textura «A» de ese .xpr.
+  · «Exportar texturas del juego» saca todas las texturas .xpr a PNG para editarlas y crear tu pack.
+  · Se aplican al abrir el juego. ReForge guarda los originales y los devuelve tal cual al desactivar o
+    borrar el pack. Si una actualización del juego cambia un archivo, esa versión pasa a ser la original.
+  · Límite: las texturas conservan su tamaño original (un PNG más grande se ajusta). No hay reemplazo de
+    texturas «en vivo» en la GPU: los juegos que guardan sus imágenes en formatos propios o comprimidos
+    (no .xpr) solo admiten packs de archivos completos.
+
+ReForge Studio 1.26.0 — icono oficial de cada juego en su .exe
+
+NOVEDADES 1.26.0
+- Los .exe recompilados ya no salen con el icono genérico de Windows: ReForge les pone el icono oficial
+  del juego, el mismo que mostraba la consola (imagen del título que cada XEX lleva en su tabla XDBF).
+  · Se saca del propio default.xex (descifrando solo ese trozo) en juegos sin compresión o con compresión
+    básica: la mayoría de juegos de disco y muchos arcade. Tarda unas centésimas de segundo.
+  · Si el XEX usa compresión LZX, se saca de la imagen del juego que deja la extensión al abrirlo: el icono
+    aparece al cerrar la primera partida. Mientras tanto lleva uno con las iniciales del juego.
+  · Se aplica solo al jugar, al recompilar y en el «🔬 Barrido completo» (capa «Icono»); conserva la fecha
+    del .exe, así que no provoca recompilaciones.
+  · Deja también reforge_icon.png / reforge_icon.ico junto al .exe y el PNG en la carpeta del proyecto.
+
+ReForge Studio 1.25.0 — 🔬 Barrido completo
+
+NOVEDADES 1.25.0
+- Taller → «🔬 Barrido completo»: revisa de una vez todas las capas donde suele fallar un juego recompilado,
+  corrige lo que puede y luego hace el mantenimiento completo (análisis profundo, correcciones del codegen,
+  compilar, probar el arranque y reparar en rondas). Al final deja un informe por capa:
+  · Compilación: obliga el modo Release (optimizaciones -O3 de clang) y comprueba que el compilador es clang.
+  · Procesador: activa -march=native si tu CPU tiene AVX2 (el código vectorial VMX128 del Xbox 360 usa
+    AVX2/AVX-512).
+  · XEX: que default.xex sea un XEX2 válido (no dañado ni de otra consola).
+  · Archivos del juego: archivos vacíos o ilegibles (extracción incompleta, nube sin descargar) e imágenes
+    ISO/comprimidos olvidados dentro de assets.
+  · Funciones del sistema: las que el runtime aún no implementa y que el juego llamó (separa las de red/Live,
+    normales, de las que pueden causar fallos).
+  · Código recompilado: funciones declaradas, setjmp/longjmp, excepciones, nivel de optimización y entradas
+    pendientes del análisis profundo.
+  · Avisos del compilador: cada compilación los cuenta y separa los que pueden cambiar lo que hace el código
+    (return-type, uninitialized, unsequenced…).
+  · Mandos: XInput nativo de Windows o SDL; menú Guía.
+  · Rendimiento: autoconfiguración según tu PC.
+
+ReForge Studio 1.24.1
+- Partidas: también copia los juegos que guardan su progreso solo en los ajustes del perfil del título
+  (algunos arcade). Antes decía «el juego todavía no ha guardado nada».
+
+ReForge Studio 1.24.0 — ranuras de partidas en el menú Guía
+
+NOVEDADES 1.24.0
+- 🎮 Menú Guía → pestaña «Partidas»: 4 ranuras con miniatura de la imagen del juego, fecha y hora.
+  · A «Guardar»: copia en la ranura las partidas guardadas del juego (puntos de control y perfil del juego).
+  · Y «Cargar»: el juego se cierra y se vuelve a abrir solo con las partidas de esa ranura; luego continúa
+    desde «Continuar» / «Cargar partida» en el menú del juego.
+  · También con el ratón. ReForge sabe que es un reinicio y no lo trata como fin de partida.
+- No son «estados» instantáneos como en un emulador: un juego recompilado corre como programa nativo y su
+  estado completo (pila del procesador, GPU, sonido) no se puede congelar. Por eso copia las partidas que el
+  propio juego guarda: guarda en el juego (o llega a un punto de control) antes de copiar.
+- Requiere recompilar (el Taller lo hace solo al pulsar ▶ Jugar).
+
+ReForge Studio 1.23.0 — FSR y CAS de AMD dentro de los juegos
+
+NOVEDADES 1.23.0
+- ⚡ Entorno → «Compilar con FSR / CAS (AMD FidelityFX)»: compila una vez la misma versión de rexglue que usas
+  con AMD FidelityFX (la oficial se publica sin él) y la deja activa. Después, «Escalado / nitidez» en
+  🎮 Opciones ofrece AMD FSR 1 y AMD CAS en todos los juegos. Si no hay git, descarga uno portátil.
+- Guarda una copia del SDK compilado en Documentos\ReForgeStudio\Respaldo. Ponla junto al instalador de
+  ReForge y se instala sola, sin volver a compilar (también tras formatear el PC).
+- Al cambiar de SDK, cada juego se reconfigura y se recompila solo la próxima vez que pulses ▶ Jugar.
+
+ReForge Studio 1.22.0 — escalado automático en todos los juegos
+
+NOVEDADES 1.22.0
+- Escala de resolución «Automática» (nueva opción por defecto): al abrir cada juego, el Taller elige la
+  resolución interna según tu tarjeta (1× con menos de 6 GB de VRAM o gráfica integrada, 2× = 1440p interno
+  con 6-11 GB, 3× = 4K interno con 12 GB o más). Es supermuestreo real: el juego se dibuja con más píxeles,
+  no se estira una imagen de 720p. Si un juego no llega a sus FPS, el ajuste automático la baja y no se
+  vuelve a subir para ese juego. Si eliges una escala a mano, se respeta.
+- FSR y CAS de AMD aparecen en «Escalado / nitidez» pero desactivados cuando el runtime no los trae: el SDK
+  oficial de rexglue se publica sin AMD FidelityFX (rexglue lo tiene como opción experimental al compilarlo
+  desde el código fuente).
+
+ReForge Studio 1.21.1
+- Menú Guía: muestra el nombre oficial del juego, el que trae el propio juego en su tabla de datos (XDBF),
+  en lugar del nombre de la carpeta del proyecto.
+
+ReForge Studio 1.21.0 — menú Guía dentro de cada juego (botón Xbox / PS)
+
+NOVEDADES 1.21.0
+- 🎮 Menú Guía como el del Xbox 360, en todos los juegos compilados con ReForge: botón Xbox del mando (o PS
+  en mandos de PlayStation) o la tecla Inicio del teclado.
+  · Cabecera: avatar del perfil, gamertag, puntos (G) y logros conseguidos, hora y fecha.
+  · Nombre del juego, tiempo de esta partida, tiempo total jugado y FPS actuales.
+  · Inicio: «Volver al juego» y «Salir del juego» (con confirmación, sin ratón), progreso de logros y los
+    últimos desbloqueados.
+  · Logros: lista completa con icono, puntos, fecha de desbloqueo y descripción.
+  · Personalizar (se guarda por juego): contador de FPS en pantalla, color de acento, posición de la
+    notificación de logros y esconder el puntero con el mando.
+  · Se maneja con la cruceta o el stick, A para elegir, B para volver, LB/RB para cambiar de pestaña;
+    también con el ratón o el teclado.
+  · Mientras está abierto, el juego no recibe el mando y se le avisa como en la consola (la mayoría se
+    pausa). El botón Xbox/PS nunca le llega al juego.
+  · Se puede desactivar en 🎮 Opciones.
+- Requiere recompilar (el Taller lo hace solo al pulsar ▶ Jugar).
+
+ReForge Studio 1.20.0 — se configura solo al abrir cada juego
+
+NOVEDADES 1.20.0
+- ⚙ Autoconfiguración al abrir (Taller, Biblioteca, lanzador): antes de cada partida se revisa el PC tal como
+  está (tarjeta gráfica y VRAM, hilos de la CPU, frecuencia del monitor; se vuelve a detectar si cambias de
+  tarjeta o cada semana) y se escribe la configuración más rápida que el juego ha demostrado aguantar. En el
+  log aparece una línea con lo aplicado, p. ej. «RTX 5060 Ti 8 GB · 12 hilos · 60 FPS estables · optimizador
+  Fluido · 6 hilos para shaders · audio 64 · código Segura».
+- Ya no sale el menú de motor gráfico cada vez que pulsas ▶ Jugar (se puede volver a activar en 🎮 Opciones).
+- Mejoras para PC sin preguntar: la base de datos de parches de Xenia se descarga sola y, si tiene FPS
+  desbloqueados o correcciones para tu versión exacta del juego, se integran, se recompila y el juego se
+  abre solo (se puede desactivar quitando el ajuste automático en ⚡ Optimizar).
+- Reparación automática nueva: si el juego se cierra por un acceso inválido, el Taller activa los
+  manejadores de excepciones del juego (__try/__except: muchos juegos capturan esos accesos a propósito),
+  regenera, compila y lo vuelve a probar, antes del mantenimiento completo.
+
+ReForge Studio 1.19.0 — lo mejor de XenonRecomp / Unleashed Recompiled para cualquier juego
+
+NOVEDADES 1.19.0
+- ⚡ Optimización del código recompilado (Optimizador → «Optimización del código»; automática por defecto en
+  todos los juegos): rexglue guarda registros del PowerPC como variables locales de C++ en vez de en la
+  estructura del contexto, como Unleashed Recompiled. Menos accesos a memoria = más FPS cuando la CPU limita.
+  · Segura (la que usa Automática): registros de control CR, CTR, XER y reserva. Probada con Fast & Furious
+    Showdown: arranca igual que sin optimizar y el ejecutable baja de 39,4 MB a 33,8 MB (−14 % de código).
+  · Máxima (experimental): además registros temporales y no volátiles. Fast & Furious Showdown se cuelga al
+    arrancar con ella (los registros temporales), así que no se usa sola.
+  · Si el juego se cierra o se queda colgado sin imagen antes de comprobar la optimización, el Taller baja
+    de nivel, recompila y lo vuelve a probar solo. Tras 2 minutos jugando sin fallos queda comprobada.
+  · Los juegos ya compilados se recompilan solos la próxima vez que pulses ▶ Jugar (todo el juego: tarda).
+- Ejecutable siempre en memoria (como Zelda 64: Recompiled y Unleashed Recompiled): al arrancar se lee el .exe
+  entero en segundo plano y se bloquea en memoria. Evita tirones al llegar por primera vez a zonas del código.
+- Temporizador de Windows a 0,5 ms y sin ahorro de energía (EcoQoS) para el juego: el vblank del Xbox 360 de
+  rexglue y las esperas del juego usan Sleep(1) y con la resolución por defecto su ritmo tiembla.
+- Requiere recompilar (el Taller lo hace solo).
+
+ReForge Studio 1.18.2 — el informe repara solo
+
+NOVEDADES 1.18.2
+- Tras cada partida, el Taller no solo informa: corrige lo que se puede corregir con ajustes y vuelve a
+  abrir el juego con la cuenta atrás de 10 s:
+  · tirones al compilar shaders con la ruta «Preciso» → ruta «Rápido» (shaders mucho más ligeros);
+  · tirones por texturas → optimizador «Fluido» y, si ya lo estaba, menos resolución interna;
+  · el juego no llega a sus FPS mientras juegas → menos resolución interna (si estaba por encima de 1×);
+  · «lecturas exactas» (readback) con tirones o bajones → se desactivan;
+  · ritmo que no aguanta → 60 FPS estables; audio entrecortado → más audio en cola (como antes).
+  En el log aparece como «🔧 Reparado automáticamente».
+- Los cierres del juego se siguen reparando solos (funciones, mantenimiento completo) como hasta ahora.
+
+ReForge Studio 1.18.1 — informe de rendimiento que separa el arranque y diagnóstico automático
+
+NOVEDADES 1.18.1
+- El informe tras cada partida separa:
+  · el arranque (logos, vídeos y menú, que van a 30 FPS o menos a propósito): no cuenta como tirones;
+  · ráfagas de fotogramas lentos (vídeos, menús, zonas pesadas);
+  · los tirones sueltos de verdad mientras juegas, con cuántos hay por minuto.
+  En Gears of War 2: de 148 «tirones», 125 eran del arranque y 12 de un vídeo; jugando hubo 11 en 4 min.
+- El estado en vivo cuenta lo mismo (el mínimo de FPS y los tirones desde que empiezas a jugar).
+- Diagnóstico automático: ya no hay que activarlo a mano. Si hay 1 o más tirones sueltos por minuto de
+  juego, la siguiente partida se analiza en detalle y al cerrar se apaga solo; si los tirones siguen, se
+  repite pasadas 5 partidas normales (el log detallado consume rendimiento). La casilla del Optimizador
+  sigue para forzarlo.
+
+ReForge Studio 1.18.0 — el Taller reconoce tus juegos abiertos, se ajusta solo y vuelve a abrirlos
+
+NOVEDADES 1.18.0
+- Vigilancia en vivo de cualquier juego creado con ReForge, da igual cómo lo abras (Taller, lanzador, acceso
+  directo, .bat o doble clic) e incluso si ya estaba abierto antes de abrir ReForge: el estado muestra el
+  tiempo jugado, los FPS reales del juego, los tirones, logros y avisos mientras juegas.
+- Al cerrar el juego, el Taller lo analiza siempre (también las partidas lanzadas por fuera): explica los
+  cierres, lanza el mantenimiento automático si hace falta y aplica los ajustes de rendimiento.
+- Recompilar y volver a abrir solo:
+  · ▶ Jugar ya no abre un juego al que le falta algo (extensión de una versión anterior, trucos/mejoras o
+    correcciones de funciones sin compilar): recompila primero y lo abre solo al terminar;
+  · si detecta abierto un juego en ese estado, ofrece cerrarlo, recompilarlo y abrirlo de nuevo;
+  · tras una partida con ajustes nuevos, el juego se vuelve a abrir solo tras una cuenta atrás de 10 s
+    (puedes cancelarla).
+- Bajones bruscos de FPS y latencia: la extensión anota los FPS del juego cada 5 s y el Taller comprueba si
+  el juego aguanta el ritmo automático (82,5 FPS en un monitor de 165 Hz). Si no lo aguanta, cada vblank que
+  falla lo baja de golpe a la mitad (82 → 41 FPS); entonces lo fija a 60 FPS constantes. Si eliges el ritmo
+  a mano en 🎮 Opciones, se quita ese tope.
+- El diagnóstico detallado (log de depuración) se hace una sola vez por juego: consume rendimiento y la
+  partida diagnosticada iba peor.
+- Aviso si «lecturas exactas» (readback) está activado: provoca latencia y bajones bruscos.
+- Requiere recompilar el juego (el Taller lo hace solo al pulsar ▶ Jugar).
+
+ReForge Studio 1.17.0 — setjmp/longjmp y mantenimiento automático tras un cierre
+
+NOVEDADES 1.17.0
+- setjmp/longjmp: muchos juegos (libjpeg, Lua, motores con manejo de errores propio) se recuperan de un error
+  con longjmp. Recompilado, eso solo funciona si rexglue sabe cuáles son esas funciones; si no, el juego sigue
+  con registros basura y se cierra. ReForge ahora las reconoce en el código generado y las declara en el
+  manifiesto (setjmp_address / longjmp_address) durante el codegen, sin que tengas que hacer nada.
+  Fast & Furious Showdown se cerraba así al arrancar («read of guest 0x000001A4»): su cargador de imágenes
+  prueba primero JPEG y, al fallar, libjpeg hace longjmp. Probado: con la corrección pasa ese punto.
+  Gears of War 2 también usa setjmp/longjmp: queda declarado.
+- Cierres por acceso inválido del código del juego: el Taller los reconoce («guest_av»), explica la
+  dirección (p. ej. puntero nulo) y lanza solo un mantenimiento completo (análisis profundo + todas las
+  correcciones del codegen + compilar + probar) una vez por proyecto y sesión.
+- Ya no se dice «sin mensaje en el log» cuando el log sí explica el fallo.
+- El .toml del juego se lee aunque un editor lo haya guardado con BOM (UTF-8 con firma).
+
+ReForge Studio 1.16.0 — medición real y ajuste automático
+
+NOVEDADES 1.16.0
+- La medición de tirones ahora cuenta los fotogramas que entrega el juego (VdSwap), no los repintados de la
+  ventana: la 1.15 marcaba 224 FPS y «sin tirones» porque la ventana se repinta aunque el juego se congele.
+  Las pantallas de carga (pausas de más de 0,7 s) se cuentan aparte y no estropean el 1 % más lento.
+- 🔧 Ajuste automático tras cada partida (Taller y lanzador; se puede desactivar en el Optimizador):
+  · sonido entrecortado/estático (el audio se queda sin datos) → más audio en cola;
+  · muchos tirones sin causa conocida → la próxima partida se analiza en detalle;
+  · diagnóstico terminado → el log detallado se apaga solo;
+  · tirones por texturas → optimizador «Fluido».
+- Audio: el optimizador deja 32 fotogramas de audio en cola (antes, el valor de rexglue): evita el
+  sonido estático mientras el juego carga una partida.
+- Shaders: el optimizador usa la mitad de los hilos de la CPU para compilar pipelines (antes casi todos).
+  Medido en Gears of War 2: el sonido estático coincidía con ráfagas de 30-200 pipelines nuevos que dejaban
+  sin CPU al juego y al audio.
+- Requiere recompilar el juego.
+
+ReForge Studio 1.15.0 — diagnóstico de tirones
+
+NOVEDADES 1.15.0
+- 📈 Diagnóstico de tirones: la extensión de ReForge mide dentro del juego el tiempo de cada imagen. Cada
+  tirón de más de 50 ms queda en el log del juego con su hora. Al cerrar, el Taller muestra cuántos hubo,
+  el mayor, la media de FPS y el 1% de fotogramas más lentos.
+- Optimizador → «Diagnóstico de tirones en la próxima partida»: rexglue escribe además lo que hace por
+  dentro (shaders y pipelines nuevos, texturas, disco, audio) y ReForge cruza cada tirón con lo que pasaba
+  en ese instante para decir la causa y qué ajustar. Desactívalo al terminar (el log detallado consume).
+- Requiere recompilar el juego (la extensión se actualiza sola).
+
+ReForge Studio 1.14.1 — parche urgente: cierres al usar el mando
+
+NOVEDADES 1.14.1
+- Corregido el cierre del juego (0xC0000005 / memoria dañada) que aparecía al jugar, sobre todo tras
+  desconectarse y reconectarse el mando. Causa (en rexglue 0.10): la lista de mandos se reconstruye en cada
+  consulta del juego (conexión, vibración al disparar…) sin cerrojo; dos hilos a la vez dañan la memoria y
+  el fallo salta después en cualquier parte (en tu caso, dentro del audio). La extensión de ReForge hace
+  ahora que todas las consultas de mando del juego pasen de una en una. Hay que recompilar el juego.
+- Mando «Automático» (nuevo, por defecto): XInput si hay un mando de Xbox conectado, SDL con el resto.
+- El Taller y el lanzador explican estos cierres («fallo del runtime» + mando reconectado) y ya no
+  muestran como error los avisos que rexglue escribe en todos los juegos (cache:\, XLIVEBASE).
+
+ReForge Studio 1.14.0 — sin micro tirones y puntero escondido con mando
+
+NOVEDADES 1.14.0
+- Fotogramas «Automático» (nuevo, recomendado): elige un ritmo que divide exacto la frecuencia de tu
+  monitor. 60 FPS en un monitor de 165 Hz son 2,75 refrescos por imagen (unas duran 3 y otras 2): se nota
+  como micro tirones aunque el contador marque FPS estables. Con el juego desbloqueado (Unlock FPS) el ritmo
+  pasa a 82,5 (165/2), 72 en 144 Hz, 60 en 120 Hz… Un juego sin desbloquear se queda en 60 para no
+  acelerarse. «Frecuencia del monitor» (165) exige una imagen cada 6 ms: si el juego no llega, el ritmo
+  cae a saltos en cada efecto o cambio de escena; por eso Automático es la opción recomendada.
+- La presentación ya no se fuerza «sin desgarros»: G-Sync/FreeSync vuelven a funcionar (actívalo en el
+  panel de NVIDIA para pantalla completa y ventana).
+- El puntero del ratón se esconde al usar el mando (o con el ratón quieto 3 s) y vuelve al moverlo.
+  Opciones del juego → Controles. Requiere recompilar el juego (la extensión de ReForge lo hace).
+- Logros revisados: rexglue lee los logros del propio juego y ReForge los muestra con su animación.
+  Se guardan en Documentos\<juego>\achievements\<TitleID>.toml.
+
+NOVEDADES 1.13.0
+- ✨ Mejoras para PC: muchos juegos del Xbox 360 se limitan ellos mismos a 30 FPS (el contador puede
+  marcar más, pero solo hay 30 imágenes distintas por segundo). Para quitar ese bloqueo hay que cambiar
+  el código del juego: ReForge usa los parches «Unlock FPS / 60 FPS» de la base de datos de Xenia Canary
+  (hay para más de 300 juegos) y los integra al recompilar, junto con las correcciones gráficas del juego
+  («… Fix»: sombreado negro del MSAA, streaming de texturas…) y sin desenfoque de movimiento (estelas al
+  girar la cámara o disparar a más FPS).
+  · 🎯 Trucos → «✨ Recomendadas para PC» (las mejoras salen con ★).
+  · Al cerrar un juego, si hay mejoras para tu versión, ReForge pregunta si aplicarlas y recompila.
+  · Gears of War 2: Unlock FPS + Black Shading Fix + Disable Motion Blur + Texture Streaming Fix.
+- Fotogramas (Opciones del juego → Gráficos), en lugar de la casilla VSync:
+  · 60 FPS con VSync (recomendado): ritmo de 60 Hz y presentación sin desgarros.
+  · Frecuencia de tu monitor con VSync (experimental): algunos juegos se aceleran; si pasa, vuelve a 60.
+  · Sin límite: VSync desactivado (puede haber desgarros).
+  En rexglue «vsync» marca el ritmo del vblank del Xbox 360 (60 por segundo, o 1000 sin VSync) y
+  d3d12_allow_variable_refresh_rate_and_tearing controla los desgarros en tu monitor.
+
+NOVEDADES 1.12.0
+- Perfil por motor: ReForge reconoce el motor del juego por sus archivos (Unreal Engine 3,
+  IW/Call of Duty, Frostbite, CryEngine, Source, RenderWare, MT Framework) y aplica su perfil.
+  Unreal Engine 3 (Gears of War, Mass Effect, Bioshock, Batman, Borderlands…): consultas de
+  oclusión simuladas. En rexglue cada consulta real obliga a esperar a la GPU; los juegos UE3
+  hacen cientos por fotograma → tirones y caídas. Simuladas, no hay esperas. También permite
+  los datos de «fetch» no válidos que piden muchos juegos UE3.
+  Optimizador → PERFIL DEL JUEGO: ver el motor, cambiar «Consultas de oclusión»
+  (Automático / Simuladas / Reales) si algo se ve raro (objetos que desaparecen).
+- «Compilar para tu procesador» (-march=native, opcional en el Optimizador): el código
+  recompilado usa las instrucciones de TU CPU (AVX2…). El .exe solo funcionará en este PC.
+- Idioma: nuevo «Automático · el de Windows» (por defecto). Windows en español de América →
+  Español (México); de España → España. Se reconocen los idiomas de Unreal (ESM = México,
+  ESN = España, INT = inglés), así que ahora salen en la lista.
+  «El que elija el juego» sigue disponible (rexglue usa inglés).
+
+NOVEDADES 1.11.0
+- 🎯 Trucos (Taller y lanzador del juego): usa la base de datos de parches de Xenia Canary
+  (github.com/xenia-canary/game-patches): «Descargar / actualizar» la baja de GitHub. Solo
+  se ofrecen los parches de TU versión exacta del juego (el mismo «hash» de módulo que usa
+  Xenia; el juego lo anota al arrancar, o pulsa «Identificar»). Marca los que quieras y
+  «Aplicar»: ReForge crea un default.xexp propio que rexglue aplica al cargar el juego, así
+  los trucos de código quedan dentro del ejecutable recompilado (hay que recompilar; desde
+  el lanzador se abre ReForge y lo hace solo) y los de datos valen al volver a arrancar.
+  Trucos y actualización del juego usan el mismo mecanismo: no se pueden combinar.
+- Codegen: además de las funciones cortadas, declara los saltos a código sin función que
+  rexglue solo avisaba («Unresolved b target»): el juego se habría cerrado al llegar ahí.
+  Probado con Gears of War 2: código generado sin errores tras la corrección automática.
+- Taller más rápido y completo para mantener juegos:
+  · Análisis profundo: el juego vuelca su imagen al arrancar (reforge_image.bin) y ReForge busca
+    de una vez las entradas de función que rexglue no ve (tablas de métodos virtuales y
+    punteros en el código). En Gears of War 2 encontró las 16 que la reparación había ido
+    descubriendo de una en una, y más. En Castlevania SOTN evita las rondas de 0x10 en 0x10.
+  · «🩺 Mantener» (el botón Reparar cuando no hay fallo pendiente): análisis profundo +
+    correcciones del codegen + compilar + probar el juego; si se cierra, sigue reparando solo.
+    Al cerrar el juego, ReForge avisa si quedan entradas por añadir.
+  · Si en una ronda fallan varios hilos a la vez se declaran todas las direcciones del log.
+  · El código generado se revisa también por dentro: saltos convertidos en REX_FATAL se
+    declaran y regeneran (probado con Gears of War 2: 0 saltos rotos y 0 etiquetas perdidas).
+  · Entradas que caían dentro de una función con «end» se declaran como fragmento («parent»):
+    rexglue ya no rechaza el manifiesto con «Overlapping boundaries».
+- Corregido «No se pudo preparar el lanzamiento: [WinError 32]» al terminar con el juego
+  abierto (la DLL del motor ya estaba cargada; ahora solo se copia si cambió).
+- Aviso si la compilación está en «Debug» (ofrece cambiar a «Release»).
+- Al instalar o quitar una actualización/trucos se fuerza a regenerar el código (antes
+  CMake podía no enterarse del cambio en default.xexp).
+- Hay que pulsar «Compilar» una vez en cada juego para que anote su versión (trucos).
+
+ReForge Studio 1.10.1 — licencia de los juegos Arcade
+
+NOVEDADES 1.10.1
+- 🎮 Opciones → Idioma, audio y reparación → «Licencia»: igual que license_mask de Xenia
+  (rexglue tiene la misma opción). En «Automática» los Arcade (Title ID 5841…) arrancan con
+  la licencia del juego completo en vez de quedarse en «Desbloquear juego completo». También:
+  juego completo, todas las licencias (si algún Arcade lo necesita) o versión de prueba.
+  Se aplica al lanzar el juego, sin recompilar.
+
+ReForge Studio 1.10.0 — actualizaciones de juegos y Castle Crashers
+
+NOVEDADES 1.10.0
+- ⬆ Actualización (Taller, junto a «Log»): instala la actualización de título (TU) de un
+  juego: el paquete de 000B0000 o un default.xexp. Comprueba que sea del mismo juego
+  (Title ID) y para tu versión exacta del default.xex (si no, explica qué versión pide),
+  coloca default.xexp junto a default.xex y el resto en <proyecto>/update, que el juego ve
+  como «update:». Al aceptar, regenera el código y compila: el ejecutable sale ya con el
+  parche (el codegen de rexglue aplica default.xexp al cargar el XEX). «Quitar» vuelve al
+  juego base.
+- Si eliges una actualización como origen de un juego nuevo, el Taller te lo indica.
+- Corregido «use of undeclared label 'loc_…'» al compilar (Castle Crashers): el análisis
+  de rexglue cortaba funciones partidas en varios fragmentos (.pdata). ReForge revisa el
+  código generado, declara el final real de la función en reforge_functions.toml
+  («end = …») y regenera, tanto en el paso Codegen como si el error aparece al compilar.
+
+ReForge Studio 1.9.0 — GOD, XBLA y XEX
+
+NOVEDADES 1.9.0
+- Nuevos orígenes en el Taller («1 · Origen del juego»):
+  · Paquete GOD / XBLA: Games on Demand (SVOD: archivo de cabecera + carpeta .data con
+    Data0000…), juegos Arcade y demos (STFS: un único archivo LIVE/PIRS/CON). Puedes elegir
+    la carpeta del Title ID o el archivo sin extensión de 00007000 / 000D0000. Se extrae
+    directamente a assets, sin herramientas externas (mismo lector que el runtime de rexglue).
+  · Archivo XEX: copia la carpeta del .xex y lo guarda como default.xex.
+- Se detecta solo: si eliges un paquete o un .xex con el origen «ISO», cambia al correcto.
+- Muestra nombre, Title ID, tamaño y avisa si el paquete no es un juego (DLC, actualización…)
+  o si faltan partes Data.
+
+ReForge Studio 1.8.0 — animación de logros, logo y calidad de imagen
+
+NOVEDADES 1.8.0
+- Nueva animación de logros (en el juego y en la vista previa de Perfil, idéntica):
+  la insignia aparece con rebote y una onda, la cápsula se despliega con chispas, el
+  título y el logro entran deslizándose, los G cuentan hasta su valor, un destello
+  recorre la cápsula y un anillo con arcos gira alrededor de la insignia. La insignia
+  alterna tu logo con el icono del logro (o un trofeo) con un giro, y al final vuelve
+  al logo, se repliega, late y desaparece.
+- Logo de los logros (Perfil → Logo → «Elegir imagen…»): quita solo el fondo liso o de
+  cuadros y lo centra en el círculo.
+- ⚡ Optimizar → Calidad de imagen: escala interna 1× / 2× / 3× (supermuestreo real, la
+  recomendada según tu GPU) y filtrado anisotrópico 16×. Para RTX: pasos para DLDSR y
+  Smooth Motion (IA del driver de NVIDIA, sin integrar en el juego) y botón a la NVIDIA App.
+  DLSS no es posible: necesita vectores de movimiento que los juegos de Xbox 360 no generan.
+- FSR/CAS ya no se ofrecen si tu runtime de rexglue no los trae (se ignoraban).
+- Protección contra DXVK: si hay DLL de DXVK junto a un juego se apartan a
+  «_dxvk_desactivado» (DXVK es para Direct3D 8-11; su dxgi.dll impide arrancar D3D12).
+- Hay que pulsar «Compilar» una vez en cada juego para que tenga la nueva animación y el logo.
+
+ReForge Studio 1.7.0 — sonido de logros y vigilante de juegos
+
+NOVEDADES 1.7.0
+- Sonido en las notificaciones de logro (Perfil → Notificación de logros):
+  · «ReForge»: timbre propio de dos notas.
+  · «Personalizado»: elige tu propio archivo (WAV, MP3, OGG…). Se le quita el silencio
+    inicial para que suene justo al aparecer la notificación y se normaliza el volumen.
+  · «Sin sonido».  Control de volumen y botón «Probar» con sonido.
+  El juego lo reproduce desde reforge_achievement.wav junto al .exe. Hay que volver a
+  pulsar «Compilar» en cada juego una vez para que la extensión incluya el sonido.
+- Vigilante de juegos: con ReForge abierto, detecta el juego recompilado que abras de
+  cualquier forma (.bat, acceso directo, doble clic). Muestra «🎮 Jugando: …» y si falla:
+  · función no registrada → cierra el juego colgado y lo repara en el Taller (o pregunta,
+    según «Reparar automáticamente»);
+  · error gráfico (device lost) → ofrece el asistente de imagen;
+  · otro error → lo explica con las últimas líneas del log.
+  Se activa/desactiva en Ajustes → JUEGOS. No interviene si el lanzador ya vigila el juego.
+
+ReForge Studio 1.6.2 — Español (México)
+
+NOVEDADES 1.6.2
+- Idioma: «Español (México / Latinoamérica)» además de «Español (España)». En Xbox 360
+  el español latino es idioma Español + país México: ReForge envía user_language = 5 y
+  user_country = 71 (región MX en rexglue). Cada idioma usa además su región natural
+  (Inglés → EE. UU., Español (España) → España…).
+- Se detectan también carpetas/archivos con mx, mex, las, latam o es-419.
+
+ReForge Studio 1.6.1 — texturas con bloques negros
+
+NOVEDADES 1.6.1
+- Perfiles de imagen por juego: Ben 10 Omniverse (44500802) usa Preciso (ROV) + datos
+  no válidos automáticamente (en RTV el suelo salía con bloques negros y rayas).
+- El asistente de imagen pide mirar una partida 3D (no solo el menú) y el botón «✖»
+  cubre también texturas raras (bloques negros, rayas, parpadeo).
+- La descripción de «Rápido (RTV)» avisa de ese posible problema.
+
+ReForge Studio 1.6.0 — optimizador de rendimiento
+
+NOVEDADES 1.6.0
+- ⚡ Optimizar (Taller y lanzador del juego): detecta tu GPU, VRAM y CPU y ajusta el
+  runtime de rexglue: caché de texturas según la VRAM (menos texturas que se descartan y
+  recargan), hilos para compilar shaders, compilación en segundo plano y prioridad de la
+  cola gráfica. Al lanzar: prioridad «por encima de lo normal» y GPU de alto rendimiento.
+- Modo «Fluido» (sin pausas; lo nuevo puede parpadear la primera vez) o «Sin parpadeo»
+  (pausa breve la primera vez). La caché de shaders lo recuerda entre sesiones.
+- Asistente de imagen: prueba los modos del más rápido al más pesado y te pregunta si el
+  juego se ve bien; guarda el más rápido que funcione (en vez de Compatibilidad máxima,
+  que lee texturas en la CPU y provoca tirones).
+- Nuevos modos en el menú ▶ Jugar: Rápido + datos no válidos, Preciso + datos no
+  válidos, Rápido + lectura de texturas.
+
+ReForge Studio 1.5.1 — corrección de la extensión en Windows
+
+NOVEDADES 1.5.1
+- Corregido: la extensión ReForge no compilaba en Windows («small» es una macro de
+  rpcndr.h). Era el único error; el resto de la extensión ya compilaba bien.
+- Si alguna vez la extensión no compila en un juego, el Taller la quita y compila el
+  juego sin ella (avisa en el log) en vez de dejarte sin .exe.
+- Prueba nueva: la extensión no puede usar nombres que Windows define como macros.
+
+ReForge Studio 1.5.0 — perfil de jugador, Xbox Live simulado, idioma real y logros
+
+NOVEDADES 1.5.0
+- Nueva sección «Perfil» (menú lateral y la tarjeta de abajo): Gamertag, imagen de
+  jugador (8 propias o una tuya), «Conectado a Xbox Live (simulado)» y la notificación
+  de logros: posición (superior/inferior · izquierda/centro/derecha), duración, título
+  y vista previa animada.
+- Extensión ReForge para cada juego (src/reforge_ext.cpp, se añade sola al compilar):
+  * El juego ve tu Gamertag y, si activas Live simulado, una sesión de Xbox Live con
+    privilegios online y red conectada (no hay servidores: el online real no existe).
+  * Idioma REAL: sustituye XGetLanguage, que en rexglue 0.10 siempre decía inglés.
+  * Notificación de logros con diseño propio en la posición elegida (F7: lista de logros).
+  * Mismo XUID que rexglue: tus partidas guardadas siguen valiendo.
+  * Si algún juego no compila con ella: 🎮 Opciones → «Extensión ReForge» y recompilar.
+- Para aplicarlo a un juego ya compilado: Taller → solo Codegen + Compilar.
+
+ReForge Studio 1.4.3 — lanzador de cada juego e idioma
+
+NOVEDADES 1.4.3
+- Lanzador propio de cada juego (estilo Xbox): el acceso directo del Escritorio
+  (botón 🖥 Escritorio del Taller) y «Jugar <juego>.bat» lo abren. Antes de jugar
+  eliges motor (Direct3D 12: Estándar, Precisión ROV, Compatibilidad máxima, Rápido
+  RTV; Vulkan aparece desactivado), idioma, pantalla y controles. «Jugar <juego>
+  (directo).bat» abre el juego sin lanzador.
+- El lanzador vigila el juego: si se cierra por una función no registrada (p. ej.
+  al pulsar Start), ofrece «Reparar ahora» y ReForge Studio lo repara solo.
+- Idioma: se detectan los idiomas que trae el juego en sus archivos (Angry Birds:
+  inglés, alemán, francés, español e italiano) y se aplica con user_language.
+  Límite de rexglue 0.10: si el juego pide el idioma con XGetLanguage, el runtime
+  responde siempre inglés.
+
+ReForge Studio 1.4.2 — menú de motor y modo compatibilidad (pantalla negra)
+
+NOVEDADES 1.4.2
+- Al pulsar ▶ Jugar aparece un menú para elegir el modo del motor antes de arrancar:
+  Direct3D 12 Estándar, Precisión (ROV), Compatibilidad máxima y Rápido (RTV).
+  Vulkan aparece pero desactivado: tu SDK de Windows no lo trae.
+- Nuevas opciones en 🎮 Opciones → Gráficos → Compatibilidad: ruta de render (RTV/ROV),
+  lectura de texturas en CPU (d3d12_readback_resolve) y datos no válidos permitidos
+  (gpu_allow_invalid_fetch_constants). Solo se escriben si el plugin del juego las trae.
+
+ReForge Studio 1.4.1 — vigilancia del juego mientras juegas
+
+NOVEDADES 1.4.1
+- ▶ Jugar ya no deja de vigilar a los 45 s: mientras el juego esté abierto, si aparece
+  un [FATAL] por función no registrada (aunque sea minutos después), ReForge cierra el
+  juego colgado en el cuadro de error de Windows, declara la función, recompila y lo
+  vuelve a abrir solo.
+- Detecta el [FATAL] en el log aunque Windows mantenga el proceso abierto (abort()).
+- Solo analiza el log de la ejecución actual (antes podía leer el anterior).
+- Máximo de rondas por defecto: 100.
+- Instalador: ya no se queda «rígido» con Python 3.15 en Windows en español.
+
+ReForge Studio 1.4.0 — arranque reparado, opciones del juego y controles
+
+INSTALAR
+1. Extrae este ZIP completo en una carpeta nueva.
+2. En Windows con Python y las dependencias instaladas, ejecuta build_release.bat
+   (corre las 8 baterías de pruebas y genera el instalador).
+3. Abre dist\ReForgeStudio-Setup-1.6.2.exe y actualiza tu instalación (conserva
+   tus proyectos, SDK y parches). La app debe mostrar v1.4.0 abajo a la izquierda.
+
+TU PROYECTO EXISTENTE (angrybirdstrilogy)
+1. Biblioteca → abre el proyecto. No hace falta extraer el juego otra vez.
+2. Marca solo Codegen y Compilar y pulsa Recompilar. Aparecerá el paso
+   «Preparar el proyecto (carpeta del juego automática)».
+3. Pulsa ▶ Jugar. ReForge vigila el arranque 45 s. Si el juego se cierra por
+   «Call to invalid or unregistered function at guest address 0x…», declara
+   esa dirección, regenera, compila y vuelve a probar solo, ronda a ronda,
+   hasta que el juego se quede abierto (máximo 25 rondas, configurable).
+   Tus logs ya indicaban 0x8262E8B8 y 0x8263E990: el bucle sigue desde ahí.
+4. 🔧 Reparar hace lo mismo leyendo el último log, si abriste el juego por fuera.
+
+OPCIONES DEL JUEGO (botón 🎮 Opciones)
+Se guardan en el proyecto y en <juego>.toml junto al .exe; el runtime las lee
+al arrancar, también con doble clic.
+- Gráficos: pantalla completa, VSync, escala 1×–3×, FSR/CAS, FXAA,
+  anisotrópico, barras negras.
+- Controles: mandos SDL (Xbox, PlayStation, Switch, genéricos) o XInput;
+  teclado y ratón con todas las teclas editables y sensibilidad.
+- Audio: silenciar.  Reparación: automática sí/no, rondas, segundos.
+
+LÍMITES REALES DEL RUNTIME DE REXGLUE (no son fallos de ReForge)
+- Motor gráfico en Windows: Direct3D 12. Vulkan existe en el código de
+  rexglue pero el SDK de Windows no lo trae compilado. OpenGL y Direct3D 11
+  no existen en rexglue y no se pueden añadir desde ReForge.
+- No hay limitador de FPS propio: usa VSync o el límite del panel de NVIDIA/AMD.
+
+DOBLE CLIC EN EL .EXE
+Ahora el proyecto recibe un gancho OnConfigurePaths en src/*_app.h que busca
+«assets» junto al .exe, en la carpeta superior o en el proyecto.
+
+VALIDACIÓN
+Pruebas en Linux: pipeline, parches, XISO, arranque, perfiles y 21 nuevas de
+reparación (incluye un juego simulado que falla hasta tener sus funciones
+declaradas y arranca tras el bucle). El gancho C++ se comprobó con clang++
+contra las cabeceras reales del SDK. No se ha compilado ni ejecutado el juego en
+Windows aquí: el bucle resuelve funciones no registradas, pero otros fallos del
+juego (gráficos, guardado…) pueden requerir ajustes manuales.

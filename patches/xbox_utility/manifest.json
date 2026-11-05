@@ -1,0 +1,40 @@
+{
+  "id": "xbox-utility",
+  "name": "Utilidades Xbox",
+  "version": "1.0.1",
+  "author": "ReForge",
+  "api": 1,
+  "requires_core": ">=1.1.0,<2.0.0",
+  "entry": "plugin.py",
+  "description": "Funciones del 360 Utility Batch Create Extract y Qwix integradas en ReForge Studio: extracción y creación de ISOs por lotes, Xbox Clásica ISO ↔ carpeta, herramientas GOD, FTP a la consola y limpieza segura.",
+  "changelog": [
+    {
+      "version": "1.0.1",
+      "date": "2026-10-15",
+      "notes": [
+        "Incluido dentro de ReForge Studio 1.2: se instala y actualiza solo",
+        "Pestañas compactas y tarjetas de herramientas sin texto cortado"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-10-15",
+      "notes": [
+        "Extracción de ISOs por lotes (Xbox 360 y Xbox Clásica) con detección de título, Title ID y región",
+        "Creación de ISOs por lotes con creador XDVDFS nativo (compatible con extract-xiso)",
+        "Xbox Clásica: ISO → carpeta y carpeta → ISO",
+        "Lanzador de 360mpGui, Iso2God, God2Iso, Xbox Image Browser, abgx360, ImgBurn y Qwix",
+        "Registro de MSCOMCTL.OCX para Xbox Image Browser",
+        "Envío de juegos a la Xbox por FTP con revisión de nombres FATX (42 caracteres)",
+        "Limpieza de carpetas de juego con papelera de reciclaje y confirmación"
+      ]
+    }
+  ],
+  "credits": [
+    "360 Utility Batch Create Extract — BLAHPR",
+    "extract-xiso — XboxDev / in@fishtank.com",
+    "Qwix — Devenic, Team Avalaunch",
+    "360mpGui Team · Iso2God Team · God2Iso Team · Redline99 (Xbox Image Browser)",
+    "abgx360 · ImgBurn"
+  ]
+}

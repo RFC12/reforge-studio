@@ -1,0 +1,5 @@
+LIBRARY libScePad
+EXPORTS
+    scePadRead @12
+    scePadReadState @13
+    scePadSetVibration @23
