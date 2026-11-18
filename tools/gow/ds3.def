@@ -1,0 +1,8 @@
+LIBRARY libScePad
+EXPORTS
+    scePadGetControllerType @4
+    scePadRead @12
+    scePadReadState @13
+    scePadResetLightBar @14
+    scePadSetLightBar @18
+    scePadSetVibration @23

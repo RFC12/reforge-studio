@@ -249,6 +249,8 @@ Configuración recomendada en Windows (**Ajustes**): *Detectar automáticamente*
 
 ## Desarrollo
 
+Hace falta **Python 3.11 o más nuevo**.
+
 ```bash
 python -m pip install -r requirements.txt
 python main.py                 # ejecutar desde el código
@@ -261,5 +263,24 @@ python tests/test_patches.py   # parches, instalador de parches, creador de ISO
 | `build_release.bat` | Instalador + parches (lo recomendado) |
 | `build_exe.bat` | `.exe` portable de un solo archivo, sin instalador |
 | `build_patches.bat` | Solo los `.rfpatch` |
+| `buscar_python.bat` | Lo llaman los tres anteriores: busca un Python 3.11+ (con el lanzador `py`, porque `python` en Windows suele ser una versión vieja) y activa UTF-8 en la consola |
+
+`build_release.bat` ejecuta todas las pruebas de `tests\` antes de compilar, así
+que no hay que añadirlas a mano cuando se crea una nueva.
+
+Para que el actualizador automático vea una versión nueva, hay que publicar una
+Release en GitHub y subir el instalador tal cual sale de `dist\`, sin cambiarle
+el nombre (`ReForgeStudio-Setup-<versión>.exe`): ese es el nombre que busca.
+
+## Herramientas (`tools/`)
+
+Además de `make_patch.py` y `make_payload.py`, que empaquetan los parches y el
+instalador, en `tools/` están las herramientas de los proyectos grandes hechos
+con ReForge: el doblaje latino de *Call of Duty: Advanced Warfare* (parcheador,
+interfaz y los scripts que comprueban el resultado e identifican el idioma de
+cada pista) y las tres versiones de ReForge DualSense para juegos de PC
+(XInput, Borderlands 2 con reescalado por IA, y `libScePad` de God of War).
+Cada carpeta lleva su propio `README.md`; el índice está en
+[`tools/README.md`](tools/README.md).
 
 Atajos: `F11` pantalla completa · `Ctrl+1…9` secciones · flechas + `Enter` en los tiles.
