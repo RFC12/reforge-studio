@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QFra
 from . import game
 from .game_options import GameOptions, write_runtime_config
 from .optimizer import (PERF_MODES, QUALITY_LEVELS, RENDER_LADDER, cached_hardware, describe, detect_hardware,
-                        nvidia_ai_tips, open_nvidia_app, recommended_scale, shader_cache_info)
+                        nvidia_ai_tips, open_nvidia_app, recommended_scale)
 from .widgets import label
 
 LADDER_TITLES = {k: t for k, t, *_r in RENDER_LADDER}
@@ -146,13 +146,23 @@ class OptimizeDialog(QDialog):
         v.addWidget(assist, 0, Qt.AlignmentFlag.AlignLeft)
 
         v.addWidget(label("CACHÉ DE SHADERS", "Section"))
-        base, files = shader_cache_info(title_id, game.manifest_project_name(root) or name)
-        total = sum(sz for _f, sz in files)
-        v.addWidget(label((f"{len(files)} archivo(s) · {total / 1024:.0f} KB en {base}. " if files else
-                           "Aún vacía. ") +
-                          "Se llena sola mientras juegas y se carga al arrancar: cada escena nueva puede dar un "
-                          "tirón o parpadeo solo la primera vez. Cambiar entre RTV y ROV usa cachés distintas, "
-                          "así que conviene quedarse con un modo.", "Hint", wrap=True))
+        from . import shadercache
+        st = shadercache.status(exe, title_id, getattr(self.o, "render_path", "") or "rtv")
+        v.addWidget(label(shadercache.describe(st) + " Se llena sola mientras juegas y se carga al arrancar: "
+                          "cada escena nueva puede dar un tirón solo la primera vez.", "Hint", wrap=True))
+        shared = shadercache.other_caches(exe, title_id)
+        if shared and not st["exists"]:
+            v.addWidget(label(f"Hay shaders ya traducidos de otro proyecto de este juego "
+                              f"({shared[0][1] / (1 << 20):.1f} MB): se reaprovechan al jugar.", "Hint", wrap=True))
+        sh = QHBoxLayout()
+        for text, fn in (("Exportar…", self._export_shaders), ("Importar…", self._import_shaders),
+                         ("Vaciar", self._clear_shaders)):
+            b = QPushButton(text)
+            b.clicked.connect(fn)
+            sh.addWidget(b)
+        sh.addStretch(1)
+        v.addLayout(sh)
+        self._sc_exe, self._sc_tid = exe, title_id
         v.addStretch(1)
         v = outer
         row = QHBoxLayout()
@@ -166,6 +176,43 @@ class OptimizeDialog(QDialog):
         row.addWidget(cancel)
         v.addLayout(row)
         self._refresh()
+
+    def _export_shaders(self):
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        from . import shadercache
+        dest, _f = QFileDialog.getSaveFileName(self, "Guardar la caché de shaders",
+                                               f"shaders-{self._sc_tid or 'juego'}.zip", "Zip (*.zip)")
+        if not dest:
+            return
+        out = shadercache.export_zip(self._sc_exe, self._sc_tid, dest)
+        QMessageBox.information(self, "Caché de shaders",
+                                f"Guardada en {out}" if out else "Todavía no hay nada que guardar.")
+
+    def _import_shaders(self):
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        from . import shadercache
+        src, _f = QFileDialog.getOpenFileName(self, "Caché de shaders", "", "Zip (*.zip)")
+        if not src:
+            return
+        try:
+            n = shadercache.import_zip(self._sc_exe, self._sc_tid, src)
+        except Exception as e:      # noqa: BLE001
+            QMessageBox.warning(self, "Caché de shaders", f"No se pudo importar: {e}")
+            return
+        QMessageBox.information(self, "Caché de shaders",
+                                f"{n} archivo(s) añadidos." if n else
+                                "Ese archivo no tiene shaders de este juego.")
+
+    def _clear_shaders(self):
+        from PySide6.QtWidgets import QMessageBox
+        from . import shadercache
+        if QMessageBox.question(self, "Vaciar la caché",
+                                "Se borrarán los shaders ya traducidos de este juego. La próxima partida "
+                                "volverá a traducirlos (tirones la primera vez). ¿Seguir?"
+                                ) != QMessageBox.StandardButton.Yes:
+            return
+        n = shadercache.clear(self._sc_exe, self._sc_tid)
+        QMessageBox.information(self, "Caché de shaders", f"{n} archivo(s) borrados.")
 
     def _open_nvidia(self):
         if not open_nvidia_app():

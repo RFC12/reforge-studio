@@ -79,6 +79,17 @@ class _FuncThread(QThread):
             self.done.emit(False, str(e))
 
 
+def run_in_thread(func, done=None):
+    """Lanza func(ctx) en un hilo y llama a done(ok, error) al terminar. Devuelve el hilo (tiene
+    .cancel_event para cancelar y .progress_signal para el progreso)."""
+    import threading
+    t = _FuncThread(func, threading.Event())
+    if done is not None:
+        t.done.connect(done)
+    t.start()
+    return t
+
+
 class PipelineRunner(QObject):
     step_state = Signal(int, str)   # índice, pending|running|done|error|skipped
     log = Signal(str, str)

@@ -94,6 +94,7 @@ class GameOptions:
     diag_done: bool = False        # (1.18.0, ya no se usa)
     diag_cooldown: int = 0         # partidas que faltan para que el Taller pueda volver a diagnosticar solo
     audio_queue: int = 0           # fotogramas de audio en cola (audio_maxqframes); 0 = el del optimizador
+    heap_size_mb: int = 0          # montón del CRT del juego (rexcrt_heap_size_mb); 0 = el de rexglue
     auto_tune: bool = True         # el Taller ajusta solo tras cada partida (audio, diagnóstico, avisos)
     input_backend_chosen: bool = False  # el jugador eligió SDL/XInput a mano (no se cambia a automático)
     pc_offer_dismissed: bool = False
@@ -192,6 +193,9 @@ class GameOptions:
             pass
         if self.audio_queue:      # ajuste propio del juego (lo sube el ajuste automático si el audio se corta)
             vals["audio_maxqframes"] = max(4, min(64, int(self.audio_queue)))
+        if self.heap_size_mb:     # solo si al juego se le acabó el montón en una partida anterior
+            vals["rexcrt_heap_enable"] = True
+            vals["rexcrt_heap_size_mb"] = max(64, min(1024, int(self.heap_size_mb)))
         return vals
 
     def codegen_level(self):
@@ -404,7 +408,8 @@ ADVANCED_CVARS = ("render_target_path_d3d12", "d3d12_readback_resolve", "gpu_all
                   "texture_cache_memory_limit_hard", "texture_cache_memory_limit_render_to_texture",
                   "texture_cache_memory_limit_soft_lifetime", "d3d12_queue_priority",
                   "occlusion_query_enable", "video_mode_refresh_rate", "audio_maxqframes",
-                  "d3d12_allow_variable_refresh_rate_and_tearing")
+                  "d3d12_allow_variable_refresh_rate_and_tearing",
+                  "gpu_debug_markers", "kernel_debug_monitor", "rexcrt_heap_enable", "rexcrt_heap_size_mb")
 
 
 def supported_cvars(exe):

@@ -51,12 +51,16 @@ exe = os.path.join(TMP, "game", "build", "angrybirdstrilogy.exe")
 os.makedirs(os.path.dirname(exe))
 open(exe, "w").write("")
 opt.detect_hardware.__globals__["_gpu_from_registry"] = lambda: [("NVIDIA GeForce RTX 5060 Ti", 16311)]
+opt.detect_hardware.__globals__["_system_ram"] = lambda: (32768, 20000)   # PC de referencia: 32 GB
 opt.detect_hardware()
 o = GameOptions()
 write_runtime_config(exe, o)
 t = open(runtime_config_path(exe), encoding="utf-8").read()
 check("texture_cache_memory_limit_soft = 2048" in t and "async_shader_compilation = true" in t
       and "d3d12_queue_priority = 1" in t, "escribe la caché de texturas, los shaders y la prioridad")
+check(opt._texture_budget(16311, 8192)[1] == 1024 and opt._texture_budget(16311, 32768)[1] == 4096,
+      "con poca RAM la caché de texturas se limita aunque sobre VRAM")
+check(opt._texture_budget(16311, 0)[1] == 4096, "sin dato de RAM manda la VRAM")
 open(os.path.join(os.path.dirname(exe), "rexgpu-xenos.dll"), "wb").write(
     b"MZ texture_cache_memory_limit_soft\0texture_cache_memory_limit_hard\0async_shader_compilation\0")
 write_runtime_config(exe, o)

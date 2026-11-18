@@ -55,6 +55,8 @@ python tests\test_seh.py || goto :err
 python tests\test_split.py || goto :err
 python tests\test_texswap.py || goto :err
 python tests\test_extra_content.py || goto :err
+python tests\test_shadercache.py || goto :err
+python tests\test_update.py || goto :err
 
 echo.
 echo [3/6] Parches (se incluyen dentro del programa)

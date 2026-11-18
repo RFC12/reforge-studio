@@ -1,7 +1,8 @@
 """Optimizador de rendimiento de los juegos recompilados.
 
 Ajusta las opciones reales del runtime de rexglue (verificadas en rexgpu-xenos.dll / rexruntime.dll):
-* caché de texturas según la VRAM (menos texturas que se descartan y recargan → menos parpadeo y tirones),
+* caché de texturas según la VRAM y la RAM del PC (menos texturas que se descartan y recargan → menos
+  parpadeo y tirones, sin pasarse si el equipo tiene poca memoria),
 * hilos de creación de pipelines según la CPU y compilación de shaders en segundo plano,
 * prioridad de la cola gráfica,
 y al lanzar: prioridad «por encima de lo normal» y preferencia de GPU de alto rendimiento.
@@ -25,7 +26,8 @@ PERF_MODES = [
 
 PERF_CVARS = ("async_shader_compilation", "d3d12_pipeline_creation_threads", "texture_cache_memory_limit_soft",
               "texture_cache_memory_limit_hard", "texture_cache_memory_limit_render_to_texture",
-              "texture_cache_memory_limit_soft_lifetime", "d3d12_queue_priority")
+              "texture_cache_memory_limit_soft_lifetime", "d3d12_queue_priority",
+              "gpu_debug_markers", "kernel_debug_monitor")
 
 # Modos de imagen del asistente, del más rápido al más pesado: (clave, título, ruta, lectura CPU, datos no válidos)
 RENDER_LADDER = [
@@ -119,6 +121,41 @@ def _avx2():
         return False
 
 
+def _system_ram():
+    """(RAM total, RAM libre) en MB; (0, 0) si no se puede leer."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            class _MS(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+            m = _MS()
+            m.dwLength = ctypes.sizeof(_MS)
+            if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m)):
+                return 0, 0
+            return int(m.ullTotalPhys // (1 << 20)), int(m.ullAvailPhys // (1 << 20))
+        total = free = 0
+        with open("/proc/meminfo", encoding="utf-8", errors="replace") as f:
+            for ln in f:
+                if ln.startswith("MemTotal:"):
+                    total = int(ln.split()[1]) // 1024
+                elif ln.startswith("MemAvailable:"):
+                    free = int(ln.split()[1]) // 1024
+        return total, free
+    except Exception:      # noqa: BLE001
+        return 0, 0
+
+
+def free_ram_mb():
+    """RAM libre ahora mismo, en MB (0 si no se puede leer)."""
+    return _system_ram()[1]
+
+
 def detect_hardware(game_log=""):
     """GPU (nombre y VRAM), hilos de CPU y AVX2. Si el registro no da la GPU, se lee del log del juego."""
     gpus = _gpu_from_registry()
@@ -129,8 +166,9 @@ def detect_hardware(game_log=""):
         m = re.search(r"DXGI adapter: (.+?) \(vendor", open(game_log, encoding="utf-8", errors="replace").read())
         if m:
             name = m.group(1)
+    ram_mb, ram_free_mb = _system_ram()
     hw = {"gpu": name or "desconocida", "vram_mb": int(vram), "cpu_threads": os.cpu_count() or 4,
-          "avx2": _avx2()}
+          "avx2": _avx2(), "ram_mb": ram_mb, "ram_free_mb": ram_free_mb}
     try:
         os.makedirs(config_dir(), exist_ok=True)
         with open(hardware_path(), "w", encoding="utf-8") as f:
@@ -148,12 +186,13 @@ def cached_hardware():
         return detect_hardware()
 
 
-def tuned_values(hw, mode):
-    """Valores del runtime para el hardware y el modo elegidos ({} si el optimizador está desactivado)."""
-    if mode == "off":
-        return {}
-    vram = int(hw.get("vram_mb") or 0)
-    threads = int(hw.get("cpu_threads") or 4)
+def _texture_budget(vram, ram):
+    """(soft, hard, render-a-textura) en MB para la caché de texturas.
+
+    La caché vive en la VRAM, pero cuando la VRAM se llena el driver la desborda a la RAM del PC: por eso el
+    presupuesto se limita también por la RAM instalada (la octava parte como mucho). En un equipo con 32 GB no
+    cambia nada; en uno de 8 GB evita que el juego empiece a tirar de disco y a dar tirones.
+    """
     if vram >= 12000:
         soft, hard, rtt = 2048, 4096, 128
     elif vram >= 8000:
@@ -164,6 +203,22 @@ def tuned_values(hw, mode):
         soft, hard, rtt = 768, 1536, 48
     else:                       # VRAM desconocida o pequeña: valores de rexglue
         soft, hard, rtt = 384, 768, 24
+    if ram >= 1024:             # RAM conocida: no dejar que el desborde se coma el PC
+        cap = max(768, ram // 8)
+        if cap < hard:
+            k = cap / hard
+            soft, hard, rtt = max(384, int(soft * k)), cap, max(24, int(rtt * k))
+    return soft, hard, rtt
+
+
+def tuned_values(hw, mode):
+    """Valores del runtime para el hardware y el modo elegidos ({} si el optimizador está desactivado)."""
+    if mode == "off":
+        return {}
+    vram = int(hw.get("vram_mb") or 0)
+    ram = int(hw.get("ram_mb") or 0)
+    threads = int(hw.get("cpu_threads") or 4)
+    soft, hard, rtt = _texture_budget(vram, ram)
     return {
         "async_shader_compilation": mode != "sin_parpadeo",
         # La mitad de los hilos: con casi todos compilando pipelines a la vez (al cargar o con efectos nuevos)
@@ -172,10 +227,13 @@ def tuned_values(hw, mode):
         "texture_cache_memory_limit_soft": soft,
         "texture_cache_memory_limit_hard": hard,
         "texture_cache_memory_limit_render_to_texture": rtt,
-        "texture_cache_memory_limit_soft_lifetime": 120 if vram >= 6000 else 30,
+        "texture_cache_memory_limit_soft_lifetime": 120 if hard >= 2048 else 30,
         "d3d12_queue_priority": 1,
         # Más audio en cola: evita el sonido entrecortado/estático mientras el juego carga (CPU ocupada).
         "audio_maxqframes": 32,
+        # Marcas de depuración de la GPU: no hacen falta para jugar y cuestan trabajo por cada dibujado.
+        "gpu_debug_markers": False,
+        "kernel_debug_monitor": False,
     }
 
 
@@ -184,7 +242,8 @@ def describe(hw, mode):
     if not v:
         return "Optimizador desactivado: valores por defecto de rexglue."
     vram = f"{hw['vram_mb'] / 1024:.0f} GB" if hw.get("vram_mb") else "VRAM desconocida"
-    return (f"{hw.get('gpu')} ({vram}) · {hw.get('cpu_threads')} hilos de CPU\n"
+    ram = f" · {hw['ram_mb'] / 1024:.0f} GB de RAM" if hw.get("ram_mb") else ""
+    return (f"{hw.get('gpu')} ({vram}) · {hw.get('cpu_threads')} hilos de CPU{ram}\n"
             f"Caché de texturas {v['texture_cache_memory_limit_soft']}/{v['texture_cache_memory_limit_hard']} MB "
             f"(render a textura {v['texture_cache_memory_limit_render_to_texture']} MB) · "
             f"{v['d3d12_pipeline_creation_threads']} hilos para shaders · "

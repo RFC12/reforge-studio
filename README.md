@@ -1,4 +1,4 @@
-# ReForge Studio 1.29.0
+# ReForge Studio 1.30.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,28 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.30.0 — rendimiento automático y actualizaciones
+
+- **Ajuste por RAM además de VRAM.** La caché de texturas vive en la VRAM, pero cuando esta se llena el driver
+  la desborda a la RAM del PC. Ahora el presupuesto se limita también por la RAM instalada (la octava parte
+  como mucho): en un equipo de 32 GB no cambia nada, en uno de 8 GB evita tirones por falta de memoria.
+- **Caché de shaders que no se pierde.** rexglue guarda lo que traduce en
+  `Documentos/<juego>/cache/shaders/shareable` (`<TITLEID>.xsh` y un `.xpso` por ruta de imagen). ReForge la
+  guarda dentro del proyecto tras cada partida, la restaura si se borra, **la reaprovecha entre proyectos del
+  mismo juego** (recompilar no empieza de cero) y avisa de que cambiar RTV ↔ ROV estrena pipelines. Se puede
+  exportar e importar desde ⚡ Optimizar.
+- **Montón del juego automático.** Si en el registro aparece que al juego se le acabó su montón
+  (`rexcrt_heap`), ReForge sube `rexcrt_heap_size_mb` para la próxima partida (512 → 768 → 1024).
+- **Marcas de depuración apagadas** (`gpu_debug_markers`, `kernel_debug_monitor`): no hacen falta para jugar.
+- **Revisión del PC** en el barrido: RAM libre, planificación de GPU por hardware (HAGS), grabación en segundo
+  plano (Game DVR), Modo de juego y plan de energía. Solo informa; esos ajustes son de Windows.
+- **Actualizaciones desde GitHub.** ReForge compara su versión con la última publicada, avisa y puede
+  instalarla sola. Comprueba el tamaño y el SHA-256 del instalador antes de ejecutarlo. En Ajustes →
+  Actualizaciones se elige el repositorio, si se instalan sin preguntar y si se incluyen versiones de prueba.
+
+Cada cvar nueva solo se escribe si el runtime del juego la trae (se comprueba en `rexgpu-xenos.dll` y
+`rexruntime.dll`), así que una versión antigua del SDK no se ve afectada.
 
 ---
 

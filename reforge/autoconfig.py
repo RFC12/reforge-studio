@@ -53,6 +53,22 @@ def summary(o, hw, values):
     return " · ".join(parts)
 
 
+def sync_shaders(root, exe, options):
+    """Deja lista la caché de shaders antes de jugar (restaurarla, reaprovechar otro proyecto, avisar)."""
+    try:
+        from . import shadercache
+        from .game_options import title_id_for_exe
+        tid = title_id_for_exe(exe) or ""
+        msgs = shadercache.sync(root, exe, tid)
+        st = shadercache.status(exe, tid, getattr(options, "render_path", "") or "rtv")
+        if st["cold"]:
+            msgs.append(f"La ruta de imagen {st['render_path'].upper()} estrena pipelines: esta partida puede "
+                        "tener algún tirón hasta que se guarden.")
+        return msgs
+    except Exception:      # noqa: BLE001 — nunca impedir que el juego arranque por esto
+        return []
+
+
 def apply(root, exe):
     """Revisa el PC y escribe la configuración del juego. Devuelve el texto del resumen ('' si no se pudo)."""
     from .game_options import GameOptions, write_runtime_config
@@ -71,6 +87,7 @@ def apply(root, exe):
                 o.resolution_scale = want
                 o.save(root)
         write_runtime_config(exe, o)
-        return summary(o, hw, o.runtime_values())
+        extra = sync_shaders(root, exe, o)
+        return summary(o, hw, o.runtime_values()) + ("\n" + "\n".join(extra) if extra else "")
     except Exception:      # noqa: BLE001
         return ""

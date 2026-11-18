@@ -9,8 +9,8 @@ from PySide6.QtCore import QProcess, Qt, QTimer
 from PySide6.QtGui import QColor, QIcon, QKeySequence, QShortcut
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QFrame, QHBoxLayout, QMainWindow,
-                               QMessageBox, QPushButton, QStackedWidget, QSystemTrayIcon, QVBoxLayout,
-                               QWidget)
+                               QMessageBox, QProgressDialog, QPushButton, QStackedWidget, QSystemTrayIcon,
+                               QVBoxLayout, QWidget)
 
 from . import APP_NAME, SUPPORTED_APIS, __version__
 from . import stdlib_bundle  # noqa: F401  (módulos disponibles para parches en el .exe)
@@ -203,6 +203,76 @@ class MainWindow(QMainWindow):
         if self.args.get("install_patch"):
             QTimer.singleShot(300, lambda: self.install_patch(self.args["install_patch"]))
         self._handle_project_args(self.args, 400)
+        QTimer.singleShot(3000, self.check_updates_quietly)
+
+    # ---------------------------------------------------------------- actualizaciones
+    def check_updates_quietly(self):
+        """Pregunta a GitHub en segundo plano (como mucho una vez al día) y avisa si hay versión nueva."""
+        from threading import Thread
+
+        from . import update as upd
+
+        def work():
+            try:
+                info = upd.check()
+            except Exception:      # noqa: BLE001 — una actualización nunca debe molestar al arrancar
+                info = None
+            if info:
+                QTimer.singleShot(0, lambda: self.offer_update(info))
+
+        Thread(target=work, daemon=True).start()
+
+    def offer_update(self, info):
+        """Ofrece instalar la versión nueva (o la instala sola si así está configurado)."""
+        from . import update as upd
+        cfg = upd.load_config()
+        if not cfg.get("auto_install"):
+            box = QMessageBox(self)
+            box.setWindowTitle("Hay una versión nueva")
+            box.setText(f"ReForge Studio {info['version']} está disponible (tienes la {upd.current_version()}).")
+            if info.get("notes"):
+                box.setDetailedText(info["notes"][:4000])
+            now = box.addButton("Actualizar ahora", QMessageBox.ButtonRole.AcceptRole)
+            box.addButton("Más tarde", QMessageBox.ButtonRole.RejectRole)
+            skip = box.addButton("Omitir esta versión", QMessageBox.ButtonRole.DestructiveRole)
+            box.exec()
+            if box.clickedButton() is skip:
+                upd.save_config(skip=info["version"])
+                return
+            if box.clickedButton() is not now:
+                return
+        self._download_update(info, silent=bool(cfg.get("auto_install")))
+
+    def _download_update(self, info, silent=False):
+        from . import update as upd
+        cfg = upd.load_config()
+        dlg = QProgressDialog(f"Descargando ReForge Studio {info['version']}…", "Cancelar", 0, 1000, self)
+        dlg.setWindowTitle("Actualización")
+        dlg.setMinimumDuration(0)
+        state = {"path": "", "error": ""}
+
+        def work(ctx):
+            state["path"] = upd.download(
+                info, progress=lambda d, t: ctx.progress(int(d * 1000 / t), 1000),
+                cancelled=ctx.cancelled, token=cfg.get("token") or "")
+
+        def done(ok, err):
+            dlg.close()
+            if not ok:
+                QMessageBox.warning(self, "Actualización", f"No se pudo descargar: {err}")
+                return
+            upd.cleanup(keep=state["path"])
+            try:
+                upd.install(state["path"], silent=silent)
+            except upd.UpdateError as e:
+                QMessageBox.warning(self, "Actualización", str(e))
+                return
+            QApplication.quit()
+
+        from .runner import run_in_thread
+        th = run_in_thread(work, done)
+        th.progress_signal.connect(lambda v, m: dlg.setValue(v))
+        dlg.canceled.connect(lambda: th.cancel_event.set())
 
     # ---------------------------------------------------------------- páginas
     def add_page(self, key, nav_text, title, widget, owner="", tail=False):

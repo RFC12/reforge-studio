@@ -393,8 +393,37 @@ def auto_tune(root, exe, log_path):
         o.scale_ceiling = o.resolution_scale
         changes.append(f"El juego no llegaba a {target:g} FPS mientras jugabas: resolución interna a "
                        f"{o.resolution_scale}× para recuperar fluidez.")
+    changes += _after_play(root, exe, log_path, o)
     if changes or dirty:
         o.save(root)
+    return changes
+
+
+def _after_play(root, exe, log_path, o):
+    """Lo que se guarda o se arregla al terminar la partida: caché de shaders y montón del juego."""
+    changes = []
+    try:        # la caché de shaders que acaba de crecer se guarda dentro del proyecto
+        from . import shadercache
+        from .game_options import title_id_for_exe
+        tid = title_id_for_exe(exe) or ""
+        saved = shadercache.backup(root, exe, tid)
+        if saved > (1 << 20):
+            changes.append(f"Shaders guardados en el proyecto ({saved / (1 << 20):.1f} MB): si vuelves a "
+                           "compilar este juego, no habrá que traducirlos otra vez.")
+    except Exception:      # noqa: BLE001
+        pass
+    try:        # el juego se quedó sin montón: se sube para la próxima partida
+        from . import hostcheck
+        with open(log_path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        if hostcheck.heap_exhausted(text):
+            nxt = hostcheck.next_heap_size(getattr(o, "heap_size_mb", 0))
+            if nxt:
+                o.heap_size_mb = nxt
+                changes.append(f"Al juego se le acabó la memoria de su montón: se sube a {nxt} MB para la "
+                               "próxima partida.")
+    except Exception:      # noqa: BLE001
+        pass
     return changes
 
 

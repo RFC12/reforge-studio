@@ -6,9 +6,9 @@ import subprocess
 import time
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
-                               QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
-                               QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, QFrame, QGridLayout,
+                               QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QProgressBar,
+                               QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
 
 from .core import (Project, cmake_build_cmd, cmake_codegen_cmd, cmake_configure_cmd, copy_tree,
                    detect_tools, find_outputs, human_size, open_path, rexglue_init_cmd, sanitize_name,
@@ -2151,6 +2151,49 @@ class SettingsPage(QWidget):
                            "se cierra por una función no registrada, lo cierra y lo repara; si es un error gráfico, "
                            "te ofrece el asistente de imagen.", "Hint", wrap=True))
         bv.addWidget(p4)
+
+        p5, v5 = panel()
+        v5.addWidget(label("ACTUALIZACIONES", "Section"))
+        from . import update as upd
+        ucfg = upd.load_config()
+        self.upd_auto = QCheckBox("Buscar actualizaciones de ReForge Studio automáticamente")
+        self.upd_auto.setChecked(bool(ucfg.get("enabled", True)))
+        self.upd_auto.toggled.connect(lambda on: upd.save_config(enabled=bool(on)))
+        v5.addWidget(self.upd_auto)
+        self.upd_silent = QCheckBox("Instalarlas sin preguntar (se reinicia el programa)")
+        self.upd_silent.setChecked(bool(ucfg.get("auto_install", False)))
+        self.upd_silent.toggled.connect(lambda on: upd.save_config(auto_install=bool(on)))
+        v5.addWidget(self.upd_silent)
+        self.upd_beta = QCheckBox("Incluir versiones de prueba")
+        self.upd_beta.setChecked(bool(ucfg.get("prereleases", False)))
+        self.upd_beta.toggled.connect(lambda on: upd.save_config(prereleases=bool(on)))
+        v5.addWidget(self.upd_beta)
+        f5 = QFormLayout()
+        f5.setVerticalSpacing(8)
+        self.upd_repo = QLineEdit(ucfg.get("repo") or upd.REPO)
+        self.upd_repo.editingFinished.connect(
+            lambda: upd.save_config(repo=self.upd_repo.text().strip() or upd.REPO, last_check=0))
+        f5.addRow("Repositorio", self.upd_repo)
+        self.upd_token = QLineEdit(ucfg.get("token") or "")
+        self.upd_token.setEchoMode(QLineEdit.EchoMode.Password)
+        self.upd_token.setPlaceholderText("Solo si el repositorio es privado")
+        self.upd_token.editingFinished.connect(
+            lambda: upd.save_config(token=self.upd_token.text().strip(), last_check=0))
+        f5.addRow("Token de GitHub", self.upd_token)
+        v5.addLayout(f5)
+        hu = QHBoxLayout()
+        self.upd_btn = QPushButton("⟳  Buscar ahora")
+        self.upd_btn.clicked.connect(self.check_updates)
+        hu.addWidget(self.upd_btn)
+        hu.addStretch(1)
+        v5.addLayout(hu)
+        self.upd_state = label(f"Tienes la versión {upd.current_version()}.", "Hint", wrap=True)
+        v5.addWidget(self.upd_state)
+        v5.addWidget(label("ReForge compara su versión con la última publicada en GitHub. Antes de instalar nada "
+                           "comprueba el tamaño y el SHA-256 del instalador. Si el repositorio es privado, hace "
+                           "falta un token personal con permiso de lectura.", "Hint", wrap=True))
+        bv.addWidget(p5)
+
         bv.addStretch(1)
         left = scroll_wrap(body)
         left.setMinimumWidth(560)
@@ -2158,6 +2201,26 @@ class SettingsPage(QWidget):
         self.log = LogView()
         outer.addWidget(self.log, 2)
         self.runner.log.connect(self.log.write)
+
+    def check_updates(self):
+        """Busca una versión nueva y, si la hay, ofrece instalarla."""
+        from . import update as upd
+        self.upd_btn.setEnabled(False)
+        self.upd_state.setText("Preguntando a GitHub…")
+        QApplication.processEvents()
+        try:
+            info = upd.check(force=True)
+        except upd.UpdateError as e:
+            self.upd_state.setText(str(e))
+            self.upd_btn.setEnabled(True)
+            return
+        finally:
+            self.upd_btn.setEnabled(True)
+        if not info:
+            self.upd_state.setText(f"ReForge Studio {upd.current_version()}: ya tienes la versión más reciente.")
+            return
+        self.upd_state.setText(f"Disponible la versión {info['version']}.")
+        self.win.offer_update(info)
 
     def _set(self, key, value):
         setattr(self.win.cfg, key, value)

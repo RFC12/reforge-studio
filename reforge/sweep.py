@@ -273,13 +273,41 @@ def check_icon(root, exe):
     return [("Icono", OK, "El .exe ya tiene el icono oficial del juego.")] if src else []
 
 
+def check_host():
+    """El PC tal y como está: RAM libre y ajustes de Windows que cambian el rendimiento en Direct3D 12."""
+    from . import hostcheck
+    out = []
+    for state, txt in hostcheck.report():
+        out.append(("Tu PC", {hostcheck.OK: OK, hostcheck.WARN: WARN}.get(state, OK), txt))
+    return out
+
+
+def check_shaders(root, exe):
+    """Caché de shaders: que no haya que volver a traducirlos en cada partida."""
+    from . import shadercache
+    from .game_options import GameOptions, title_id_for_exe
+    tid = title_id_for_exe(exe) or ""
+    o = GameOptions.load(root)
+    st = shadercache.status(exe, tid, getattr(o, "render_path", "") or "rtv")
+    if not st["exists"]:
+        others = shadercache.other_caches(exe, tid)
+        if others:
+            return [("Shaders", FIXED, "Hay shaders ya traducidos de otro proyecto de este juego: se "
+                                       "reaprovechan al jugar, así la primera partida no dará tirones.")]
+        return [("Shaders", OK, "Sin caché todavía: la primera partida la crea y las siguientes cargan sin "
+                                "tirones.")]
+    state = WARN if st["cold"] else OK
+    return [("Shaders", state, shadercache.describe(st))]
+
+
 def run_static(cfg, root, exe):
     """Todas las capas que se revisan sin abrir el juego. Devuelve [(capa, estado, texto)]."""
     out = []
     for fn in (lambda: check_build(cfg, root), lambda: check_cpu(root), lambda: check_xex(root),
                lambda: check_assets(root), lambda: check_stubs(exe),
                lambda: check_code(root, exe), lambda: check_warnings(root), lambda: check_input(root),
-               lambda: check_perf(root, exe), lambda: check_icon(root, exe)):
+               lambda: check_perf(root, exe), lambda: check_icon(root, exe),
+               lambda: check_shaders(root, exe), check_host):
         try:
             out += fn()
         except Exception as e:      # noqa: BLE001
