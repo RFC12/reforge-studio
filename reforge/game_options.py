@@ -202,8 +202,14 @@ class GameOptions:
             "audio_mute": bool(self.audio_mute),
         }
         vals.update({k: v for k, v in self.keybinds.items() if k in DEFAULT_KEYBINDS})
-        from .pc_enhance import frame_values
+        from .pc_enhance import frame_values, guest_video_mode
         vals.update(frame_values(self.frame_mode(), self.fps_unlocked, cap=self.fps_cap))
+        if getattr(self, "widescreen", "auto") != "off":
+            modo = guest_video_mode()
+            if modo:
+                # Pantalla panorámica: se le ofrece al juego un modo de vídeo de su misma forma para
+                # que dibuje a lo ancho en vez de dejar bandas a los lados.
+                vals["video_mode_width"], vals["video_mode_height"] = modo
         if self.diagnostics:
             vals["log_level"] = "debug"   # rexglue anota shaders, texturas, disco… para cruzarlo con los tirones
         lang, country = self.effective_language()

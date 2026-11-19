@@ -1,4 +1,4 @@
-# ReForge Studio 1.34.0
+# ReForge Studio 1.35.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,28 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.35.0 — panorámica de verdad, sin parchear el juego
+
+Quitar las bandas negras estirando la imagen la deforma, y los parches de aspecto de
+la base de Xenia solo existen para unos pocos juegos. Resulta que hay una tercera vía,
+y es la buena: rexglue ya trae los cvars **`video_mode_width` y `video_mode_height`**,
+que son el modo de vídeo que el juego cree tener delante.
+
+Así que ReForge mira tu monitor y, si es más ancho que 16:9, le dice al juego que la
+pantalla es de esa forma (en tu caso 1712×720 para un 21:9). Los juegos que calculan
+su proyección a partir del modo de vídeo —la mayoría de los de esta época, Unreal
+Engine 3 incluido— **dibujan ellos mismos más campo de visión a lo ancho**: imagen
+llena, geometría correcta, sin estirar y sin parche. Los que llevan 1280×720 a fuego
+lo ignoran y se quedan como estaban, sin romperse.
+
+Se mantiene la altura en 720 para no encarecer el dibujado: lo que crece es el ancho,
+y el supermuestreo del optimizador sigue multiplicando encima. El ancho se redondea a
+múltiplo de 16 (los mosaicos del Xenos), lo que deja la forma a menos del 1 % de la de
+tu pantalla.
+
+Esto va además de lo de la 1.32.0: si el juego tiene parche de aspecto en la base de
+Xenia, se sigue aplicando.
 
 ## Novedades 1.34.0 — puntería con el ratón de verdad
 

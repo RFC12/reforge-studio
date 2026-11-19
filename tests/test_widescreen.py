@@ -68,6 +68,27 @@ check(o.letterbox_value() is False, "«estirar» quita las bandas aunque no haya
 o.widescreen = "auto"
 check(o.runtime_values()["present_letterbox"] is True, "lo que se escribe en el .toml sale de ahí")
 
+print("Modo de vídeo panorámico para el juego")
+check(P.guest_video_mode(ANCHA) is None, "en 16:9 no se le cambia el modo al juego")
+m21 = P.guest_video_mode(ULTRA)
+check(m21 is not None, "en 21:9 sí")
+if m21:
+    ancho, alto = m21
+    check(alto == 720, "se mantiene la altura de 720 para no encarecer el dibujado")
+    check(ancho % 16 == 0, f"el ancho es múltiplo de 16 ({ancho})")
+    check(640 <= ancho <= 0x0FFF, "y cabe en lo que acepta el cvar de rexglue")
+    check(abs(ancho / alto - ULTRA) / ULTRA < 0.01, "la forma queda a menos del 1 % de la pantalla")
+m32 = P.guest_video_mode(CINE)
+check(m32 is not None and m32[0] > m21[0], "una pantalla más ancha pide un modo más ancho")
+
+print("Lo que se le escribe al juego")
+o2 = GameOptions()
+v = o2.runtime_values()
+hay = "video_mode_width" in v
+check(hay == P.panoramic(), "solo se escribe el modo si la pantalla de verdad es panorámica")
+o2.widescreen = "off"
+check("video_mode_width" not in o2.runtime_values(), "«no tocar nada» tampoco toca el modo de vídeo")
+
 print()
 print(f"{len(fallos)} fallos" if fallos else "0 fallos")
 sys.exit(1 if fallos else 0)

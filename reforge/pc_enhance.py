@@ -224,6 +224,29 @@ def panoramic(aspect=None):
     return float(aspect if aspect is not None else monitor_aspect()) > PANORAMIC
 
 
+GUEST_HEIGHT = 720        # la altura con la que trabajan los juegos del 360 en alta definición
+
+
+def guest_video_mode(aspect=None):
+    """Modo de vídeo panorámico que se le ofrece al juego, o None si no hay nada que ganar.
+
+    Es la forma limpia de quitar las bandas negras: en vez de estirar la imagen por fuera, al juego se
+    le dice que la pantalla es de 21:9 (`video_mode_width`/`video_mode_height`, los cvars que ya trae
+    rexglue) y es él quien dibuja más campo de visión a lo ancho. Los juegos que calculan su proyección
+    a partir del modo de vídeo —la mayoría de los de esta época— salen bien sin parchear nada; los que
+    tienen 1280x720 a fuego lo ignoran y se quedan como estaban, sin romperse.
+
+    Se mantiene la altura de 720 para no cambiar el coste de dibujar: lo que crece es el ancho. El
+    supermuestreo del optimizador (draw_resolution_scale) sigue multiplicando encima.
+    """
+    asp = float(aspect if aspect is not None else monitor_aspect())
+    if asp <= PANORAMIC:
+        return None
+    ancho = int(round(GUEST_HEIGHT * asp / 16.0)) * 16     # múltiplo de 16: así cuadra con los mosaicos
+    ancho = max(640, min(0x0FFF, ancho))                   # lo que acepta el cvar
+    return ancho, GUEST_HEIGHT
+
+
 def paced_rate(hz, unlocked=True):
     """Ritmo del juego que encaja exacto con el monitor (cada imagen dura el mismo número de refrescos).
     60 en un monitor de 165 Hz son 2,75 refrescos por imagen: unas duran 3 y otras 2 → micro tirones aunque
