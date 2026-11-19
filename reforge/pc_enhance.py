@@ -26,6 +26,11 @@ NOT_FIX_RE = re.compile(r"(hash|check|crash\s*handler|cheat|debug|dev\s*menu|ups
                         r"option\s*b)", re.I)
 UPSCALE_FIX_RE = re.compile(r"upscal", re.I)
 MOTION_BLUR_RE = re.compile(r"(disable|remove|no)\s+motion\s*blur", re.I)
+WIDE_RE = re.compile(r"(ultra[\s_-]?wide|wide[\s_-]?screen|aspect\s*ratio|\d{2}[:/]\d{1,2}|"
+                     r"(remove|disable|no|fix)\s+(pillar|letter)\s*box)", re.I)
+NOT_WIDE_RE = re.compile(r"(option\s*[b-z]\b|hud\s*only|menu\s*only|\bfov\b.*only)", re.I)
+ASPECT_RE = re.compile(r"(\d{1,2})\s*[:/]\s*(\d{1,2})")
+PANORAMIC = 1.9       # a partir de aquí el monitor es panorámico (21:9 = 2,37 · 16:9 = 1,78)
 
 FPS_MODES = [
     ("auto", "Automático · ritmo exacto para tu monitor (recomendado)"),
@@ -44,14 +49,47 @@ def unlocks_framerate(name):
     return is_fps_patch(name) and not re.search(r"\b60\s*fps\b", name, re.I)
 
 
+def is_widescreen_patch(name):
+    """¿Es un parche que cambia la relación de aspecto del juego (panorámica, 21:9, sin bandas)?"""
+    return bool(WIDE_RE.search(name)) and not NOT_WIDE_RE.search(name)
+
+
+def patch_aspect(name):
+    """Relación que deja un parche: la que diga su nombre, «ultrawide» = 21:9, y si no dice nada, 16:9."""
+    m = ASPECT_RE.search(name)
+    if m:
+        ancho, alto = int(m.group(1)), int(m.group(2))
+        if alto and 1.0 <= ancho / alto <= 4.0:
+            return ancho / alto
+    if re.search(r"ultra[\s_-]?wide", name, re.I):
+        return 21 / 9
+    return 16 / 9
+
+
+def best_widescreen(patches, target):
+    """El parche panorámico que más se acerca a la pantalla sin pasarse (None si no hay ninguno que sirva).
+
+    Pasarse estrecha la imagen de verdad (el juego dibuja menos de lo que cabe), así que entre dos se
+    prefiere el que se queda corto; solo se acepta uno más ancho si no hay nada por debajo.
+    """
+    if not target or target <= 16 / 9 + 0.02:
+        return None          # en una pantalla 16:9 el juego ya llena: no hay nada que ganar
+    cands = [p for p in patches if is_widescreen_patch(p.name)]
+    if not cands:
+        return None
+    return min(cands, key=lambda p: (patch_aspect(p.name) > target + 0.02, abs(patch_aspect(p.name) - target)))
+
+
 def classify(name):
-    """'fps', 'fps_fix', 'fix', 'upscale_fix', 'motion_blur' o ''."""
+    """'fps', 'fps_fix', 'fix', 'upscale_fix', 'motion_blur', 'widescreen' o ''."""
     if is_fps_patch(name):
         return "fps"
     if FPS_COMPANION_RE.search(name) and not NOT_FPS_RE.search(name):
         return "fps_fix"
     if MOTION_BLUR_RE.search(name):
         return "motion_blur"
+    if is_widescreen_patch(name):
+        return "widescreen"
     if FIX_RE.search(name) and UPSCALE_FIX_RE.search(name) and not re.search(r"option\s*[b-z]\b", name, re.I):
         return "upscale_fix"
     if FIX_RE.search(name) and not NOT_FIX_RE.search(name):
@@ -71,7 +109,7 @@ def _fps_rank(name, fps_mode):
     return len(order)
 
 
-def recommended(patches, scale=1, fps_mode="60", motion_blur=True):
+def recommended(patches, scale=1, fps_mode="60", motion_blur=True, wide_target=0.0):
     """Parches recomendados para PC entre `patches` ([Patch] o [(archivo, Patch)]). Devuelve [Patch]:
     un solo parche de FPS (y sus correcciones), correcciones gráficas y, si se pide, sin desenfoque."""
     ps = [p[1] if isinstance(p, tuple) else p for p in patches]
@@ -89,6 +127,9 @@ def recommended(patches, scale=1, fps_mode="60", motion_blur=True):
             out.append(p)
         elif c == "motion_blur" and motion_blur:
             out.append(p)
+    wide = best_widescreen(ps, wide_target)
+    if wide is not None:
+        out.append(wide)
     res = []
     for p in out:
         if p.name not in seen:
@@ -117,6 +158,8 @@ def describe(sel):
         parts.append("correcciones gráficas")
     if "motion_blur" in kinds:
         parts.append("sin desenfoque de movimiento (estelas)")
+    if "widescreen" in kinds:
+        parts.append("imagen panorámica")
     return ", ".join(parts)
 
 
@@ -127,7 +170,8 @@ def apply_recommended(root, exe, title_id, options=None):
     avail = available_for_exe(exe, title_id)
     if not avail:
         return [], False
-    rec = recommended(avail, o.resolution_scale, o.frame_mode())
+    wide_target = monitor_aspect() if getattr(o, "widescreen", "auto") != "off" else 0.0
+    rec = recommended(avail, o.resolution_scale, o.frame_mode(), wide_target=wide_target)
     state = cheats.cheats_state(root) or {}
     active = set(state.get("patches", []))
     new = [p for p in rec if p.name not in active]
@@ -136,6 +180,8 @@ def apply_recommended(root, exe, title_id, options=None):
     sel = [p for _f, p in avail if p.name in active] + new
     changed = cheats.apply_cheats(root, sel)
     o.pc_enhanced = True
+    if any(classify(p.name) == "widescreen" for p in sel):
+        o.widescreen_patched = True      # ya no hacen falta las bandas negras: la imagen llena la pantalla
     o.save(root)
     return new, changed
 
@@ -157,6 +203,25 @@ def monitor_hz():
         except Exception:      # noqa: BLE001
             pass
     return 60
+
+
+def monitor_aspect():
+    """Relación de la pantalla principal (ancho/alto); 16/9 si no se puede saber."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            ancho, alto = int(user32.GetSystemMetrics(0)), int(user32.GetSystemMetrics(1))
+            if ancho > 0 and alto > 0:
+                return ancho / alto
+        except Exception:      # noqa: BLE001
+            pass
+    return 16 / 9
+
+
+def panoramic(aspect=None):
+    """¿La pantalla es más ancha que 16:9 (21:9, 32:9…)?"""
+    return float(aspect if aspect is not None else monitor_aspect()) > PANORAMIC
 
 
 def paced_rate(hz, unlocked=True):

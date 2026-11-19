@@ -41,7 +41,10 @@ jobs:
           Get-ChildItem tests\test_*.py | Sort-Object Name | ForEach-Object {
             Write-Host "--- $($_.Name)"
             python $_.FullName
-            if ($LASTEXITCODE -ne 0) { $fallos += $_.Name }
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::$($_.Name) termino con el codigo $LASTEXITCODE"
+              $fallos += "$($_.Name) ($LASTEXITCODE)"
+            }
           }
           if ($fallos.Count) { Write-Host "FALLAN: $($fallos -join ', ')"; exit 1 }
 

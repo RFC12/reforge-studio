@@ -49,6 +49,8 @@ def summary(o, hw, values):
         parts.append(f"audio {values['audio_maxqframes']}")
     if int(o.resolution_scale or 1) > 1:
         parts.append(f"resolución {o.resolution_scale}×")
+    if values.get("present_letterbox") is False:
+        parts.append("panorámica sin bandas" if getattr(o, "widescreen_patched", False) else "imagen estirada")
     parts.append(f"código {game.CODEGEN_LEVEL_TITLES.get(o.codegen_level(), '')}")
     return " · ".join(parts)
 

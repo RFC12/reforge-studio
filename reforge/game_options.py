@@ -60,6 +60,8 @@ class GameOptions:
     swap_post_effect: str = "none"
     anisotropic_override: int = 3
     present_letterbox: bool = True
+    widescreen: str = "auto"       # pantalla panorámica: auto (parche si lo hay) / on (estirar) / off
+    widescreen_patched: bool = False   # el Taller activó un parche panorámico de la base de Xenia
     # Compatibilidad gráfica (pantallas negras). render_path: "" automático, "rtv" rápido, "rov" preciso
     render_path: str = ""
     path_trial: str = ""           # «rtv»: probando la ruta rápida tras ir lento en ROV (se confirma o se revierte)
@@ -146,6 +148,21 @@ class GameOptions:
             json.dump(asdict(self), f, indent=2, ensure_ascii=False)
         os.replace(tmp, path)
 
+    def letterbox_value(self):
+        """Si se dibujan bandas negras cuando el juego no tiene la forma de la pantalla.
+
+        Con un parche panorámico activo hay que quitarlas: el juego mete más campo de visión dentro del
+        mismo búfer de 16:9 (imagen anamórfica) y es al estirarla al ancho real cuando recupera sus
+        proporciones y llena la pantalla. Sin parche, quitarlas solo deforma la imagen, así que eso hay
+        que pedirlo a mano («estirar»).
+        """
+        mode = getattr(self, "widescreen", "auto")
+        if mode == "on":
+            return False
+        if mode == "auto" and getattr(self, "widescreen_patched", False):
+            return False
+        return bool(self.present_letterbox)
+
     # ---------------------------------------------------------------- runtime .toml
     def runtime_values(self):
         scale = max(1, min(3, int(self.resolution_scale)))
@@ -157,7 +174,7 @@ class GameOptions:
             "present_effect": self.present_effect,
             "swap_post_effect": self.swap_post_effect,
             "anisotropic_override": int(self.anisotropic_override),
-            "present_letterbox": bool(self.present_letterbox),
+            "present_letterbox": self.letterbox_value(),
             "input_backend": resolve_input_backend(self.input_backend),
             # El botón Xbox/PS llega a la extensión de ReForge (menú Guía); al juego nunca se le pasa.
             "guide_button": bool(self.guide_menu and self.reforge_ext),

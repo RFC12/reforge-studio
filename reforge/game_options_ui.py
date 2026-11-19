@@ -146,6 +146,24 @@ class GameOptionsDialog(QDialog):
         self.letter = QCheckBox("Mantener relación de aspecto (barras negras)")
         self.letter.setChecked(self.o.present_letterbox)
         f.addRow(self.letter)
+        from .pc_enhance import monitor_aspect, panoramic
+        asp = monitor_aspect()
+        self.wide = QComboBox()
+        self.wide.addItem("Automática · parche panorámico si el juego tiene uno", "auto")
+        self.wide.addItem("Estirar la imagen hasta llenar la pantalla", "on")
+        self.wide.addItem("No tocar nada", "off")
+        self.wide.setCurrentIndex(max(0, self.wide.findData(getattr(self.o, "widescreen", "auto"))))
+        f.addRow("Pantalla panorámica", self.wide)
+        if panoramic(asp):
+            pista = (f"Tu pantalla es de {asp:.2f}:1 y los juegos del 360 se hicieron para 16:9 (1,78:1), "
+                     "así que sobran bandas negras a los lados. En automática, al preparar el juego en el "
+                     "Taller se activa el parche panorámico de la base de Xenia si lo hay y la imagen pasa "
+                     "a llenar la pantalla con más campo de visión. Si ese juego no tiene parche, estirar "
+                     "quita las bandas pero deforma la imagen.")
+        else:
+            pista = (f"Tu pantalla es de {asp:.2f}:1, prácticamente lo que esperan los juegos del 360 "
+                     "(16:9), así que no hay bandas que quitar y esto se queda como está.")
+        f.addRow("", label(pista, "Hint", wrap=True))
         f.addRow(label("COMPATIBILIDAD (SI VES PANTALLA NEGRA)", "Section"))
         self.rpath = QComboBox()
         for k, t in (("", "Automática"), ("rtv", "RTV · rápida"), ("rov", "ROV · precisa (más compatible)")):
@@ -340,6 +358,7 @@ class GameOptionsDialog(QDialog):
         o.swap_post_effect = self.post.currentData()
         o.anisotropic_override = int(self.aniso.currentData())
         o.present_letterbox = self.letter.isChecked()
+        o.widescreen = self.wide.currentData()
         o.render_path = self.rpath.currentData()
         o.readback_resolve = self.readback.isChecked()
         o.allow_invalid_fetch = self.invfetch.isChecked()

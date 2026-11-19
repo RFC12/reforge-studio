@@ -258,3 +258,11 @@ check(ws._mode_key() == "pkg" and "Xbox Live Arcade" in ws.src_info.text(), "un 
 from reforge.runner import wait_threads  # noqa: E402
 wait_threads()
 print(f"\nTodas las pruebas pasaron ({ok}).")
+# La ventana se cierra a mano antes de salir: si se deja que Qt destruya el QApplication y los widgets
+# durante el apagado del intérprete, en Windows sin pantalla (el servidor de compilación) el proceso se
+# cae al final y devuelve un código de fallo aunque las pruebas hayan pasado todas.
+w.close()
+w.deleteLater()
+app.processEvents()
+sys.stdout.flush()
+os._exit(0)

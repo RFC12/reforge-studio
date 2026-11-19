@@ -1,4 +1,4 @@
-# ReForge Studio 1.31.0
+# ReForge Studio 1.32.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,30 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.32.0 — pantalla panorámica sin bandas negras
+
+Los juegos de Xbox 360 se hicieron para 16:9. En un monitor panorámico (21:9, 32:9)
+la imagen sale con bandas negras a los lados, y estirarla sin más deforma a todo el
+mundo. La solución buena existe desde hace años: los parches panorámicos de la base
+de datos de Xenia Canary, que cambian el campo de visión del juego para que dibuje a
+lo ancho de verdad. ReForge los descartaba a propósito; ahora los usa.
+
+En 🎮 Opciones del juego → Gráficos hay **Pantalla panorámica**:
+
+* **Automática** (de serie) — ReForge mira tu monitor; si es más ancho que 16:9,
+  busca el parche de aspecto de ese juego y elige el que mejor encaja con tu pantalla
+  (prefiere quedarse corto antes que pasarse, porque pasarse recorta imagen). Al
+  preparar el juego en el Taller lo activa con el resto de mejoras, y entonces quita
+  las bandas negras: con el parche puesto el juego mete más campo de visión dentro del
+  mismo búfer de 16:9, y es al estirarlo al ancho real cuando recupera sus proporciones
+  y llena la pantalla. Si ese juego no tiene parche, no se toca nada: mejor bandas que
+  una imagen deformada.
+* **Estirar la imagen** — quita las bandas aunque no haya parche. Llena la pantalla a
+  costa de deformar; está ahí para quien lo prefiera así.
+* **No tocar nada** — como antes.
+
+En un monitor de 16:9 esto no hace nada, porque no hay nada que ganar.
 
 ## Novedades 1.31.0 — teclado y ratón por juego
 
