@@ -138,10 +138,79 @@ def reject_functions(root, items):
             f.write(f"0x{a:08X}  # {why}\n")
 
 
+_RANGE_CACHE = {}
+
+
+def module_range(root):
+    """(code_lo, code_hi, image_lo, image_hi) del módulo del juego, leídos de su XEX. ((0,0,0,0) si no se puede).
+
+    Una dirección fuera de [image_lo, image_hi) no puede ser una función del juego: declararla hace que el
+    runtime rechace TODA la tabla de funciones al arrancar («func_mappings entries rejected») y el juego ni
+    siquiera abre. Por eso todo lo que declara ReForge se filtra antes con este rango.
+    """
+    xex = os.path.join(root, "assets", "default.xex")
+    try:
+        key = (xex, os.path.getmtime(xex))
+    except OSError:
+        return (0, 0, 0, 0)
+    if key in _RANGE_CACHE:
+        return _RANGE_CACHE[key]
+    try:
+        from .deepscan import page_layout
+        with open(xex, "rb") as f:
+            data = f.read()
+        base, pages = page_layout(data)
+        code = [(lo, hi) for lo, hi, t in pages if t == 1]
+        image_hi = pages[-1][1] if pages else base
+        rng = ((code[0][0], code[-1][1], base, image_hi) if code else (0, 0, 0, 0))
+    except Exception:      # noqa: BLE001
+        rng = (0, 0, 0, 0)
+    _RANGE_CACHE[key] = rng
+    return rng
+
+
+def in_module(root, address):
+    """¿La dirección cae dentro de la imagen del módulo del juego? (True si no se puede saber el rango)."""
+    _cl, _ch, lo, hi = module_range(root)
+    if not hi:
+        return True       # sin rango fiable, no se descarta nada
+    return lo <= address < hi
+
+
+def prune_bad_functions(root):
+    """Quita de reforge_functions.toml las direcciones que caen FUERA del módulo y las anota como no-función.
+
+    Son las que dejan el proyecto sin arrancar («func_mappings entries rejected»). Devuelve la lista de las
+    que quitó.
+    """
+    path = os.path.join(root, FUNCTIONS_FILE)
+    if not os.path.isfile(path):
+        return []
+    _cl, _ch, lo, hi = module_range(root)
+    if not hi:
+        return []
+    lineas = Path(path).read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+    quitadas, fuera = [], []
+    for ln in lineas:
+        m = re.match(r"\s*0x([0-9A-Fa-f]+)\s*=", ln)
+        if m:
+            a = int(m.group(1), 16)
+            if not (lo <= a < hi):
+                quitadas.append(a)
+                continue
+        fuera.append(ln)
+    if quitadas:
+        with open(path, "w", encoding="utf-8") as f:
+            f.writelines(fuera)
+        reject_functions(root, [(a, "fuera del modulo del juego: un salto a esta direccion es un puntero danado, "
+                                    "no una funcion") for a in quitadas])
+    return quitadas
+
+
 def declare_functions(root, addresses, note):
     """Declara varias funciones de una vez. Devuelve las nuevas."""
     have = declared_functions(root) | rejected_functions(root)
-    new = [a for a in addresses if a not in have]
+    new = [a for a in addresses if a not in have and in_module(root, a)]
     if not new:
         return []
     ensure_include(root)
@@ -1206,6 +1275,16 @@ def game_log_dir(exe):
     return os.path.join(os.path.dirname(exe), "logs")
 
 
+def _read_log_text(path):
+    """El texto de un log, o '' si no se puede leer."""
+    if not path:
+        return ""
+    try:
+        return Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
 def newest_log(exe, since=0.0):
     import glob
     logs = [p for p in glob.glob(os.path.join(game_log_dir(exe), "*.log")) if os.path.getmtime(p) >= since]
@@ -1335,8 +1414,16 @@ def crash_advice(info):
 
 
 def declare_runtime_function(root, address):
-    """Declara una función descubierta en ejecución. Devuelve False si ya estaba declarada."""
+    """Declara una función descubierta en ejecución. Devuelve False si ya estaba (o si no es válida).
+
+    Si la dirección cae fuera del módulo del juego no es una función: es un salto a través de un puntero
+    dañado. Declararla haría que el runtime rechazara toda la tabla al arrancar, así que se anota como
+    no-función y no se declara.
+    """
     if address in declared_functions(root):
+        return False
+    if not in_module(root, address):
+        reject_functions(root, [(address, "fuera del modulo del juego: puntero danado, no una funcion")])
         return False
     ensure_include(root)
     path = os.path.join(root, FUNCTIONS_FILE)

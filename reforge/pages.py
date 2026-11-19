@@ -1153,6 +1153,18 @@ class WorkshopPage(QWidget):
         env = cfg.environment()
 
         def do_declare(ctx):
+            # Base de datos de problemas conocidos: remedios automáticos (p. ej. quitar funciones fuera del
+            # módulo que dejan el juego sin arrancar) antes de recompilar a ciegas.
+            try:
+                from . import knownissues
+                exe0 = self._current_exe()
+                log0 = game.newest_log(exe0) if exe0 else ""
+                info0 = game.analyze_runtime_log(log0) if log0 else {}
+                msgs, _rec = knownissues.auto_heal(root, exe0, game._read_log_text(log0), info0)
+                for m in msgs:
+                    ctx.log(m, "ok")
+            except Exception as e:      # noqa: BLE001
+                ctx.log(f"Diagnóstico de problemas conocidos no disponible: {e}", "dim")
             if address is None:
                 ctx.log("Mantenimiento: revisar entradas de función, regenerar con correcciones, compilar y probar.")
             elif game.declare_runtime_function(root, address):

@@ -1,4 +1,4 @@
-# ReForge Studio 1.35.0
+# ReForge Studio 1.36.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,32 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.36.0 — base de datos de problemas y un bug que impedía arrancar
+
+Al recompilar juegos grandes, ReForge aprende funciones mirando el juego en marcha. Pero cuando un juego
+salta a través de un **puntero dañado**, esa «dirección» cae fuera de su propio módulo, y ReForge la
+declaraba como si fuera una función. El resultado: el runtime de rexglue rechaza *toda* la tabla de
+funciones al arrancar («func_mappings entries rejected») y el juego **ni siquiera abre**. Le pasaba a
+Forza Horizon (`0x88050388`, 80 MB por encima del módulo).
+
+Arreglado en tres frentes:
+
+* **Guardarraíl:** ReForge ya nunca declara una dirección fuera del módulo del juego. Si el juego saltó
+  ahí, se anota como «no es función» y no se reintenta.
+* **Autocuración:** los proyectos que ya quedaron rotos se arreglan solos en el mantenimiento — se quita
+  la dirección mala de `reforge_functions.toml` y se recompila. Probado con el Forza real: pasa de «no
+  arranca» a iniciarse del todo.
+* **Base de datos de problemas conocidos** (`reforge/knownissues.py`): una tabla que reconoce cada fallo
+  por su huella en el log, explica la causa y, cuando se puede, trae el remedio que el mantenimiento
+  aplica solo. De momento cubre: función fuera del módulo, montón del CRT agotado, caché de shaders
+  dañada, mando reconectado (el bug del SDL) y salto a un puntero sin resolver. Es ampliable: cada
+  problema nuevo que se diagnostica se añade aquí para que el siguiente no empiece de cero.
+
+Nota honesta sobre Forza: con esto **arranca** (antes no), pero todavía se cierra un instante después
+porque el juego llama a un puntero que esta versión de rexglue no resuelve (un import del motor). Eso es
+compatibilidad del título con el SDK, no algo que una base de datos pueda inventar; queda diagnosticado
+con su consejo en vez de fingir un arreglo.
 
 ## Novedades 1.35.0 — panorámica de verdad, sin parchear el juego
 
