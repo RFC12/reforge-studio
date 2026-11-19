@@ -1,4 +1,4 @@
-# ReForge Studio 1.38.2
+# ReForge Studio 1.39.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,36 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.39.0 — lo mejor de ShiftGlue para mandos, teclado y ratón
+
+[ShiftGlue](https://github.com/arcanite24/shiftglue-sdk) es el fork de rexglue (licencia BSD-3) donde el
+proyecto [Pinyon Shift](https://github.com/arcanite24/pinyon-shift) metió los arreglos para que los juegos
+corran bien en PC, portátiles, Mac y Android. De ahí se traen las mejoras **generales y portables** —sin
+tocar el SDK ni atar nada a un juego concreto—:
+
+**Base de mapeos de mando al día, junto a cada juego.** rexglue arranca su driver SDL leyendo
+`{carpeta_del_exe}/gamecontrollerdb.txt`; si no hay archivo, usa solo su base interna y con mandos modernos
+a veces deja botones mal asignados. ReForge ahora empaqueta una base SDL actualizada (2309 mandos:
+DualSense y DualSense Edge, DualShock 4, Xbox Series, Switch Pro, 8BitDo…) y la coloca sola al compilar y
+al lanzar. Nunca pisa un `gamecontrollerdb.txt` que hayas puesto tú (solo reescribe el suyo, marcado con
+`REFORGE-GCDB`). Base de datos de [mdqinc/SDL_GameControllerDB](https://github.com/mdqinc/SDL_GameControllerDB).
+
+**Aviso del DualSense (Opciones del juego → Controles).** Si hay un mando Sony conectado, ReForge avisa de
+la causa número uno de «botones cambiados» en PC —la misma que detecta el driver de ShiftGlue—: **Steam
+Input** se queda con el DualSense y se lo presenta al juego como un mando de Xbox. La solución (desactivar
+Steam Input para ese juego) se explica ahí mismo.
+
+**Diagnóstico de imports dinámicos sin resolver.** Cuando un juego se cierra con «GetProcAddress(…): ordinal
+out of bounds» y una llamada a `0x88xxxxxx`, la base de problemas conocidos ahora lo reconoce: el juego
+carga un módulo secundario en marcha y esta versión de rexglue no implementa esa carga (no es un fallo de
+tu equipo; es rexglue [issue #448](https://github.com/rexglue/rexglue-sdk/issues/448)). Para **Forza
+Horizon** (disco USA MS-2505) el camino que sí funciona es Pinyon Shift, que compila ese juego desde tu
+propio disco con su motor a medida.
+
+Lo que **no** se trajo, por honestidad: el audio XMA reescrito, el renderer a medida y la carga dinámica de
+módulos de ShiftGlue están tan ligados a su fork que portarlos como parches de texto rompería la base. Eso
+es justo lo que Pinyon Shift resuelve como motor aparte.
 
 ## Novedades 1.38.2 — reporte honesto de parches en SDK reorganizados
 
