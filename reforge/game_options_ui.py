@@ -211,6 +211,21 @@ class GameOptionsDialog(QDialog):
         self.ask = QCheckBox("Mostrar el menú de motor al pulsar ▶ Jugar")
         self.ask.setChecked(self.o.ask_engine_on_play)
         f.addRow(self.ask)
+
+        f.addRow("", label("Compatibilidad gráfica — déjalas apagadas salvo que un juego tenga un fallo "
+                           "concreto de imagen. Son ajustes heredados de Xenia; cada juego necesita unos u "
+                           "otros, así que se prueban de uno en uno. Solo surten efecto si el motor del juego "
+                           "las admite.", "Hint", wrap=True))
+        self.gfx_hpo = QCheckBox("Desplazamiento de medio píxel (geometría/HUD desalineados o temblorosos)")
+        self.gfx_hpo.setChecked(bool(getattr(self.o, "gfx_half_pixel_offset", False)))
+        self.gfx_alpha = QCheckBox("Transparencias difusas (bordes de transparencias que parpadean)")
+        self.gfx_alpha.setChecked(bool(getattr(self.o, "gfx_fuzzy_alpha", False)))
+        self.gfx_edram = QCheckBox("Acotar el rango de EDRAM al mínimo (parpadeos o restos en pantalla)")
+        self.gfx_edram.setChecked(bool(getattr(self.o, "gfx_edram_clamp_min", False)))
+        self.gfx_gamma = QCheckBox("Gamma como UNORM16 (iluminación demasiado oscura o lavada)")
+        self.gfx_gamma.setChecked(bool(getattr(self.o, "gfx_gamma_unorm16", False)))
+        for cb in (self.gfx_hpo, self.gfx_alpha, self.gfx_edram, self.gfx_gamma):
+            f.addRow(cb)
         return w
 
     def _open_packs(self):
@@ -399,6 +414,10 @@ class GameOptionsDialog(QDialog):
         o.render_path = self.rpath.currentData()
         o.readback_resolve = self.readback.isChecked()
         o.allow_invalid_fetch = self.invfetch.isChecked()
+        o.gfx_half_pixel_offset = self.gfx_hpo.isChecked()
+        o.gfx_fuzzy_alpha = self.gfx_alpha.isChecked()
+        o.gfx_edram_clamp_min = self.gfx_edram.isChecked()
+        o.gfx_gamma_unorm16 = self.gfx_gamma.isChecked()
         if self.ask.isChecked() != o.ask_engine_on_play:
             o.ask_engine_chosen = True
         o.ask_engine_on_play = self.ask.isChecked()

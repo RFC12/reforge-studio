@@ -156,6 +156,21 @@ if _os2.path.isfile(FUENTE):
     rt = open(_os2.path.join(rt_dir, "runtime.cpp"), encoding="utf-8").read()
     check("func_mappings entries skipped" in rt, "ahora avisa y sigue")
     check("Shutdown();" not in rt, "ya no aborta el arranque por esto")
+    # parche del resolve vacío
+    gdir = _os2.path.join(arbol, "src", "graphics", "util")
+    _os2.makedirs(gdir)
+    with open(_os2.path.join(gdir, "draw.cpp"), "w", encoding="utf-8") as f:
+        f.write("  assert_true(x0 < x1 && y0 < y1);\n"
+                "  if (x0 >= x1 || y0 >= y1) {\n"
+                '    REXGPU_ERROR("Resolve region is empty");\n'
+                "    return false;\n"
+                "  }\n")
+    check(sdk_patch.apply_resolve_noop(arbol) is True, "un resolve vacío deja de abortar el frame")
+    check(sdk_patch.apply_resolve_noop(arbol) is False, "y no se aplica dos veces")
+    dw = open(_os2.path.join(gdir, "draw.cpp"), encoding="utf-8").read()
+    check("info_out.coordinate_info.width_div_8 = 0;" in dw and "return true;" in dw,
+          "devuelve tamaño 0 con éxito, como espera el llamador")
+    check("return false;" not in dw, "ya no devuelve false en un resolve vacío")
     check(sdk_patch.is_applied(arbol) is False, "is_applied no da por bueno un árbol sin el resto de parches")
 else:
     print("  (sin el código de rexglue a mano: no se puede probar el parche aquí)")

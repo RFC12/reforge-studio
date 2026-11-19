@@ -70,6 +70,12 @@ class GameOptions:
     readback_mode: str = ""        # lectura de resolves aprendida por el guardián de imagen ("some"/"fast"/"full")
     image_guard: bool = True       # guardián de imagen dentro del juego
     allow_invalid_fetch: bool = False
+    # Compatibilidad gráfica (cvars heredados de Xenia; documentados en fh1-recomp-findings). Solo se
+    # escriben si el plugin del juego los trae, y solo cuando se activan: así no afectan a lo que ya va bien.
+    gfx_half_pixel_offset: bool = False
+    gfx_fuzzy_alpha: bool = False
+    gfx_edram_clamp_min: bool = False
+    gfx_gamma_unorm16: bool = False
     ask_engine_on_play: bool = False   # menú de motor antes de jugar (por defecto no: autoconfiguración)
     # Optimizador de rendimiento: "fluido", "sin_parpadeo" u "off"
     perf_mode: str = "fluido"
@@ -224,6 +230,14 @@ class GameOptions:
             vals["readback_resolve"] = self.readback_mode
         if self.allow_invalid_fetch:
             vals["gpu_allow_invalid_fetch_constants"] = True
+        if getattr(self, "gfx_half_pixel_offset", False):
+            vals["half_pixel_offset"] = True
+        if getattr(self, "gfx_fuzzy_alpha", False):
+            vals["use_fuzzy_alpha_epsilon"] = True
+        if getattr(self, "gfx_edram_clamp_min", False):
+            vals["mrt_edram_used_range_clamp_to_min"] = True
+        if getattr(self, "gfx_gamma_unorm16", False):
+            vals["gamma_render_target_as_unorm16"] = True
         try:
             from .engine import profile_values
             vals.update(profile_values(self))
@@ -452,7 +466,9 @@ ADVANCED_CVARS = ("render_target_path_d3d12", "d3d12_readback_resolve", "gpu_all
                   "texture_cache_memory_limit_soft_lifetime", "d3d12_queue_priority",
                   "occlusion_query_enable", "video_mode_refresh_rate", "audio_maxqframes",
                   "d3d12_allow_variable_refresh_rate_and_tearing",
-                  "gpu_debug_markers", "kernel_debug_monitor", "rexcrt_heap_enable", "rexcrt_heap_size_mb")
+                  "gpu_debug_markers", "kernel_debug_monitor", "rexcrt_heap_enable", "rexcrt_heap_size_mb",
+                  "half_pixel_offset", "use_fuzzy_alpha_epsilon", "mrt_edram_used_range_clamp_to_min",
+                  "gamma_render_target_as_unorm16")
 
 
 def supported_cvars(exe):

@@ -1,4 +1,4 @@
-# ReForge Studio 1.37.0
+# ReForge Studio 1.38.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,25 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.38.0 — compatibilidad gráfica y arreglos del SDK (hallazgos de la comunidad)
+
+A partir de lo documentado en [fh1-recomp-findings](https://github.com/ItsNotPaths/fh1-recomp-findings),
+se incorporan dos cosas:
+
+**Compatibilidad gráfica** (🎮 Opciones del juego → Gráficos). Cuatro ajustes heredados de Xenia, apagados
+de serie, para pelear un fallo concreto de imagen en un juego sin tocar a los demás (solo surten efecto si
+el motor del juego los admite): desplazamiento de medio píxel (geometría/HUD temblorosos), transparencias
+difusas (bordes que parpadean), acotar el rango de EDRAM al mínimo (restos en pantalla) e iluminación gamma
+como UNORM16 (imagen muy oscura o lavada). Se prueban de uno en uno porque cada juego necesita unos u otros.
+
+**Resolve vacío tolerante** (parche del SDK). Una región de *resolve* vacía ya no aborta el frame: se trata
+como «nada que copiar», que es lo que hace Xenia. Solo afecta a los juegos que generan resolves vacíos
+(FH1/FH2 y parecidos); los que ya van bien no entran nunca en ese caso. Entra al recompilar el SDK.
+
+El selector de SDK en Entorno ya lista automáticamente las versiones nuevas de rexglue (incluida la v0.11.0,
+que corrige casos límite de `fctid`, `srad/sraw` y `vcmpbfp` en el codegen); los parches de ReForge se
+aplican sobre la versión que elijas.
 
 ## Novedades 1.37.0 — ningún juego se niega a abrir por una función fuera del módulo
 

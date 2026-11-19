@@ -267,6 +267,34 @@ FUNCMAP_HOOK = """    if (rejected > 0) {
 """
 
 
+RESOLVE_ANCHOR = """  assert_true(x0 < x1 && y0 < y1);
+  if (x0 >= x1 || y0 >= y1) {
+    REXGPU_ERROR("Resolve region is empty");
+    return false;
+  }
+"""
+RESOLVE_HOOK = """  if (x0 >= x1 || y0 >= y1) {
+    // ReForge: un resolve vacío no es un error. El llamador (render_target_cache: \"Nothing to copy/clear\")
+    // ya trata tamaño 0 como un no-op con éxito, así que se devuelve éxito con tamaño 0 en vez de false,
+    // que abortaba el frame entero. Documentado para FH1/FH2 (fh1-recomp-findings) y es lo que hace Xenia.
+    // Los juegos que no generan resolves vacíos nunca entran aquí, así que no les afecta.
+    info_out.coordinate_info.width_div_8 = 0;
+    info_out.height_div_8 = 0;
+    return true;
+  }
+"""
+
+
+def apply_resolve_noop(src):
+    """Un resolve de región vacía no aborta el frame: se trata como «nada que copiar»."""
+    path = os.path.join(src, "src", "graphics", "util", "draw.cpp")
+    if not os.path.isfile(path):
+        return False
+    return _patch_text(path, [
+        (RESOLVE_ANCHOR, RESOLVE_HOOK, "un resolve vacío no es un error"),
+    ])
+
+
 def apply_funcmap_tolerant(src):
     """El arranque no se aborta porque una función caiga fuera del módulo: se salta con un aviso."""
     path = os.path.join(src, "src", "system", "runtime.cpp")
@@ -297,6 +325,7 @@ def apply_all(src):
     changed |= apply_asyncpso(src)
     changed |= apply_mouseaim(src)
     changed |= apply_funcmap_tolerant(src)
+    changed |= apply_resolve_noop(src)
     return changed
 
 
@@ -316,6 +345,12 @@ def is_applied(src):
         pass             # un SDK sin el driver de teclado y ratón no puede llevar ese parche
     rt = os.path.join(src, "src", "system", "runtime.cpp")
     try:
-        return "func_mappings entries skipped" in open(rt, encoding="utf-8").read()
+        if "func_mappings entries skipped" not in open(rt, encoding="utf-8").read():
+            return False
+    except OSError:
+        return True
+    draw = os.path.join(src, "src", "graphics", "util", "draw.cpp")
+    try:
+        return "un resolve vacío no es un error" in open(draw, encoding="utf-8").read()
     except OSError:
         return True
