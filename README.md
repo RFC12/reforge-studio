@@ -1,4 +1,4 @@
-# ReForge Studio 1.38.0
+# ReForge Studio 1.38.1
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,15 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.38.1 — los parches del SDK no tumban una versión nueva
+
+Al salir **rexglue v0.11.0**, que reorganizó el árbol de gráficos (`src/graphics/` → `src/gpu/xenos/`), se
+vio que un parche de ReForge que no encajaba **abortaba toda la compilación del SDK**. Ya no: cada parche
+busca sus archivos en las dos ubicaciones, y si aun así uno no encaja (porque una versión nueva cambió el
+código), se **salta con un aviso** y el SDK se compila igual con los demás. Solo los parches imprescindibles
+(que el arranque tolere funciones fuera del módulo) detienen la compilación si fallan. Así ReForge sigue
+sirviendo con las versiones nuevas de rexglue en vez de romperse con cada actualización.
 
 ## Novedades 1.38.0 — compatibilidad gráfica y arreglos del SDK (hallazgos de la comunidad)
 

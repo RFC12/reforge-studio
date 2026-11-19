@@ -171,6 +171,13 @@ if _os2.path.isfile(FUENTE):
     check("info_out.coordinate_info.width_div_8 = 0;" in dw and "return true;" in dw,
           "devuelve tamaño 0 con éxito, como espera el llamador")
     check("return false;" not in dw, "ya no devuelve false en un resolve vacío")
+    # apply_all degrada con elegancia: un parche cosmético que no encaja no tumba la compilación
+    vacio = _tmp.mkdtemp(prefix="reforge-sdkv-")
+    cambio, aplicados, saltados = sdk_patch.apply_all(vacio)
+    nombres_saltados = [n for n, _m in saltados]
+    check("iconos de botones PlayStation" in nombres_saltados,
+          "un parche que no encaja (SDK nuevo) se salta en vez de abortar")
+    check(cambio is False, "sin árbol de rexglue no se cambia nada, pero no revienta")
     check(sdk_patch.is_applied(arbol) is False, "is_applied no da por bueno un árbol sin el resto de parches")
 else:
     print("  (sin el código de rexglue a mano: no se puede probar el parche aquí)")

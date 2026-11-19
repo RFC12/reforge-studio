@@ -42,6 +42,18 @@ class PatchError(Exception):
     pass
 
 
+def _gfx(src, *relparts):
+    """Ruta de un archivo del árbol de gráficos, tanto en el diseño viejo (src/graphics/…) como en el nuevo
+    de rexglue 0.11 (src/gpu/xenos/…). Devuelve la primera que exista, o la nueva si ninguna existe todavía."""
+    nueva = os.path.join(src, "src", "gpu", "xenos", *relparts)
+    vieja = os.path.join(src, "src", "graphics", *relparts)
+    if os.path.exists(nueva):
+        return nueva
+    if os.path.exists(vieja):
+        return vieja
+    return nueva
+
+
 def _patch_text(path, pairs):
     with open(path, encoding="utf-8", newline="") as f:
         txt = f.read()
@@ -64,10 +76,11 @@ def _patch_text(path, pairs):
 
 def apply_texswap(src):
     """Aplica el parche al árbol de rexglue en `src`. Devuelve True si cambió algo."""
-    tex_dir = os.path.join(src, "src", "graphics", "pipeline", "texture")
+    tex_dir = os.path.dirname(_gfx(src, "pipeline", "texture", "cache.cpp"))
     cache = os.path.join(tex_dir, "cache.cpp")
-    cml = os.path.join(src, "src", "graphics", "CMakeLists.txt")
-    shm = os.path.join(src, "include", "rex", "graphics", "shared_memory.h")
+    cml = _gfx(src, "CMakeLists.txt")
+    shm = _gfx(src, "shared_memory.h") if os.path.exists(_gfx(src, "shared_memory.h")) \
+        else os.path.join(src, "include", "rex", "graphics", "shared_memory.h")
     if not (os.path.isfile(cache) and os.path.isfile(cml)):
         raise PatchError("El código de rexglue no tiene la caché de texturas donde se esperaba")
     changed = False
@@ -145,7 +158,7 @@ def apply_asyncpso(src):
     """Sin esperas a la creación de pipelines al final de cada envío cuando la compilación es asíncrona."""
     changed = False
     for api in ("d3d12", "vulkan"):
-        path = os.path.join(src, "src", "graphics", api, "pipeline_cache.cpp")
+        path = _gfx(src, api, "pipeline_cache.cpp")
         if not os.path.isfile(path):
             continue
         with open(path, encoding="utf-8", newline="") as f:
@@ -287,7 +300,7 @@ RESOLVE_HOOK = """  if (x0 >= x1 || y0 >= y1) {
 
 def apply_resolve_noop(src):
     """Un resolve de región vacía no aborta el frame: se trata como «nada que copiar»."""
-    path = os.path.join(src, "src", "graphics", "util", "draw.cpp")
+    path = _gfx(src, "util", "draw.cpp")
     if not os.path.isfile(path):
         return False
     return _patch_text(path, [
@@ -319,14 +332,39 @@ def apply_mouseaim(src):
     ])
 
 
-def apply_all(src):
-    changed = apply_texswap(src)
-    changed |= apply_crashinfo(src)
-    changed |= apply_asyncpso(src)
-    changed |= apply_mouseaim(src)
-    changed |= apply_funcmap_tolerant(src)
-    changed |= apply_resolve_noop(src)
-    return changed
+# (clave, función, ¿imprescindible?). Un parche no imprescindible que no encaje en una versión nueva
+# del SDK se salta con un aviso en vez de tumbar toda la compilación: así ReForge sigue sirviendo con las
+# versiones nuevas de rexglue aunque un parche cosmético haya quedado desfasado por un cambio del código.
+PATCHES = (
+    ("iconos de botones PlayStation", apply_texswap, False),
+    ("localización de fallos en el log", apply_crashinfo, False),
+    ("compilación de shaders en segundo plano", apply_asyncpso, False),
+    ("puntería con el ratón", apply_mouseaim, False),
+    ("el arranque tolera funciones fuera del módulo", apply_funcmap_tolerant, True),
+    ("un resolve vacío no aborta el frame", apply_resolve_noop, False),
+)
+
+
+def apply_all(src, on_skip=None):
+    """Aplica todos los parches. Devuelve (cambió_algo, [nombres aplicados], [(nombre, motivo) saltados]).
+
+    Un parche que no encaja (p. ej. porque una versión nueva movió el código) se salta con su motivo en
+    vez de abortar, salvo los imprescindibles, que sí propagan el error.
+    """
+    changed = False
+    aplicados, saltados = [], []
+    for nombre, fn, imprescindible in PATCHES:
+        try:
+            if fn(src):
+                changed = True
+            aplicados.append(nombre)
+        except PatchError as e:
+            if imprescindible:
+                raise
+            saltados.append((nombre, str(e)))
+            if on_skip:
+                on_skip(nombre, str(e))
+    return changed, aplicados, saltados
 
 
 def is_applied(src):
@@ -349,7 +387,7 @@ def is_applied(src):
             return False
     except OSError:
         return True
-    draw = os.path.join(src, "src", "graphics", "util", "draw.cpp")
+    draw = _gfx(src, "util", "draw.cpp")
     try:
         return "un resolve vacío no es un error" in open(draw, encoding="utf-8").read()
     except OSError:

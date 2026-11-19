@@ -150,11 +150,14 @@ def build(cfg, version, ctx):
         if n:
             ctx.log(f"Sustituidos {n} enlaces simbólicos por sus archivos (Windows los baja como texto).", "dim")
     from .sdk_patch import apply_all
-    if apply_all(src):
-        ctx.log("Parches de ReForge aplicados: puntería con el ratón (giro proporcional al recorrido y "
-                "sensibilidad por eje), el arranque no se aborta por una función fuera del módulo, cambio "
-                "de texturas en la GPU (iconos de botones PlayStation en cualquier juego, en caliente) y "
-                "localización de fallos en el log.", "dim")
+    _changed, aplicados, saltados = apply_all(src)
+    if aplicados:
+        ctx.log("Parches de ReForge aplicados: " + ", ".join(aplicados) + ".", "dim")
+    for nombre, motivo in saltados:
+        # Un parche no imprescindible que no encaja en esta versión del SDK (un cambio del código movió su
+        # sitio): se avisa y se sigue. Los imprescindibles habrían detenido la compilación antes.
+        ctx.log(f"Parche «{nombre}» omitido en esta versión de rexglue ({motivo}). El SDK se compila igual; "
+                "esa mejora concreta no estará hasta actualizar ReForge.", "warn")
     ctx.log("Configurando con AMD FidelityFX…")
     _run([cmake, "--preset", tag, "-DREXGLUE_ENABLE_FIDELITYFX=ON"], src, env, ctx, "cmake (configurar)")
     ctx.log("Compilando el SDK (tarda: es todo rexglue)…")
