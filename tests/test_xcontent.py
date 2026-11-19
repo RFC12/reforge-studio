@@ -202,12 +202,42 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 app = QApplication.instance() or QApplication([])
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 from test_xiso import fake_xex  # noqa: E402
-from reforge import app as appmod  # noqa: E402
+from PySide6.QtWidgets import QMainWindow  # noqa: E402
+
+from reforge.core import AppConfig, Library  # noqa: E402
+from reforge.pages import WorkshopPage  # noqa: E402
 
 xex = fake_xex()
 make_god(os.path.join(TMP, "god3", "4D5307E6", "00007000", "AA11"), [("default.xex", xex)], god_media)
-w = appmod.MainWindow()
-ws = w.workshop
+
+
+class Ventana(QMainWindow):
+    """Lo mínimo que el Taller necesita de la ventana principal.
+
+    Esta prueba es del Taller (detectar el formato del juego y extraerlo), no de la aplicación entera,
+    así que monta solo esa página. Además, en Windows crear la ventana completa deja el proceso tocado
+    y al salir devuelve 0xC0000409 aunque todas las comprobaciones hayan pasado; está localizado en la
+    página «Entorno» (sustituirla por una vacía hace que el proceso salga limpio) y viene de antes de
+    esta prueba, pero así no tumba la compilación mientras se busca.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.cfg, self.lib = AppConfig.load(), Library.load()
+        self.args, self.nav, self.nav_order = {"safe_mode": True, "install_patch": ""}, {}, []
+
+    def go(self, *_a, **_k):
+        pass
+
+    def notify(self, *_a, **_k):
+        pass
+
+    def set_busy(self, *_a, **_k):
+        pass
+
+
+w = Ventana()
+ws = WorkshopPage(w)
 
 
 class Ctx:
@@ -258,11 +288,3 @@ check(ws._mode_key() == "pkg" and "Xbox Live Arcade" in ws.src_info.text(), "un 
 from reforge.runner import wait_threads  # noqa: E402
 wait_threads()
 print(f"\nTodas las pruebas pasaron ({ok}).")
-# La ventana se cierra a mano antes de salir: si se deja que Qt destruya el QApplication y los widgets
-# durante el apagado del intérprete, en Windows sin pantalla (el servidor de compilación) el proceso se
-# cae al final y devuelve un código de fallo aunque las pruebas hayan pasado todas.
-w.close()
-w.deleteLater()
-app.processEvents()
-sys.stdout.flush()
-os._exit(0)
