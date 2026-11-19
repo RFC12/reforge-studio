@@ -1558,10 +1558,11 @@ class WorkshopPage(QWidget):
         if kind == "hang":
             self.log.write("El juego se quedó colgado al arrancar.", "err")
             return
-        if kind == "guest_av" and o.auto_repair and p and not game.exception_handlers_enabled(p.root) \
-                and game.enable_exception_handlers(p.root):
+        if kind in ("guest_av", "crash") and o.auto_repair and p and not game.exception_handlers_enabled(p.root) \
+                and not res.get("hotplug") and game.enable_exception_handlers(p.root):
             # Muchos juegos capturan accesos inválidos con __try/__except (comprobar memoria, cargar datos
-            # opcionales). Recompilado sin manejadores, ese acceso cierra el juego en vez de seguir.
+            # opcionales). Recompilado sin manejadores, ese acceso cierra el juego en vez de seguir. Un cierre
+            # «crash» (0xC0000005 sin mensaje) suele ser justo eso: un acceso que el juego esperaba capturar.
             self.log.write(game.crash_advice(res), "err")
             self.log.write("↻ Reparación automática: se activan los manejadores de excepciones del juego "
                            "(__try/__except), se regenera, se compila y se vuelve a probar.", "warn")

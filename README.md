@@ -1,4 +1,4 @@
-# ReForge Studio 1.36.0
+# ReForge Studio 1.37.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,21 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.37.0 — ningún juego se niega a abrir por una función fuera del módulo
+
+La 1.36.0 evitaba que ReForge *añadiera* direcciones fuera del módulo, pero el propio recompilador de
+rexglue también las encuentra en el XEX, así que el problema podía volver al recompilar. El arreglo de
+raíz va en el SDK (`sdk_patch.apply_funcmap_tolerant`): si una función cae fuera del módulo del juego, el
+runtime la **salta con un aviso** en vez de abortar todo el arranque. Una dirección así nunca se puede
+llamar de forma válida, de modo que saltarla es más seguro que negarse a abrir; si el juego la llega a
+llamar de verdad, fallará solo en esa llamada en lugar de no arrancar.
+
+Entra al recompilar el SDK (Entorno → rexglue con FidelityFX), junto al parche de puntería del ratón.
+
+También: un cierre por **acceso inválido sin mensaje en el log** (0xC0000005) ahora activa solo los
+manejadores de excepciones del juego (`__try/__except`) y recompila, igual que ya se hacía con los
+«guest access violation». Muchos cierres de ese tipo son accesos que el juego esperaba capturar.
 
 ## Novedades 1.36.0 — base de datos de problemas y un bug que impedía arrancar
 

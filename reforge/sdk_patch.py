@@ -249,6 +249,34 @@ MNK_AIM_HOOK = """  if (REXCVAR_GET(mnk_mouse) && IsMouseLookActive()) {
 """
 
 
+FUNCMAP_ANCHOR = """    if (rejected > 0) {
+      REXSYS_ERROR("PPCImageInfo registration: {} func_mappings entries rejected", rejected);
+      Shutdown();
+      return X_STATUS_UNSUCCESSFUL;
+    }
+"""
+FUNCMAP_HOOK = """    if (rejected > 0) {
+      // ReForge: no abortar el arranque por esto. Una entrada rechazada cae fuera de todos los módulos
+      // registrados (SetFunction lo comprueba), así que es una dirección que el juego nunca podrá llamar
+      // de forma válida —normalmente un salto a través de un puntero sin inicializar que el recompilador
+      // recogió del XEX—. Saltarla y seguir deja el juego arrancar; si acaso el juego la llama de verdad,
+      // fallará en esa llamada concreta en vez de negarse a abrir entero.
+      REXSYS_WARN("PPCImageInfo registration: {} func_mappings entries skipped (outside module range)",
+                  rejected);
+    }
+"""
+
+
+def apply_funcmap_tolerant(src):
+    """El arranque no se aborta porque una función caiga fuera del módulo: se salta con un aviso."""
+    path = os.path.join(src, "src", "system", "runtime.cpp")
+    if not os.path.isfile(path):
+        return False
+    return _patch_text(path, [
+        (FUNCMAP_ANCHOR, FUNCMAP_HOOK, "func_mappings entries skipped (outside module range)"),
+    ])
+
+
 def apply_mouseaim(src):
     """Puntería con el ratón en el driver mnk. Devuelve True si cambió algo."""
     path = os.path.join(src, "src", "input", "mnk", "mnk_input_driver.cpp")
@@ -268,6 +296,7 @@ def apply_all(src):
     changed |= apply_crashinfo(src)
     changed |= apply_asyncpso(src)
     changed |= apply_mouseaim(src)
+    changed |= apply_funcmap_tolerant(src)
     return changed
 
 
@@ -281,6 +310,12 @@ def is_applied(src):
     except OSError:
         return False
     try:
-        return "reforge_aim_x += double(mouse_dx_)" in open(mnk, encoding="utf-8").read()
+        if "reforge_aim_x += double(mouse_dx_)" not in open(mnk, encoding="utf-8").read():
+            return False
     except OSError:
-        return True      # un SDK sin el driver de teclado y ratón no puede llevar ese parche
+        pass             # un SDK sin el driver de teclado y ratón no puede llevar ese parche
+    rt = os.path.join(src, "src", "system", "runtime.cpp")
+    try:
+        return "func_mappings entries skipped" in open(rt, encoding="utf-8").read()
+    except OSError:
+        return True

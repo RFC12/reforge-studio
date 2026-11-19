@@ -152,8 +152,9 @@ def build(cfg, version, ctx):
     from .sdk_patch import apply_all
     if apply_all(src):
         ctx.log("Parches de ReForge aplicados: puntería con el ratón (giro proporcional al recorrido y "
-                "sensibilidad por eje), cambio de texturas en la GPU (iconos de botones PlayStation en "
-                "cualquier juego, en caliente) y localización de fallos en el log.", "dim")
+                "sensibilidad por eje), el arranque no se aborta por una función fuera del módulo, cambio "
+                "de texturas en la GPU (iconos de botones PlayStation en cualquier juego, en caliente) y "
+                "localización de fallos en el log.", "dim")
     ctx.log("Configurando con AMD FidelityFX…")
     _run([cmake, "--preset", tag, "-DREXGLUE_ENABLE_FIDELITYFX=ON"], src, env, ctx, "cmake (configurar)")
     ctx.log("Compilando el SDK (tarda: es todo rexglue)…")

@@ -142,6 +142,20 @@ if _os2.path.isfile(FUENTE):
     check(texto.count("REXCVAR_GET(mnk_sensitivity_x)") == 1, "y los usa en el cálculo del stick")
     check("double reforge_aim_x = 0.0;" in texto, "declara el recorrido pendiente")
     check("kBaseScale" not in texto, "quita el cálculo viejo de píxeles por fotograma")
+    # parche del arranque tolerante
+    rt_dir = _os2.path.join(arbol, "src", "system")
+    _os2.makedirs(rt_dir)
+    with open(_os2.path.join(rt_dir, "runtime.cpp"), "w", encoding="utf-8") as f:
+        f.write("    if (rejected > 0) {\n"
+                '      REXSYS_ERROR("PPCImageInfo registration: {} func_mappings entries rejected", rejected);\n'
+                "      Shutdown();\n"
+                "      return X_STATUS_UNSUCCESSFUL;\n"
+                "    }\n")
+    check(sdk_patch.apply_funcmap_tolerant(arbol) is True, "el arranque se hace tolerante a funciones fuera del módulo")
+    check(sdk_patch.apply_funcmap_tolerant(arbol) is False, "y no se aplica dos veces")
+    rt = open(_os2.path.join(rt_dir, "runtime.cpp"), encoding="utf-8").read()
+    check("func_mappings entries skipped" in rt, "ahora avisa y sigue")
+    check("Shutdown();" not in rt, "ya no aborta el arranque por esto")
     check(sdk_patch.is_applied(arbol) is False, "is_applied no da por bueno un árbol sin el resto de parches")
 else:
     print("  (sin el código de rexglue a mano: no se puede probar el parche aquí)")
