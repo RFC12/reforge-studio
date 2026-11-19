@@ -62,6 +62,9 @@ class GameOptions:
     present_letterbox: bool = True
     widescreen: str = "auto"       # pantalla panorámica: auto (parche si lo hay) / on (estirar) / off
     widescreen_patched: bool = False   # el Taller activó un parche panorámico de la base de Xenia
+    # Renderer (gpu.driver de rexglue): "auto" = el del SDK (D3D12 en Windows) · "d3d12" · "vulkan".
+    # Vulkan solo funciona si el SDK con el que compilaste el juego trae ese driver (ver game.sdk_has_vulkan).
+    renderer: str = "auto"
     # Compatibilidad gráfica (pantallas negras). render_path: "" automático, "rtv" rápido, "rov" preciso
     render_path: str = ""
     path_trial: str = ""           # «rtv»: probando la ruta rápida tras ir lento en ROV (se confirma o se revierte)

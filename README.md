@@ -1,4 +1,4 @@
-# ReForge Studio 1.39.0
+# ReForge Studio 1.40.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,23 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.40.0 — selector de renderer (D3D12 / Vulkan, experimental)
+
+Opciones del juego → Gráficos → **Renderer**. rexglue trae dos renderers (el mismo linaje Xenia): **Direct3D 12**
+(lo estable y probado, lo que usabas) y **Vulkan** (experimental). Ahora puedes elegirlo por juego; ReForge
+pasa `--gpu.driver=` al lanzar y en los accesos directos.
+
+Vulkan es un experimento para comparar fluidez, no una garantía de ir mejor: a veces va igual, mejor o peor
+según el juego y el driver. Y **solo funciona si el SDK con el que compilaste el juego trae el driver Vulkan**
+— los SDK de ReForge se han venido compilando solo con D3D12, así que para probar Vulkan hay que recompilar
+el SDK con ese módulo. Si eliges Vulkan y el SDK no lo trae, ReForge lo detecta (`game.sdk_has_vulkan`) y te
+avisa en vez de dejar que el juego no abra.
+
+Nota de rendimiento: lo que hacía a Forza Horizon tan fluido en Pinyon Shift no era Vulkan en sí, sino
+**precompilar todos los shaders antes de jugar** (AOT). Tus juegos en D3D12 ya compilan shaders en segundo
+plano y guardan una caché persistente que rexglue precarga al arrancar, por eso la segunda partida va más
+suave que la primera.
 
 ## Novedades 1.39.0 — lo mejor de ShiftGlue para mandos, teclado y ratón
 

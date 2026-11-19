@@ -202,6 +202,15 @@ class GameOptionsDialog(QDialog):
             self.rpath.addItem(t, k)
         self.rpath.setCurrentIndex(max(0, self.rpath.findData(self.o.render_path)))
         f.addRow("Ruta de render", self.rpath)
+        self.renderer = QComboBox()
+        for k, t in (("auto", "Automático (D3D12 en Windows)"), ("d3d12", "Direct3D 12"),
+                     ("vulkan", "Vulkan (experimental)")):
+            self.renderer.addItem(t, k)
+        self.renderer.setCurrentIndex(max(0, self.renderer.findData(getattr(self.o, "renderer", "auto"))))
+        f.addRow("Renderer", self.renderer)
+        f.addRow("", label("D3D12 es lo estable y probado. Vulkan es experimental: solo funciona si el SDK con "
+                           "el que compilaste el juego trae el driver Vulkan (si no, el juego no abrirá y ReForge "
+                           "te avisará). Úsalo para comparar fluidez; no garantiza ir mejor.", "Hint", wrap=True))
         self.readback = QCheckBox("Leer en la CPU lo que el juego dibuja en texturas (menús, transiciones)")
         self.readback.setChecked(self.o.readback_resolve)
         self.invfetch = QCheckBox("Permitir datos de textura/vértice no válidos (no descarta dibujos)")
@@ -419,6 +428,7 @@ class GameOptionsDialog(QDialog):
         o.present_letterbox = self.letter.isChecked()
         o.widescreen = self.wide.currentData()
         o.render_path = self.rpath.currentData()
+        o.renderer = self.renderer.currentData()
         o.readback_resolve = self.readback.isChecked()
         o.allow_invalid_fetch = self.invfetch.isChecked()
         o.gfx_half_pixel_offset = self.gfx_hpo.isChecked()

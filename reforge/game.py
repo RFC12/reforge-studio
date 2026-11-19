@@ -1077,7 +1077,45 @@ def rebuild_reason(root, exe, cfg=None):
 
 
 def launch_args(exe, root):
-    return [exe, f"--game_data_root={os.path.join(root, 'assets')}", "--gpu_plugin=xenos"]
+    args = [exe, f"--game_data_root={os.path.join(root, 'assets')}", "--gpu_plugin=xenos"]
+    try:
+        from .game_options import GameOptions
+        r = getattr(GameOptions.load(root), "renderer", "auto")
+        if r in ("d3d12", "vulkan"):
+            args.append(f"--gpu.driver={r}")
+    except Exception:      # noqa: BLE001
+        pass
+    return args
+
+
+def _driver_flag(root):
+    """« --gpu.driver=vulkan» / «=d3d12» para los lanzadores, o «» si el renderer es automático."""
+    try:
+        from .game_options import GameOptions
+        r = getattr(GameOptions.load(root), "renderer", "auto")
+        if r in ("d3d12", "vulkan"):
+            return f" --gpu.driver={r}"
+    except Exception:      # noqa: BLE001
+        pass
+    return ""
+
+
+def sdk_has_vulkan(exe):
+    """¿El rexgpu-xenos.dll junto al juego trae el driver Vulkan? (para avisar si se elige Vulkan sin tenerlo).
+
+    Devuelve True/False, o None si no se puede comprobar (no está el DLL). Barato: busca la firma del driver
+    Vulkan en el binario; no carga nada.
+    """
+    dll = os.path.join(os.path.dirname(exe), "rexgpu-xenos.dll")
+    if not os.path.isfile(dll):
+        return None
+    try:
+        with open(dll, "rb") as f:
+            data = f.read()
+    except OSError:
+        return None
+    # El driver Vulkan se registra con el nombre "vulkan" y enlaza símbolos de Vulkan/SPIR-V.
+    return b"vkCreateDevice" in data or b"VK_KHR_swapchain" in data
 
 
 def launch_env(cfg):
@@ -1228,13 +1266,13 @@ def write_launcher(exe, root, title):
         path = os.path.join(os.path.dirname(exe), f"jugar_{os.path.basename(exe)}.sh")
         with open(path, "w", encoding="utf-8") as f:
             f.write(f'#!/bin/sh\ncd "$(dirname "$0")"\nexec "./{os.path.basename(exe)}" '
-                    f'"--game_data_root={os.path.join(root, "assets")}" --gpu_plugin=xenos "$@"\n')
+                    f'"--game_data_root={os.path.join(root, "assets")}" --gpu_plugin=xenos{_driver_flag(root)} "$@"\n')
         os.chmod(path, 0o755)
         return path
     direct = os.path.join(os.path.dirname(exe), f"Jugar {title} (directo).bat")
     with open(direct, "w", encoding="utf-8") as f:
         f.write("@echo off\r\nchcp 65001 >nul\r\ncd /d \"%~dp0\"\r\n"
-                f"start \"\" \"%~dp0{os.path.basename(exe)}\" \"--game_data_root={os.path.join(root, 'assets')}\" --gpu_plugin=xenos %*\r\n")
+                f"start \"\" \"%~dp0{os.path.basename(exe)}\" \"--game_data_root={os.path.join(root, 'assets')}\" --gpu_plugin=xenos{_driver_flag(root)} %*\r\n")
     rf = reforge_executable()
     path = os.path.join(os.path.dirname(exe), f"Jugar {title}.bat")
     if not rf:
@@ -1260,7 +1298,7 @@ def desktop_shortcut(exe, root, title):
     if rf:
         target, args, workdir = rf, f'--launcher "{os.path.abspath(root)}"', os.path.dirname(rf)
     else:
-        target, args, workdir = exe, f'--game_data_root="{os.path.join(root, "assets")}" --gpu_plugin=xenos', os.path.dirname(exe)
+        target, args, workdir = exe, f'--game_data_root="{os.path.join(root, "assets")}" --gpu_plugin=xenos{_driver_flag(root)}', os.path.dirname(exe)
     subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
                     f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{esc(lnk)}');"
                     f"$s.TargetPath='{esc(target)}';$s.Arguments='{esc(args)}';"
