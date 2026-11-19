@@ -25,7 +25,10 @@ for key in M.ORDER:
           f"{key}: los 24 botones del mando, ni uno de más")
     check(all(v.strip() for v in kb.values()), f"{key}: ningún botón se queda sin tecla")
     check(bool(data["titulo"]) and bool(data["ayuda"]), f"{key}: tiene nombre y explicación")
-    check(0.1 <= float(data["sens"]) <= 5.0, f"{key}: la sensibilidad cabe en el control del diálogo")
+    check(0.1 <= float(data["sens"]) <= 10.0, f"{key}: la sensibilidad cabe en el control del diálogo")
+    if data["mouse"]:
+        check(float(data["sens"]) >= 3.0,
+              f"{key}: la sensibilidad pasa de la zona muerta del juego ({data['sens']})")
     ratones = {t for v in kb.values() for t in v.split(",") if t.startswith("Mouse")}
     check(ratones <= VALIDAS, f"{key}: solo botones de ratón que entiende rexglue ({sorted(ratones) or 'ninguno'})")
     if data["mouse"]:
@@ -41,6 +44,7 @@ check(sh["keybind_left_trigger"] == "MouseRight", "apuntar es el clic derecho")
 check(sh["keybind_lstick_up"] == "W" and sh["keybind_lstick_left"] == "A", "moverse con WASD")
 check(sh["keybind_a"] == "Space", "saltar con Espacio")
 check(M.LAYOUTS["shooter"]["mouse"] is True, "la puntería va con el ratón")
+check(M.LAYOUTS["shooter"]["sens"] >= 3.0, "y con sensibilidad suficiente para que el juego la vea")
 check(M.keybinds("carreras")["keybind_right_trigger"] == "W", "en carreras se acelera con W")
 check(M.LAYOUTS["carreras"]["mouse"] is False, "en carreras el ratón no mueve nada")
 

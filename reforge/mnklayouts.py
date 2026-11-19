@@ -37,7 +37,7 @@ LAYOUTS = {
         "ayuda": "Ratón para apuntar, clic izquierdo disparar, clic derecho apuntar. WASD, Espacio saltar, "
                  "Ctrl agacharse, R recargar, F cambiar arma, G granada, Mayús correr.",
         "mouse": True,
-        "sens": 1.0,
+        "sens": 5.0,
         "keys": {
             "keybind_right_trigger": "MouseLeft",
             "keybind_left_trigger": "MouseRight",
@@ -64,7 +64,7 @@ LAYOUTS = {
         "ayuda": "Como el de shooter, con A en Espacio para cubrirse y correr, y el cuerpo a cuerpo en V "
                  "o en el botón lateral del ratón. Pensado para Gears of War y parecidos.",
         "mouse": True,
-        "sens": 1.0,
+        "sens": 5.0,
         "keys": {
             "keybind_right_trigger": "MouseLeft",
             "keybind_left_trigger": "MouseRight",
@@ -91,7 +91,7 @@ LAYOUTS = {
         "ayuda": "El ratón mueve la cámara, clic izquierdo ataque rápido, clic derecho ataque fuerte. "
                  "Espacio saltar, Ctrl esquivar, Mayús bloquear, E usar.",
         "mouse": True,
-        "sens": 1.0,
+        "sens": 5.0,
         "keys": {
             "keybind_x": "MouseLeft",
             "keybind_y": "MouseRight",
@@ -192,7 +192,7 @@ LAYOUTS = {
         "ayuda": "El ratón mueve el stick derecho como si fuera un puntero y el clic izquierdo es A. "
                  "Para juegos que en la consola se jugaban apuntando con el stick.",
         "mouse": True,
-        "sens": 1.5,
+        "sens": 4.0,
         "keys": {
             "keybind_a": "MouseLeft,Space",
             "keybind_b": "MouseRight,Backspace",

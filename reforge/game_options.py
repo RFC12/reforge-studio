@@ -141,6 +141,12 @@ class GameOptions:
                 # automático para que el Taller ponga el del juego.
                 o.mnk_mode = True
                 o.mnk_layout = "auto"
+            if (o.mnk_mouse and getattr(o, "mnk_auto", True) and float(o.mnk_sensitivity) <= 1.0):
+                # Sensibilidad 1 con el ratón no sirve: el driver da 200 por píxel, así que un gesto
+                # normal queda por debajo de la zona muerta del juego y la cámara ni se entera. Se sube
+                # a la del reparto (quien la haya puesto a mano la tiene por encima de 1).
+                from .mnklayouts import LAYOUTS
+                o.mnk_sensitivity = float(LAYOUTS.get(getattr(o, "mnk_layout", ""), {}).get("sens", 5.0))
             kb = dict(DEFAULT_KEYBINDS)
             kb.update({k: v for k, v in (o.keybinds or {}).items() if k in DEFAULT_KEYBINDS})
             o.keybinds = kb

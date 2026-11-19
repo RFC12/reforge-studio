@@ -234,8 +234,8 @@ class GameOptionsDialog(QDialog):
         self.mouse = QCheckBox("Usar el ratón como stick derecho")
         self.mouse.setChecked(self.o.mnk_mouse)
         self.sens = QDoubleSpinBox()
-        self.sens.setRange(0.1, 5.0)
-        self.sens.setSingleStep(0.1)
+        self.sens.setRange(0.1, 10.0)       # el máximo que acepta rexglue (mnk_sensitivity)
+        self.sens.setSingleStep(0.5)
         self.sens.setValue(float(self.o.mnk_sensitivity))
         top.addRow(self.mnk)
         top.addRow("", label("El mando no estorba: rexglue suma lo que haces con el teclado y el ratón a lo "
@@ -246,6 +246,9 @@ class GameOptionsDialog(QDialog):
         top.addRow("", self.layout_hint)
         top.addRow(self.mouse)
         top.addRow("Sensibilidad del ratón", self.sens)
+        top.addRow("", label("El ratón mueve el stick derecho, y los juegos descartan los empujones "
+                             "pequeños del stick: por debajo de 3 la cámara casi no responde. Los repartos "
+                             "con ratón vienen en 5; súbela si quieres girar más rápido.", "Hint", wrap=True))
         ov.addLayout(top)
         ov.addWidget(label("Teclas (varias separadas por coma; combinaciones con +, p. ej. Shift+Up):", "Hint",
                            wrap=True))

@@ -1,4 +1,4 @@
-# ReForge Studio 1.33.0
+# ReForge Studio 1.33.1
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,19 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.33.1 — el ratón con sensibilidad que sirve
+
+El reparto llegaba bien al juego pero la cámara no se movía. El motivo está en
+`mnk_input_driver.cpp`: el ratón se convierte en stick derecho multiplicando los
+píxeles por 200 y por la sensibilidad. Con la sensibilidad 1 que trae el SDK, un
+gesto normal de ratón (unos 16 píxeles entre fotograma y fotograma a 60 FPS) da un
+10 % de stick, **por debajo de la zona muerta de cualquier shooter**, así que el
+juego lo descarta entero y parece que el ratón no funciona.
+
+Los repartos con ratón vienen ahora en 5 (ese mismo gesto pasa al 49 %) y los
+proyectos que ya estaban configurados se corrigen solos al abrirlos. El control del
+diálogo llega hasta 10, que es el máximo que acepta rexglue.
 
 ## Novedades 1.33.0 — el teclado y el ratón ya vienen puestos
 
