@@ -49,3 +49,31 @@ def resolve(style, ids=None):
         return style
     found = detect(ids)
     return "playstation" if found == "playstation" else "xbox"
+
+
+# DualSense / DualSense Edge por su identificador de producto de Sony (VID 054C).
+DUALSENSE_RE = re.compile(r"VID[_&](?:0002)?054C&PID[_&](?:0CE6|0DF2)", re.I)
+
+
+def dualsense_present(ids=None):
+    """True si hay un DualSense o DualSense Edge conectado (por USB o Bluetooth)."""
+    ids = present_device_ids() if ids is None else ids
+    return any(DUALSENSE_RE.search(i) for i in ids)
+
+
+def advice(ids=None):
+    """Consejo breve si hay un mando Sony y sus botones pueden salir mal en el juego, o '' si no aplica.
+
+    La causa más común en PC (la misma que detecta ShiftGlue en su driver SDL) es que **Steam Input** toma el
+    DualSense y se lo presenta al juego como un mando virtual de Xbox: entonces los botones de cara, el panel
+    táctil o los gatillos salen cambiados. ReForge ya deja una base de mapeos SDL al día junto al juego, pero
+    si Steam Input está activo esa base no se aplica, porque el juego ya no ve el DualSense real.
+    """
+    ids = present_device_ids() if ids is None else ids
+    if not any(SONY_RE.search(i) for i in ids):
+        return ""
+    return ("Veo un mando Sony conectado. Si los botones salen cambiados dentro del juego, casi siempre es "
+            "Steam Input, que se queda con el DualSense y se lo pasa al juego como un mando de Xbox. "
+            "Solución: en Steam, propiedades del juego → Controlador → «Desactivar Steam Input», o cierra "
+            "Steam mientras juegas. ReForge ya dejó una base de mapeos SDL al día junto al juego para el resto "
+            "de casos.")

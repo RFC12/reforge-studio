@@ -244,6 +244,13 @@ class GameOptionsDialog(QDialog):
         top.addRow("Mandos", self.backend)
         top.addRow("", label("Con mandos de Xbox, XInput es más estable: el controlador SDL de rexglue 0.10 puede "
                              "cerrar el juego si el mando se desconecta y reconecta.", "Hint", wrap=True))
+        try:      # aviso del DualSense (Steam Input) solo si hay un mando Sony conectado; nunca impide abrir la ventana
+            from . import controller
+            _sony = controller.advice()
+        except Exception:      # noqa: BLE001
+            _sony = ""
+        if _sony:
+            top.addRow("", label("🎮 " + _sony, "Hint", wrap=True))
         self.hide_cursor = QCheckBox("Esconder el puntero del ratón al jugar con mando (vuelve al mover el ratón)")
         self.hide_cursor.setChecked(self.o.hide_cursor)
         top.addRow(self.hide_cursor)

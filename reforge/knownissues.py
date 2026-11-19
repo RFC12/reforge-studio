@@ -86,6 +86,24 @@ def _tiene(*trozos):
 
 ISSUES = [
     Issue(
+        id="import_dinamico_sin_resolver",
+        titulo="El juego pide una función de un módulo que no está",
+        sintomas="Cierre al poco de arrancar con «GetProcAddress(…): ordinal out of bounds» y una llamada a "
+                 "una dirección muy alta (0x88xxxxxx) que «function not in function table».",
+        causa="El juego busca una función por ordinal dentro de otro módulo (una DLL del sistema o del "
+              "propio juego) y la carga en marcha. Esta versión de rexglue no implementa esa carga de "
+              "módulos secundarios (es una función que falta en el SDK, no un bug: rexglue issue #448), así "
+              "que la búsqueda devuelve una dirección inválida y el juego la llama. No es nada que ReForge "
+              "pueda declarar ni recompilar por su cuenta.",
+        match=lambda log, info: ("ordinal out of bounds" in (log or "")
+                                 or "XexGetProcedureAddress" in (log or "")),
+        consejo="Es una limitación del SDK con los juegos que enlazan módulos en marcha, no de tu equipo. "
+                "Para Forza Horizon (disco USA MS-2505) hay un proyecto dedicado que sí lo resuelve, Pinyon "
+                "Shift (github.com/arcanite24/pinyon-shift): compila ese juego desde tu propio disco. Otros "
+                "títulos que hagan lo mismo aún no corren con rexglue genérico.",
+        recompila=False,
+    ),
+    Issue(
         id="funcs_fuera_del_modulo",
         titulo="Una función declarada cae fuera del juego",
         sintomas="El juego ni siquiera abre: se cierra al instante. En el log, «func_mappings entries "

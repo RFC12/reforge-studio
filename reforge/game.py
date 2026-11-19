@@ -1126,6 +1126,11 @@ def prepare_game_runtime(cfg, exe, root):
                 raise
     from .gameicon import ensure as ensure_icon      # icono oficial del juego en el .exe (nunca impide jugar)
     ensure_icon(exe, root, manifest_project_name(root) or "")
+    try:      # base de mapeos de mando al día junto al juego (DualSense, DualShock 4, Switch Pro…); nunca impide jugar
+        from . import controllerdb
+        controllerdb.place(destination)
+    except Exception:      # noqa: BLE001
+        pass
     apply_visual_layers(root, exe)
     try:      # opciones al día también en los arranques vigilados (reparación automática, Live sin conexión…)
         from .game_options import GameOptions, write_runtime_config
