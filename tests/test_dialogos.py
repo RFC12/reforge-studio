@@ -25,6 +25,12 @@ def check(cond, msg):
         fallos.append(msg)
 
 
+# Qt se traga las excepciones de los slots: sin esto, un error al construir el diálogo solo saldría
+# por pantalla y la prueba pasaría igual.
+_errores = []
+_hook = sys.excepthook
+sys.excepthook = lambda t, v, tb: (_errores.append(f"{t.__name__}: {v}"), _hook(t, v, tb))
+
 app = QApplication.instance() or QApplication([])
 TMP = tempfile.mkdtemp(prefix="reforge-dlg-")
 os.environ["APPDATA"] = os.environ["XDG_CONFIG_HOME"] = os.path.join(TMP, "cfg")
@@ -57,6 +63,8 @@ print("Optimizar")
 from reforge.optimizer_ui import OptimizeDialog                    # noqa: E402
 
 revisa("Optimizar", OptimizeDialog(None, cfg, proyecto.root, proyecto.name, "", ""))
+
+check(not _errores, f"ningún diálogo lanza errores al construirse ({'; '.join(_errores[:3])})")
 
 print()
 print(f"{len(fallos)} fallos" if fallos else "0 fallos")

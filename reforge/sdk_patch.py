@@ -1,5 +1,11 @@
 """Parches de ReForge sobre el código de rexglue (se aplican al compilar el SDK con FSR/CAS).
 
+* mouseaim: puntería con el ratón de verdad en el driver de teclado y ratón (src/input/mnk). El SDK
+  convierte los píxeles de cada fotograma en deflexión del stick derecho, y eso no sirve para apuntar:
+  un stick manda velocidad de giro y un ratón manda distancia, así que lo lento se queda por debajo de
+  la zona muerta del juego y lo rápido pega un salto. El parche acumula el recorrido y lo gasta a lo
+  largo de varios fotogramas, siempre por encima de la zona muerta, y añade sensibilidad separada para
+  X y para Y. Va en rexruntime.dll, que ReForge copia junto a cada juego.
 * texswap: cambio de texturas en la GPU (iconos de botones Xbox ↔ PlayStation en cualquier juego, en
   caliente). Añade reforge_texswap.cpp/.h a la caché de texturas y dos llamadas en cache.cpp. Va en
   rexgpu-xenos.dll, que ReForge copia junto a cada juego: los juegos ya compilados lo heredan sin recompilar.
@@ -150,16 +156,131 @@ def apply_asyncpso(src):
     return changed
 
 
+
+# ---------------------------------------------------------------- mouseaim
+MNK_CVAR_ANCHOR = """REXCVAR_DEFINE_DOUBLE(mnk_sensitivity, 1.0, "Input", "Mouse sensitivity for right stick")
+    .range(0.01, 10.0);
+"""
+MNK_CVAR_HOOK = MNK_CVAR_ANCHOR + """
+// ReForge: mouseaim. Sensibilidad por eje (0 = usar mnk_sensitivity para los dos) y cuánto stick
+// vale el empujón mínimo, que tiene que pasar la zona muerta del juego para que se note.
+REXCVAR_DEFINE_DOUBLE(mnk_sensitivity_x, 0.0, "Input",
+                      "ReForge: horizontal mouse sensitivity (0 = use mnk_sensitivity)")
+    .range(0.0, 10.0);
+REXCVAR_DEFINE_DOUBLE(mnk_sensitivity_y, 0.0, "Input",
+                      "ReForge: vertical mouse sensitivity (0 = use mnk_sensitivity)")
+    .range(0.0, 10.0);
+REXCVAR_DEFINE_DOUBLE(mnk_aim_floor, 0.40, "Input",
+                      "ReForge: smallest right-stick push the mouse produces, as a fraction of range")
+    .range(0.0, 0.95);
+REXCVAR_DEFINE_DOUBLE(mnk_aim_tail, 8.0, "Input",
+                      "ReForge: how many frames of mouse travel may queue up (lower = less drift)")
+    .range(1.0, 60.0);
+"""
+
+MNK_STATE_ANCHOR = "std::atomic<bool> mouse_look_active{true};\n"
+MNK_STATE_HOOK = ("std::atomic<bool> mouse_look_active{true};\n"
+                  "\n"
+                  "// ReForge: mouseaim. Recorrido del ratón pendiente de convertir en giro, en unidades\n"
+                  "// de stick. Solo se tocan con state_mutex_ cogido (GetDeviceState) o al perder el foco.\n"
+                  "double reforge_aim_x = 0.0;\n"
+                  "double reforge_aim_y = 0.0;\n")
+
+MNK_AIM_ANCHOR = """  if (REXCVAR_GET(mnk_mouse) && IsMouseLookActive()) {
+    double sensitivity = REXCVAR_GET(mnk_sensitivity);
+    constexpr double kBaseScale = 200.0;
+    rx += static_cast<int32_t>(double(mouse_dx_) * sensitivity * kBaseScale);
+    ry += static_cast<int32_t>(double(-mouse_dy_) * sensitivity * kBaseScale);
+  }
+"""
+MNK_AIM_HOOK = """  if (REXCVAR_GET(mnk_mouse) && IsMouseLookActive()) {
+    // ReForge: mouseaim.
+    //
+    // El stick manda VELOCIDAD de giro y el ratón manda DISTANCIA. Convertir los píxeles de un solo
+    // fotograma en deflexión no sirve para apuntar: un gesto normal se queda por debajo de la zona
+    // muerta del juego y no pasa nada, y uno rápido entra de golpe en la parte alta de su curva de
+    // respuesta y pega un salto.
+    //
+    // Aquí el recorrido se acumula y se gasta a lo largo de varios fotogramas con una deflexión que
+    // siempre supera la zona muerta: el giro total sale proporcional a lo que se movió el ratón y los
+    // movimientos pequeños también cuentan. El techo lo pone el giro máximo del propio juego, así que
+    // un gesto muy rápido no cabe en un fotograma y se reparte entre los siguientes; mnk_aim_tail
+    // limita esa cola para que no se sienta como inercia.
+    const double sens = REXCVAR_GET(mnk_sensitivity);
+    double sens_x = REXCVAR_GET(mnk_sensitivity_x);
+    double sens_y = REXCVAR_GET(mnk_sensitivity_y);
+    if (sens_x <= 0.0) {
+      sens_x = sens;
+    }
+    if (sens_y <= 0.0) {
+      sens_y = sens;
+    }
+    constexpr double kUnitsPerPixel = 1600.0;
+    const double floor_units = REXCVAR_GET(mnk_aim_floor) * double(INT16_MAX);
+    const double max_accum = REXCVAR_GET(mnk_aim_tail) * double(INT16_MAX);
+    reforge_aim_x += double(mouse_dx_) * sens_x * kUnitsPerPixel;
+    reforge_aim_y += double(-mouse_dy_) * sens_y * kUnitsPerPixel;
+    double mag = std::sqrt(reforge_aim_x * reforge_aim_x + reforge_aim_y * reforge_aim_y);
+    if (mag > max_accum && mag > 0.0) {
+      reforge_aim_x *= max_accum / mag;
+      reforge_aim_y *= max_accum / mag;
+      mag = max_accum;
+    }
+    if (mag >= floor_units && mag > 0.0) {
+      // Hay bastante recorrido guardado para un empujón que el juego sí nota: se suelta y se
+      // descuenta exactamente lo soltado, de modo que el giro total siga el recorrido del ratón.
+      const double out = std::min(mag, double(INT16_MAX));
+      rx += static_cast<int32_t>(reforge_aim_x / mag * out);
+      ry += static_cast<int32_t>(reforge_aim_y / mag * out);
+      reforge_aim_x -= reforge_aim_x / mag * out;
+      reforge_aim_y -= reforge_aim_y / mag * out;
+    } else if (mouse_dx_ == 0.0f && mouse_dy_ == 0.0f) {
+      // Por debajo del mínimo no se emite nada: se guarda y se suelta en cuanto haya bastante
+      // (emitir el mínimo por cada píxel haría que los gestos diminutos giraran más que los
+      // grandes). Si además el ratón se ha parado, lo que sobra se tira para que no se arrastre
+      // al siguiente movimiento.
+      reforge_aim_x = 0.0;
+      reforge_aim_y = 0.0;
+    }
+  } else {
+    reforge_aim_x = 0.0;   // con el ratón apagado no se guarda cola
+    reforge_aim_y = 0.0;
+  }
+"""
+
+
+def apply_mouseaim(src):
+    """Puntería con el ratón en el driver mnk. Devuelve True si cambió algo."""
+    path = os.path.join(src, "src", "input", "mnk", "mnk_input_driver.cpp")
+    if not os.path.isfile(path):
+        return False
+    return _patch_text(path, [
+        # Cada marca tiene que ser exclusiva de su trozo: si una aparece también en otro, ese
+        # trozo se da por puesto y se queda sin aplicar.
+        (MNK_CVAR_ANCHOR, MNK_CVAR_HOOK, "REXCVAR_DEFINE_DOUBLE(mnk_sensitivity_x"),
+        (MNK_STATE_ANCHOR, MNK_STATE_HOOK, "double reforge_aim_x = 0.0;"),
+        (MNK_AIM_ANCHOR, MNK_AIM_HOOK, "reforge_aim_x += double(mouse_dx_)"),
+    ])
+
+
 def apply_all(src):
     changed = apply_texswap(src)
     changed |= apply_crashinfo(src)
     changed |= apply_asyncpso(src)
+    changed |= apply_mouseaim(src)
     return changed
 
 
 def is_applied(src):
+    """¿Están puestos los parches de ReForge en este árbol de rexglue?"""
     cache = os.path.join(src, "src", "graphics", "pipeline", "texture", "cache.cpp")
+    mnk = os.path.join(src, "src", "input", "mnk", "mnk_input_driver.cpp")
     try:
-        return "reforge_texswap::OnLoad(" in open(cache, encoding="utf-8").read()
+        if "reforge_texswap::OnLoad(" not in open(cache, encoding="utf-8").read():
+            return False
     except OSError:
         return False
+    try:
+        return "reforge_aim_x += double(mouse_dx_)" in open(mnk, encoding="utf-8").read()
+    except OSError:
+        return True      # un SDK sin el driver de teclado y ratón no puede llevar ese parche

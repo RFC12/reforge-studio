@@ -30,6 +30,7 @@ LAYOUTS = {
                  "va en las flechas y no se usa el ratón.",
         "mouse": False,
         "sens": 1.0,
+        "sens_x": 1.0, "sens_y": 1.0,
         "keys": {},
     },
     "shooter": {
@@ -38,6 +39,7 @@ LAYOUTS = {
                  "Ctrl agacharse, R recargar, F cambiar arma, G granada, Mayús correr.",
         "mouse": True,
         "sens": 5.0,
+        "sens_x": 1.0, "sens_y": 0.8,
         "keys": {
             "keybind_right_trigger": "MouseLeft",
             "keybind_left_trigger": "MouseRight",
@@ -65,6 +67,7 @@ LAYOUTS = {
                  "o en el botón lateral del ratón. Pensado para Gears of War y parecidos.",
         "mouse": True,
         "sens": 5.0,
+        "sens_x": 1.0, "sens_y": 0.8,
         "keys": {
             "keybind_right_trigger": "MouseLeft",
             "keybind_left_trigger": "MouseRight",
@@ -92,6 +95,7 @@ LAYOUTS = {
                  "Espacio saltar, Ctrl esquivar, Mayús bloquear, E usar.",
         "mouse": True,
         "sens": 5.0,
+        "sens_x": 1.0, "sens_y": 0.8,
         "keys": {
             "keybind_x": "MouseLeft",
             "keybind_y": "MouseRight",
@@ -119,6 +123,7 @@ LAYOUTS = {
                  "C cámara, R reiniciar, Q y E las marchas. Sin ratón.",
         "mouse": False,
         "sens": 1.0,
+        "sens_x": 1.0, "sens_y": 1.0,
         "keys": {
             "keybind_right_trigger": "W",
             "keybind_left_trigger": "S",
@@ -146,6 +151,7 @@ LAYOUTS = {
                  "gatillos. Sin ratón.",
         "mouse": False,
         "sens": 1.0,
+        "sens_x": 1.0, "sens_y": 1.0,
         "keys": {
             "keybind_x": "U", "keybind_y": "I", "keybind_left_shoulder": "O",
             "keybind_a": "J", "keybind_b": "K", "keybind_right_shoulder": "L",
@@ -168,6 +174,7 @@ LAYOUTS = {
                  "Sin ratón: para juegos que no necesitan apuntar.",
         "mouse": False,
         "sens": 1.0,
+        "sens_x": 1.0, "sens_y": 1.0,
         "keys": {
             "keybind_a": "Space,J",
             "keybind_b": "LeftShift,K",
@@ -193,6 +200,7 @@ LAYOUTS = {
                  "Para juegos que en la consola se jugaban apuntando con el stick.",
         "mouse": True,
         "sens": 4.0,
+        "sens_x": 1.2, "sens_y": 1.2,
         "keys": {
             "keybind_a": "MouseLeft,Space",
             "keybind_b": "MouseRight,Backspace",
@@ -303,6 +311,8 @@ def apply(options, layout):
     options.keybinds = keybinds(layout)
     options.mnk_mouse = bool(data["mouse"])
     options.mnk_sensitivity = float(data["sens"])
+    options.mnk_sensitivity_x = float(data["sens_x"])
+    options.mnk_sensitivity_y = float(data["sens_y"])
     options.mnk_layout = layout
     return True
 

@@ -151,7 +151,8 @@ def build(cfg, version, ctx):
             ctx.log(f"Sustituidos {n} enlaces simbólicos por sus archivos (Windows los baja como texto).", "dim")
     from .sdk_patch import apply_all
     if apply_all(src):
-        ctx.log("Parches de ReForge aplicados: cambio de texturas en la GPU (iconos de botones PlayStation en "
+        ctx.log("Parches de ReForge aplicados: puntería con el ratón (giro proporcional al recorrido y "
+                "sensibilidad por eje), cambio de texturas en la GPU (iconos de botones PlayStation en "
                 "cualquier juego, en caliente) y localización de fallos en el log.", "dim")
     ctx.log("Configurando con AMD FidelityFX…")
     _run([cmake, "--preset", tag, "-DREXGLUE_ENABLE_FIDELITYFX=ON"], src, env, ctx, "cmake (configurar)")

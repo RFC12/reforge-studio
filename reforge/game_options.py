@@ -104,7 +104,9 @@ class GameOptions:
     input_backend: str = "auto"    # auto: XInput si hay un mando tipo Xbox conectado, si no SDL
     mnk_mode: bool = True          # teclado y ratón siempre disponibles: el SDK los suma al mando (MergeInto)
     mnk_mouse: bool = False
-    mnk_sensitivity: float = 1.0
+    mnk_sensitivity: float = 1.0   # runtime sin el parche de ReForge: un solo valor para los dos ejes
+    mnk_sensitivity_x: float = 0.0  # con el parche: horizontal y vertical por separado (0 = usar el de arriba)
+    mnk_sensitivity_y: float = 0.0
     keybinds: dict = field(default_factory=lambda: dict(DEFAULT_KEYBINDS))
     mnk_layout: str = "auto"       # reparto de teclas (reforge/mnklayouts.py); «auto» = el del tipo de juego
     mnk_auto: bool = True          # ReForge enciende el teclado y el ratón y pone el reparto que pide el juego
@@ -194,6 +196,9 @@ class GameOptions:
             "mnk_mode": bool(self.mnk_mode),
             "mnk_mouse": bool(self.mnk_mouse),
             "mnk_sensitivity": float(self.mnk_sensitivity),
+            # Las lee el runtime con el parche de puntería; sin él se ignoran y manda mnk_sensitivity.
+            "mnk_sensitivity_x": float(getattr(self, "mnk_sensitivity_x", 0.0)),
+            "mnk_sensitivity_y": float(getattr(self, "mnk_sensitivity_y", 0.0)),
             "audio_mute": bool(self.audio_mute),
         }
         vals.update({k: v for k, v in self.keybinds.items() if k in DEFAULT_KEYBINDS})

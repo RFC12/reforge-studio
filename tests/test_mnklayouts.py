@@ -26,9 +26,12 @@ for key in M.ORDER:
     check(all(v.strip() for v in kb.values()), f"{key}: ningún botón se queda sin tecla")
     check(bool(data["titulo"]) and bool(data["ayuda"]), f"{key}: tiene nombre y explicación")
     check(0.1 <= float(data["sens"]) <= 10.0, f"{key}: la sensibilidad cabe en el control del diálogo")
+    check("sens_x" in data and "sens_y" in data, f"{key}: tiene sensibilidad por eje")
     if data["mouse"]:
         check(float(data["sens"]) >= 3.0,
-              f"{key}: la sensibilidad pasa de la zona muerta del juego ({data['sens']})")
+              f"{key}: sin el parche del SDK, la sensibilidad pasa de la zona muerta ({data['sens']})")
+        check(0.1 <= float(data["sens_x"]) <= 10.0 and 0.1 <= float(data["sens_y"]) <= 10.0,
+              f"{key}: los ejes caben en el rango del cvar")
     ratones = {t for v in kb.values() for t in v.split(",") if t.startswith("Mouse")}
     check(ratones <= VALIDAS, f"{key}: solo botones de ratón que entiende rexglue ({sorted(ratones) or 'ninguno'})")
     if data["mouse"]:
@@ -117,6 +120,31 @@ vals = o3.runtime_values()
 check(vals["mnk_mode"] is True and vals["mnk_mouse"] is True, "el .toml enciende los dos")
 check(vals["keybind_left_trigger"] == "MouseRight", "y escribe las teclas del reparto")
 check(vals["input_backend"] in ("sdl", "xinput"), "el mando conserva su propio backend")
+
+print("Parche de puntería del SDK")
+import tempfile as _tmp                                        # noqa: E402
+import os as _os2                                              # noqa: E402
+import shutil as _sh                                           # noqa: E402
+
+from reforge import sdk_patch                                  # noqa: E402
+
+FUENTE = _os2.path.join(_os2.path.dirname(_os2.path.abspath(__file__)), "fixtures_mnk_driver.cpp")
+if _os2.path.isfile(FUENTE):
+    arbol = _tmp.mkdtemp(prefix="reforge-sdk-")
+    destino = _os2.path.join(arbol, "src", "input", "mnk")
+    _os2.makedirs(destino)
+    _sh.copyfile(FUENTE, _os2.path.join(destino, "mnk_input_driver.cpp"))
+    check(sdk_patch.apply_mouseaim(arbol) is True, "se aplica sobre el código de rexglue")
+    check(sdk_patch.apply_mouseaim(arbol) is False, "y no se vuelve a aplicar encima (idempotente)")
+    texto = open(_os2.path.join(destino, "mnk_input_driver.cpp"), encoding="utf-8").read()
+    check("REXCVAR_DEFINE_DOUBLE(mnk_sensitivity_x" in texto, "añade el cvar de sensibilidad horizontal")
+    check("REXCVAR_DEFINE_DOUBLE(mnk_sensitivity_y" in texto, "y el de la vertical")
+    check(texto.count("REXCVAR_GET(mnk_sensitivity_x)") == 1, "y los usa en el cálculo del stick")
+    check("double reforge_aim_x = 0.0;" in texto, "declara el recorrido pendiente")
+    check("kBaseScale" not in texto, "quita el cálculo viejo de píxeles por fotograma")
+    check(sdk_patch.is_applied(arbol) is False, "is_applied no da por bueno un árbol sin el resto de parches")
+else:
+    print("  (sin el código de rexglue a mano: no se puede probar el parche aquí)")
 
 print()
 print(f"{len(fallos)} fallos" if fallos else "0 fallos")

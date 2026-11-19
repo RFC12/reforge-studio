@@ -1,4 +1,4 @@
-# ReForge Studio 1.33.2
+# ReForge Studio 1.34.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,45 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.34.0 — puntería con el ratón de verdad
+
+Subir la sensibilidad no arreglaba el ratón porque el problema no era el número, era
+el método: rexglue convierte el ratón en **stick derecho**, y un stick manda
+*velocidad de giro* mientras que un ratón manda *distancia*. Por eso lo lento no
+registraba (se quedaba por debajo de la zona muerta del juego) y lo rápido pegaba un
+salto (entraba de golpe en la parte alta de la curva de respuesta).
+
+ReForge ya parchea el código de rexglue al compilar el SDK, así que el arreglo va
+donde tiene que ir: `sdk_patch.apply_mouseaim()` cambia el driver de teclado y ratón
+(`src/input/mnk/mnk_input_driver.cpp`) para que **acumule el recorrido del ratón y lo
+gaste a lo largo de varios fotogramas**, siempre con una deflexión que supera la zona
+muerta. El giro total sale proporcional a lo que has movido el ratón:
+
+| Recorrido | Giro |
+|---|---|
+| 100 px | 4,88 |
+| 200 px | 9,77 |
+| 400 px | 19,53 |
+
+Y los movimientos pequeños ya no se pierden: se guardan y se sueltan en cuanto suman
+bastante, en vez de descartarse.
+
+Además el parche añade **sensibilidad separada para X y para Y** (`mnk_sensitivity_x`
+y `mnk_sensitivity_y`), que en el diálogo son dos barras; la vertical viene algo más
+baja, como en cualquier juego de PC. Hay dos ajustes finos más por si hacen falta:
+`mnk_aim_floor` (el empujón mínimo) y `mnk_aim_tail` (cuánto recorrido puede quedar
+en cola, para que un gesto rápido no se sienta como inercia).
+
+**Hay que recompilar el SDK una vez** (Entorno → rexglue con FidelityFX) para que el
+parche entre en `rexruntime.dll`. Los juegos ya compilados lo heredan sin recompilarse,
+porque ReForge copia el runtime junto a cada juego. Mientras tanto, el runtime sin
+parchear sigue usando el valor único de siempre y ReForge se lo escribe ya subido.
+
+Lo que no se puede arreglar: el giro máximo del juego pone un techo, así que un gesto
+muy rápido no cabe en un fotograma y se reparte entre los siguientes. Un stick emulado
+nunca llegará a ser un ratón nativo; esto lo deja suave y proporcional, que es lo que
+faltaba.
 
 ## Novedades 1.33.2 — los diálogos caben en la pantalla
 

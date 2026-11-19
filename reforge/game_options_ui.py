@@ -14,6 +14,24 @@ from .game_options import (CHOICE_NAMES, DEFAULT_KEYBINDS, KEYBIND_LABELS, LICEN
                            present_effects_supported, set_language_key, write_runtime_config)
 
 
+def _barra(valor):
+    """Una barra de 0,1 a 10,0 con su número al lado. Devuelve (barra, fila)."""
+    barra = QSlider(Qt.Orientation.Horizontal)
+    barra.setRange(1, 100)              # décimas; 10,0 es el máximo que acepta rexglue
+    barra.setPageStep(5)
+    barra.setValue(max(1, min(100, int(round(valor * 10)))))
+    num = label("", "CardTitle")
+    num.setMinimumWidth(46)
+    barra.valueChanged.connect(lambda n: num.setText(f"{n / 10:.1f}".replace(".", ",")))
+    barra.valueChanged.emit(barra.value())
+    fila = QWidget()
+    f = QHBoxLayout(fila)
+    f.setContentsMargins(0, 0, 0, 0)
+    f.addWidget(barra, 1)
+    f.addWidget(num)
+    return barra, fila
+
+
 def _scrollable(widget):
     """Mete una pestaña en una zona con barra de desplazamiento.
 
@@ -247,19 +265,8 @@ class GameOptionsDialog(QDialog):
         self.layout_hint = label("", "Hint", wrap=True)
         self.mouse = QCheckBox("Usar el ratón como stick derecho")
         self.mouse.setChecked(self.o.mnk_mouse)
-        self.sens = QSlider(Qt.Orientation.Horizontal)
-        self.sens.setRange(1, 100)          # décimas: 0,1 a 10,0 (el máximo que acepta rexglue)
-        self.sens.setPageStep(5)
-        self.sens.setValue(max(1, min(100, int(round(float(self.o.mnk_sensitivity) * 10)))))
-        self.sens_val = label("", "CardTitle")
-        self.sens_val.setMinimumWidth(46)
-        self.sens.valueChanged.connect(lambda n: self.sens_val.setText(f"{n / 10:.1f}".replace(".", ",")))
-        self.sens.valueChanged.emit(self.sens.value())
-        sens_row = QWidget()
-        sr = QHBoxLayout(sens_row)
-        sr.setContentsMargins(0, 0, 0, 0)
-        sr.addWidget(self.sens, 1)
-        sr.addWidget(self.sens_val)
+        self.sens_x, fila_x = _barra(float(getattr(self.o, "mnk_sensitivity_x", 0) or 1.0))
+        self.sens_y, fila_y = _barra(float(getattr(self.o, "mnk_sensitivity_y", 0) or 0.8))
         top.addRow(self.mnk)
         top.addRow("", label("El mando no estorba: rexglue suma lo que haces con el teclado y el ratón a lo "
                              "que haces con el mando, así que los dos funcionan a la vez sin cambiar nada.",
@@ -268,10 +275,12 @@ class GameOptionsDialog(QDialog):
         top.addRow("Reparto de teclas", self.layout_cb)
         top.addRow("", self.layout_hint)
         top.addRow(self.mouse)
-        top.addRow("Sensibilidad del ratón", sens_row)
-        top.addRow("", label("El ratón mueve el stick derecho, y los juegos descartan los empujones "
-                             "pequeños del stick: por debajo de 3 la cámara casi no responde. Los repartos "
-                             "con ratón vienen en 5; súbela si quieres girar más rápido.", "Hint", wrap=True))
+        top.addRow("Sensibilidad · horizontal (X)", fila_x)
+        top.addRow("Sensibilidad · vertical (Y)", fila_y)
+        top.addRow("", label("La vertical suele querer menos que la horizontal. Con el parche de puntería de "
+                             "ReForge en el SDK, el giro es proporcional a lo que mueves el ratón y 1,0 es el "
+                             "punto de partida; si no has recompilado el SDK, el runtime usa un solo valor y "
+                             "hace falta subirlo bastante más.", "Hint", wrap=True))
         ov.addLayout(top)
         ov.addWidget(label("Teclas (varias separadas por coma; combinaciones con +, p. ej. Shift+Up):", "Hint",
                            wrap=True))
@@ -294,8 +303,9 @@ class GameOptionsDialog(QDialog):
         ov.addWidget(reset, 0, Qt.AlignmentFlag.AlignLeft)
         self.layout_cb.currentIndexChanged.connect(self._layout_changed)
         self._layout_changed(init=True)
-        self.mnk.toggled.connect(lambda on: (self.mouse.setEnabled(on), sens_row.setEnabled(on),
-                                             self.mnk_auto.setEnabled(on), self.layout_cb.setEnabled(on),
+        self.mnk.toggled.connect(lambda on: (self.mouse.setEnabled(on), fila_x.setEnabled(on),
+                                             fila_y.setEnabled(on), self.mnk_auto.setEnabled(on),
+                                             self.layout_cb.setEnabled(on),
                                              [e.setEnabled(on) for e in self.keys.values()]))
         self.mnk.toggled.emit(self.mnk.isChecked())
         return outer
@@ -321,7 +331,8 @@ class GameOptionsDialog(QDialog):
         for k, e in self.keys.items():
             e.setText(kb[k])
         self.mouse.setChecked(bool(mnklayouts.LAYOUTS[key]["mouse"]))
-        self.sens.setValue(int(round(float(mnklayouts.LAYOUTS[key]["sens"]) * 10)))
+        self.sens_x.setValue(int(round(float(mnklayouts.LAYOUTS[key]["sens_x"]) * 10)))
+        self.sens_y.setValue(int(round(float(mnklayouts.LAYOUTS[key]["sens_y"]) * 10)))
 
     def _audio_repair(self):
         w, f = self._tab()
@@ -407,7 +418,11 @@ class GameOptionsDialog(QDialog):
         o.mnk_auto = self.mnk_auto.isChecked()
         o.mnk_layout = self.layout_cb.currentData()
         o.mnk_mouse = self.mouse.isChecked()
-        o.mnk_sensitivity = self.sens.value() / 10.0
+        o.mnk_sensitivity_x = self.sens_x.value() / 10.0
+        o.mnk_sensitivity_y = self.sens_y.value() / 10.0
+        # Un runtime sin el parche solo entiende mnk_sensitivity: se le deja la horizontal, escalada
+        # a lo que necesita para pasar la zona muerta sin la puntería proporcional.
+        o.mnk_sensitivity = round(min(10.0, o.mnk_sensitivity_x * 5.0), 2)
         o.keybinds = {k: (e.text().strip() or DEFAULT_KEYBINDS[k]) for k, e in self.keys.items()}
         o.audio_mute = self.mute.isChecked()
         o.license = self.lic.currentData()
