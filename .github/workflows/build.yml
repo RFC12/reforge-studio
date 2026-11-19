@@ -1,29 +1,106 @@
 name: Build ReForge Studio
+
 on:
   push:
+    branches: ["**"]
+    tags: ["v*"]
   workflow_dispatch:
+
+permissions:
+  contents: write
+
 jobs:
   windows:
     runs-on: windows-latest
+    env:
+      # Sin esto la consola de Windows (cp1252) no puede escribir los simbolos
+      # de las pruebas y revientan con UnicodeEncodeError.
+      PYTHONUTF8: "1"
+      # Las pruebas que tocan la interfaz se ejecutan sin ventana.
+      QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: python -m pip install -r requirements.txt pyinstaller
-      - run: python tests/test_xiso.py
-      - run: python tests/test_patches.py
-      - run: python tools/make_patch.py patches/xbox_utility -o dist/patches
-      - name: App (onedir)
-        run: python -m PyInstaller --noconfirm --onedir --windowed --name ReForgeStudio --icon assets\icon.ico --add-data "assets;assets" --add-data "dist\patches;bundled_patches" --collect-submodules send2trash --distpath build\app --workpath build\work main.py
-      - run: python tools/make_payload.py build\app\ReForgeStudio build\installer
-      - name: Instalador
+
+      - name: Dependencias
+        run: python -m pip install -r requirements.txt pyinstaller
+
+      - name: Version
+        id: ver
         shell: pwsh
         run: |
           $ver = python -c "import reforge;print(reforge.__version__)"
-          python -m PyInstaller --noconfirm --onefile --windowed --name "ReForgeStudio-Setup-$ver" --icon assets\icon.ico --paths . --hidden-import reforge.toolchain --add-data "build\installer\payload.zip;." --add-data "build\installer\payload.json;." --add-data "assets\icon.ico;." --distpath dist --workpath build\work-setup installer\setup.py
+          "version=$ver" >> $env:GITHUB_OUTPUT
+          "ReForge Studio $ver"
+
+      - name: Pruebas
+        shell: pwsh
+        run: |
+          $fallos = @()
+          Get-ChildItem tests\test_*.py | Sort-Object Name | ForEach-Object {
+            Write-Host "--- $($_.Name)"
+            python $_.FullName
+            if ($LASTEXITCODE -ne 0) { $fallos += $_.Name }
+          }
+          if ($fallos.Count) { Write-Host "FALLAN: $($fallos -join ', ')"; exit 1 }
+
+      - name: Parches
+        shell: pwsh
+        run: |
+          Get-ChildItem patches -Directory | ForEach-Object {
+            python tools\make_patch.py $_.FullName -o dist\patches
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+
+      - name: Aplicacion (onedir)
+        run: >
+          python -m PyInstaller --noconfirm --clean --onedir --windowed
+          --name ReForgeStudio --icon assets\icon.ico
+          --add-data "assets;assets" --add-data "dist\patches;bundled_patches"
+          --add-data "reforge\sdk_patches;reforge\sdk_patches"
+          --collect-submodules send2trash --hidden-import PySide6.QtMultimedia
+          --distpath build\app --workpath build\work main.py
+
+      - name: Payload
+        run: python tools\make_payload.py build\app\ReForgeStudio build\installer
+
+      - name: Instalador
+        run: >
+          python -m PyInstaller --noconfirm --clean --onefile --windowed
+          --name ReForgeStudio-Setup-${{ steps.ver.outputs.version }}
+          --icon assets\icon.ico --paths .
+          --hidden-import reforge.toolchain
+          --add-data "build\installer\payload.zip;." --add-data "build\installer\payload.json;."
+          --add-data "assets\icon.ico;."
+          --distpath dist --workpath build\work-setup installer\setup.py
+
       - uses: actions/upload-artifact@v4
         with:
           name: ReForgeStudio-windows
           path: |
             dist/ReForgeStudio-Setup-*.exe
             dist/patches/*.rfpatch
+
+      # Al empujar una etiqueta vX.Y.Z se publica la Release con el instalador
+      # dentro, que es lo que busca el actualizador automatico del programa.
+      - name: Publicar la Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ver = "${{ steps.ver.outputs.version }}"
+          $exe = "dist\ReForgeStudio-Setup-$ver.exe"
+          if (-not (Test-Path $exe)) { Write-Host "No existe $exe"; exit 1 }
+          $notas = "notas.md"
+          Set-Content $notas "Instalador de ReForge Studio $ver para Windows." -Encoding UTF8
+          Add-Content $notas ""
+          Add-Content $notas "**ReForgeStudio-Setup-$ver.exe** es el instalador completo: el programa, los parches incluidos y la descarga del SDK rexglue."
+          Add-Content $notas ""
+          Add-Content $notas "Si ya tienes ReForge Studio instalado no hace falta descargarlo a mano: el programa consulta esta pagina al arrancar y te ofrece actualizarse solo."
+          Add-Content $notas ""
+          Add-Content $notas "Publicado automaticamente desde la etiqueta $env:GITHUB_REF_NAME."
+          $assets = @($exe)
+          $assets += (Get-ChildItem dist\patches\*.rfpatch | ForEach-Object { $_.FullName })
+          gh release create $env:GITHUB_REF_NAME $assets --title "ReForge Studio $ver" --notes-file $notas

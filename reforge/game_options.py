@@ -104,6 +104,8 @@ class GameOptions:
     mnk_mouse: bool = False
     mnk_sensitivity: float = 1.0
     keybinds: dict = field(default_factory=lambda: dict(DEFAULT_KEYBINDS))
+    mnk_layout: str = "auto"       # reparto de teclas (reforge/mnklayouts.py); «auto» = el del tipo de juego
+    mnk_auto: bool = True          # encender el teclado y el ratón solo cuando no hay ningún mando conectado
     # Audio e idioma (-1 = automático: el de Windows · 0 = el que decida el juego)
     audio_mute: bool = False
     language: int = -1

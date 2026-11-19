@@ -69,6 +69,37 @@ def sync_shaders(root, exe, options):
         return []
 
 
+def sync_input(root, exe, o, name=""):
+    """Teclado y ratón antes de jugar: encenderlos si no hay mando y poner el reparto que pide el juego.
+
+    Los cambios se quedan en memoria (van al .toml del juego, no al options.json): así «automático» sigue
+    siendo automático y el día que se conecte un mando se vuelve a jugar con el mando sin tocar nada.
+    """
+    msgs = []
+    try:
+        from . import mnklayouts
+        from .game_options import title_id_for_exe, xinput_pad_connected
+        if getattr(o, "mnk_auto", True) and not o.mnk_mode and not xinput_pad_connected():
+            o.mnk_mode = True
+            msgs.append("No hay ningún mando conectado: esta partida se juega con teclado y ratón.")
+        if not o.mnk_mode:
+            return msgs
+        layout = getattr(o, "mnk_layout", mnklayouts.AUTO)
+        auto = layout == mnklayouts.AUTO or layout not in mnklayouts.LAYOUTS
+        if auto:
+            tid = title_id_for_exe(exe) or ""
+            guess, _ = mnklayouts.suggest(name or os.path.basename(os.path.normpath(root)), tid,
+                                          os.path.splitext(os.path.basename(exe or ""))[0])
+            layout = guess or "teclado"
+            mnklayouts.apply(o, layout)
+            o.mnk_layout = mnklayouts.AUTO
+        msgs.append("Teclado y ratón · " + mnklayouts.title(layout)
+                    + (" (elegido por el tipo de juego)" if auto else ""))
+    except Exception:      # noqa: BLE001 — nunca impedir que el juego arranque por esto
+        pass
+    return msgs
+
+
 def apply(root, exe):
     """Revisa el PC y escribe la configuración del juego. Devuelve el texto del resumen ('' si no se pudo)."""
     from .game_options import GameOptions, write_runtime_config
@@ -86,8 +117,9 @@ def apply(root, exe):
             if want != int(o.resolution_scale or 1):
                 o.resolution_scale = want
                 o.save(root)
+        extra = sync_input(root, exe, o)
         write_runtime_config(exe, o)
-        extra = sync_shaders(root, exe, o)
+        extra += sync_shaders(root, exe, o)
         return summary(o, hw, o.runtime_values()) + ("\n" + "\n".join(extra) if extra else "")
     except Exception:      # noqa: BLE001
         return ""

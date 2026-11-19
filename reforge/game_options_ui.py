@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QDia
                                QFormLayout, QGridLayout, QHBoxLayout, QLineEdit, QPushButton, QRadioButton, QScrollArea,
                                QSpinBox, QTabWidget, QVBoxLayout, QWidget)
 
+from . import mnklayouts
 from .game_options import (CHOICE_NAMES, DEFAULT_KEYBINDS, KEYBIND_LABELS, LICENSE_CHOICES, POST_EFFECTS,
                            PRESENT_EFFECTS, GameOptions, detect_language_choices, language_key,
                            present_effects_supported, set_language_key, write_runtime_config)
@@ -203,6 +204,15 @@ class GameOptionsDialog(QDialog):
                              "Hint", wrap=True))
         self.mnk = QCheckBox("Jugar con teclado y ratón (se emula un mando de Xbox 360)")
         self.mnk.setChecked(self.o.mnk_mode)
+        self.mnk_auto = QCheckBox("Encenderlo solo cuando no haya ningún mando conectado")
+        self.mnk_auto.setChecked(bool(getattr(self.o, "mnk_auto", True)))
+        self.layout_cb = QComboBox()
+        self.layout_cb.addItem("Automático · el que le toque al juego", mnklayouts.AUTO)
+        for key in mnklayouts.ORDER:
+            self.layout_cb.addItem(mnklayouts.title(key), key)
+        cur = getattr(self.o, "mnk_layout", mnklayouts.AUTO)
+        self.layout_cb.setCurrentIndex(max(0, self.layout_cb.findData(cur)))
+        self.layout_hint = label("", "Hint", wrap=True)
         self.mouse = QCheckBox("Usar el ratón como stick derecho")
         self.mouse.setChecked(self.o.mnk_mouse)
         self.sens = QDoubleSpinBox()
@@ -210,6 +220,9 @@ class GameOptionsDialog(QDialog):
         self.sens.setSingleStep(0.1)
         self.sens.setValue(float(self.o.mnk_sensitivity))
         top.addRow(self.mnk)
+        top.addRow(self.mnk_auto)
+        top.addRow("Reparto de teclas", self.layout_cb)
+        top.addRow("", self.layout_hint)
         top.addRow(self.mouse)
         top.addRow("Sensibilidad del ratón", self.sens)
         ov.addLayout(top)
@@ -235,10 +248,36 @@ class GameOptionsDialog(QDialog):
         reset = QPushButton("Restaurar teclas por defecto")
         reset.clicked.connect(lambda: [e.setText(DEFAULT_KEYBINDS[k]) for k, e in self.keys.items()])
         ov.addWidget(reset, 0, Qt.AlignmentFlag.AlignLeft)
+        self.layout_cb.currentIndexChanged.connect(self._layout_changed)
+        self._layout_changed(init=True)
         self.mnk.toggled.connect(lambda on: (self.mouse.setEnabled(on), self.sens.setEnabled(on),
+                                             self.mnk_auto.setEnabled(on), self.layout_cb.setEnabled(on),
                                              [e.setEnabled(on) for e in self.keys.values()]))
         self.mnk.toggled.emit(self.mnk.isChecked())
         return outer
+
+    def _layout_changed(self, _index=None, init=False):
+        """Rellena las teclas con el reparto elegido («automático» deja ver el que le tocaría al juego)."""
+        key = self.layout_cb.currentData()
+        auto = key == mnklayouts.AUTO
+        if auto:
+            key, _ = mnklayouts.suggest(getattr(self.project, "name", "") or "",
+                                        getattr(self.project, "title_id", "") or "",
+                                        os.path.splitext(os.path.basename(self.exe or ""))[0])
+            key = key or "teclado"
+            self.layout_hint.setText("Por el nombre del juego le toca «" + mnklayouts.title(key) + "». "
+                                     + mnklayouts.LAYOUTS[key]["ayuda"]
+                                     + " Se vuelve a elegir en cada partida; para cambiar teclas sueltas, "
+                                       "elige el reparto en la lista en vez de dejarlo en automático.")
+        else:
+            self.layout_hint.setText(mnklayouts.LAYOUTS[key]["ayuda"])
+        if init and not auto:
+            return        # con un reparto elegido a mano mandan las teclas guardadas
+        kb = mnklayouts.keybinds(key)
+        for k, e in self.keys.items():
+            e.setText(kb[k])
+        self.mouse.setChecked(bool(mnklayouts.LAYOUTS[key]["mouse"]))
+        self.sens.setValue(float(mnklayouts.LAYOUTS[key]["sens"]))
 
     def _audio_repair(self):
         w, f = self._tab()
@@ -320,6 +359,8 @@ class GameOptionsDialog(QDialog):
                 pass
         o.mods_disabled = GameOptions.load(self.project.root).mods_disabled   # lo guarda el diálogo de packs
         o.mnk_mode = self.mnk.isChecked()
+        o.mnk_auto = self.mnk_auto.isChecked()
+        o.mnk_layout = self.layout_cb.currentData()
         o.mnk_mouse = self.mouse.isChecked()
         o.mnk_sensitivity = float(self.sens.value())
         o.keybinds = {k: (e.text().strip() or DEFAULT_KEYBINDS[k]) for k, e in self.keys.items()}

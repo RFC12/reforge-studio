@@ -1,4 +1,4 @@
-# ReForge Studio 1.30.0
+# ReForge Studio 1.31.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,38 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.31.0 — teclado y ratón por juego
+
+Los juegos de Xbox 360 se pensaron para un mando, y rexglue sabe emular uno con el
+teclado, pero el reparto de teclas que trae de serie sirve para probar un juego, no
+para jugarlo: la puntería va en las flechas y A está en la tecla «ñ». Un shooter así
+no hay quien lo juegue.
+
+Ahora ReForge trae **repartos de teclas por tipo de juego** y sabe cuál le toca a cada
+uno (`reforge/mnklayouts.py`):
+
+| Reparto | Para qué | Cómo se juega |
+|---|---|---|
+| Shooter en primera persona | Call of Duty, Halo, Bioshock, Borderlands… | Ratón para apuntar, clic izquierdo disparar, clic derecho apuntar, WASD, Espacio saltar, R recargar, G granada |
+| Shooter de coberturas | Gears of War, Mass Effect, Vanquish… | Igual, con A en Espacio para cubrirse y correr y el cuerpo a cuerpo en V |
+| Acción y aventura | Castlevania, Batman, Devil May Cry, Ben 10… | El ratón mueve la cámara, clic izquierdo ataque rápido, clic derecho ataque fuerte |
+| Conducción | Forza, Need for Speed, DiRT, Burnout… | W acelerar, S frenar, A y D girar, Espacio freno de mano |
+| Lucha | Street Fighter, Mortal Kombat, Tekken… | WASD y las flechas, los seis botones en U I O / J K L |
+| Teclado | Plataformas, deportes, arcade | WASD y las flechas, los botones en Espacio y J K L I |
+| Puntero | Angry Birds, pinball, puzles | El ratón es el stick derecho y el clic izquierdo es A |
+| Clásico | — | El reparto original del SDK, por si lo prefieres |
+
+El ratón entra de verdad: además de las teclas, los repartos usan los botones del ratón
+(`MouseLeft`, `MouseRight`, `MouseMiddle`, `MouseX1`), que es lo que convierte la
+emulación en algo jugable con teclado y ratón.
+
+**Y funcionan los dos a la vez.** Con «Encenderlo solo cuando no haya ningún mando
+conectado» (activado de serie), ReForge mira antes de cada partida: si hay un mando
+Xbox enchufado se juega con el mando, y si no, enciende el teclado y el ratón con el
+reparto que le toca al juego. No hay que tocar nada ni cambiar de opción para pasar de
+uno a otro: se enchufa el mando y ya. Y como esto se decide al arrancar, el reparto
+elegido a mano en 🎮 Opciones del juego → Controles se respeta siempre.
 
 ## Novedades 1.30.0 — rendimiento automático y actualizaciones
 
