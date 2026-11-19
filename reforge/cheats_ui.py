@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QDialog, QHBoxLayout, QListWidget, QListWidgetIte
                                QPushButton, QVBoxLayout)
 
 from . import cheats, game, pc_enhance
-from .widgets import label
+from .widgets import fit_to_screen, label
 
 
 class _Bridge(QObject):
@@ -31,7 +31,7 @@ class CheatsDialog(QDialog):
         except Exception:      # noqa: BLE001
             pass
         self.setWindowTitle(f"Trucos · {name}")
-        self.resize(720, 640)
+        fit_to_screen(self, 720, 640)
         v = QVBoxLayout(self)
         v.addWidget(label("BASE DE DATOS DE XENIA CANARY (game-patches)", "Section"))
         row = QHBoxLayout()

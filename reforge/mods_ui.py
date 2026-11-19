@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFileDialog, QHBoxLayo
 
 from . import mods
 from .game_options import GameOptions
-from .widgets import label
+from .widgets import fit_to_screen, label
 
 
 def open_folder(path):
@@ -32,7 +32,7 @@ class ModsDialog(QDialog):
         self.root = root
         self.o = GameOptions.load(root)
         self.setWindowTitle(f"Packs y texturas · {name or os.path.basename(root)}")
-        self.resize(640, 520)
+        fit_to_screen(self, 640, 520)
         v = QVBoxLayout(self)
         v.addWidget(label("Packs de este juego. Se aplican al abrirlo (orden alfabético: el último manda). "
                           "Al desactivar uno, ReForge devuelve los archivos originales.", "Hint", wrap=True))

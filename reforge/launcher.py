@@ -16,7 +16,7 @@ from .core import AppConfig, Library
 from .game_options import GameOptions, detect_languages, language_key, set_language_key, write_runtime_config
 from .game_options_ui import language_combo
 from .game_options_ui import ENGINE_PRESETS, GameOptionsDialog, vulkan_in_plugin
-from .widgets import label
+from .widgets import fit_to_screen, label
 
 PRESET_TITLES = {k: t for k, t, _d in ENGINE_PRESETS}
 PRESET_DESC = {k: d for k, _t, d in ENGINE_PRESETS}
@@ -53,7 +53,7 @@ class GameLauncher(QWidget):
         self.timer.timeout.connect(self._poll)
         self.setWindowTitle(f"{self.name} · ReForge")
         self.setObjectName("Root")
-        self.resize(720, 640)
+        fit_to_screen(self, 720, 640)
         self._build()
 
     # ---------------------------------------------------------------- interfaz

@@ -1,4 +1,4 @@
-# ReForge Studio 1.33.1
+# ReForge Studio 1.33.2
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,18 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.33.2 — los diálogos caben en la pantalla
+
+«Opciones del juego» había crecido tanto que en una pantalla de 1080 píxeles de alto
+los botones Guardar y Cancelar quedaban por debajo del borde, fuera del alcance del
+ratón. Ahora cada pestaña va dentro de una zona con barra de desplazamiento y el
+diálogo nunca se abre más grande que la pantalla; lo mismo en Optimizar, Trucos,
+Packs y el lanzador. Hay una prueba (`tests/test_dialogos.py`) que lo vigila, para
+que no vuelva a pasar sin que nos enteremos.
+
+La sensibilidad del ratón es ahora una **barra**, que se ajusta de un vistazo, con el
+valor al lado.
 
 ## Novedades 1.33.1 — el ratón con sensibilidad que sirve
 

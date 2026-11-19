@@ -2,14 +2,29 @@
 import os
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFormLayout, QGridLayout, QHBoxLayout, QLineEdit, QPushButton, QRadioButton, QScrollArea,
-                               QSpinBox, QTabWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+                               QDoubleSpinBox, QFormLayout, QGridLayout, QHBoxLayout, QLineEdit, QPushButton,
+                               QRadioButton, QScrollArea, QSlider, QSpinBox, QTabWidget, QVBoxLayout,
+                               QWidget)
 
 from . import mnklayouts
+from .widgets import fit_to_screen, label
 from .game_options import (CHOICE_NAMES, DEFAULT_KEYBINDS, KEYBIND_LABELS, LICENSE_CHOICES, POST_EFFECTS,
                            PRESENT_EFFECTS, GameOptions, detect_language_choices, language_key,
                            present_effects_supported, set_language_key, write_runtime_config)
+
+
+def _scrollable(widget):
+    """Mete una pestaña en una zona con barra de desplazamiento.
+
+    Sin esto la pestaña impone su altura entera al diálogo y, en una pantalla de 1080 píxeles de alto
+    (o con el escalado de Windows), los botones Guardar y Cancelar se quedan por debajo del borde.
+    """
+    sc = QScrollArea()
+    sc.setWidgetResizable(True)
+    sc.setFrameShape(QScrollArea.Shape.NoFrame)
+    sc.setWidget(widget)
+    return sc
 
 
 def language_combo(root, options):
@@ -26,7 +41,6 @@ def language_combo(root, options):
         cb.addItem(CHOICE_NAMES.get(cur, cur), cur)
     cb.setCurrentIndex(max(0, cb.findData(cur)))
     return cb
-from .widgets import label
 
 
 def vulkan_in_plugin(cfg):
@@ -45,13 +59,12 @@ class GameOptionsDialog(QDialog):
         self.cfg, self.project, self.exe = cfg, project, exe
         self.o = GameOptions.load(project.root)
         self.setWindowTitle(f"Opciones del juego · {project.name}")
-        self.resize(820, 680)
         v = QVBoxLayout(self)
         tabs = QTabWidget()
         tabs.setUsesScrollButtons(False)
-        tabs.addTab(self._graphics(), "Gráficos")
-        tabs.addTab(self._controls(), "Controles")
-        tabs.addTab(self._audio_repair(), "Idioma, audio y reparación")
+        tabs.addTab(_scrollable(self._graphics()), "Gráficos")
+        tabs.addTab(_scrollable(self._controls()), "Controles")
+        tabs.addTab(_scrollable(self._audio_repair()), "Idioma, audio y reparación")
         v.addWidget(tabs, 1)
         where = (f"Se guardan en el proyecto y en {os.path.basename(exe)[:-4] if exe else '<juego>'}.toml "
                  "junto al ejecutable. Se aplican al abrir el juego.")
@@ -61,6 +74,7 @@ class GameOptionsDialog(QDialog):
         bb.accepted.connect(self.save)
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
+        fit_to_screen(self, 880, 760, limitar=True)
 
     # ---------------------------------------------------------------- pestañas
     def _tab(self):
@@ -233,10 +247,19 @@ class GameOptionsDialog(QDialog):
         self.layout_hint = label("", "Hint", wrap=True)
         self.mouse = QCheckBox("Usar el ratón como stick derecho")
         self.mouse.setChecked(self.o.mnk_mouse)
-        self.sens = QDoubleSpinBox()
-        self.sens.setRange(0.1, 10.0)       # el máximo que acepta rexglue (mnk_sensitivity)
-        self.sens.setSingleStep(0.5)
-        self.sens.setValue(float(self.o.mnk_sensitivity))
+        self.sens = QSlider(Qt.Orientation.Horizontal)
+        self.sens.setRange(1, 100)          # décimas: 0,1 a 10,0 (el máximo que acepta rexglue)
+        self.sens.setPageStep(5)
+        self.sens.setValue(max(1, min(100, int(round(float(self.o.mnk_sensitivity) * 10)))))
+        self.sens_val = label("", "CardTitle")
+        self.sens_val.setMinimumWidth(46)
+        self.sens.valueChanged.connect(lambda n: self.sens_val.setText(f"{n / 10:.1f}".replace(".", ",")))
+        self.sens.valueChanged.emit(self.sens.value())
+        sens_row = QWidget()
+        sr = QHBoxLayout(sens_row)
+        sr.setContentsMargins(0, 0, 0, 0)
+        sr.addWidget(self.sens, 1)
+        sr.addWidget(self.sens_val)
         top.addRow(self.mnk)
         top.addRow("", label("El mando no estorba: rexglue suma lo que haces con el teclado y el ratón a lo "
                              "que haces con el mando, así que los dos funcionan a la vez sin cambiar nada.",
@@ -245,7 +268,7 @@ class GameOptionsDialog(QDialog):
         top.addRow("Reparto de teclas", self.layout_cb)
         top.addRow("", self.layout_hint)
         top.addRow(self.mouse)
-        top.addRow("Sensibilidad del ratón", self.sens)
+        top.addRow("Sensibilidad del ratón", sens_row)
         top.addRow("", label("El ratón mueve el stick derecho, y los juegos descartan los empujones "
                              "pequeños del stick: por debajo de 3 la cámara casi no responde. Los repartos "
                              "con ratón vienen en 5; súbela si quieres girar más rápido.", "Hint", wrap=True))
@@ -265,16 +288,13 @@ class GameOptionsDialog(QDialog):
             g.addWidget(e, i // 2, (i % 2) * 2 + 1)
         g.setColumnStretch(1, 1)
         g.setColumnStretch(3, 1)
-        sc = QScrollArea()
-        sc.setWidgetResizable(True)
-        sc.setWidget(grid_w)
-        ov.addWidget(sc, 1)
+        ov.addWidget(grid_w)
         reset = QPushButton("Restaurar teclas por defecto")
         reset.clicked.connect(lambda: [e.setText(DEFAULT_KEYBINDS[k]) for k, e in self.keys.items()])
         ov.addWidget(reset, 0, Qt.AlignmentFlag.AlignLeft)
         self.layout_cb.currentIndexChanged.connect(self._layout_changed)
         self._layout_changed(init=True)
-        self.mnk.toggled.connect(lambda on: (self.mouse.setEnabled(on), self.sens.setEnabled(on),
+        self.mnk.toggled.connect(lambda on: (self.mouse.setEnabled(on), sens_row.setEnabled(on),
                                              self.mnk_auto.setEnabled(on), self.layout_cb.setEnabled(on),
                                              [e.setEnabled(on) for e in self.keys.values()]))
         self.mnk.toggled.emit(self.mnk.isChecked())
@@ -301,7 +321,7 @@ class GameOptionsDialog(QDialog):
         for k, e in self.keys.items():
             e.setText(kb[k])
         self.mouse.setChecked(bool(mnklayouts.LAYOUTS[key]["mouse"]))
-        self.sens.setValue(float(mnklayouts.LAYOUTS[key]["sens"]))
+        self.sens.setValue(int(round(float(mnklayouts.LAYOUTS[key]["sens"]) * 10)))
 
     def _audio_repair(self):
         w, f = self._tab()
@@ -387,7 +407,7 @@ class GameOptionsDialog(QDialog):
         o.mnk_auto = self.mnk_auto.isChecked()
         o.mnk_layout = self.layout_cb.currentData()
         o.mnk_mouse = self.mouse.isChecked()
-        o.mnk_sensitivity = float(self.sens.value())
+        o.mnk_sensitivity = self.sens.value() / 10.0
         o.keybinds = {k: (e.text().strip() or DEFAULT_KEYBINDS[k]) for k, e in self.keys.items()}
         o.audio_mute = self.mute.isChecked()
         o.license = self.lic.currentData()

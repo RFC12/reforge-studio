@@ -9,7 +9,7 @@ from . import game
 from .game_options import GameOptions, write_runtime_config
 from .optimizer import (PERF_MODES, QUALITY_LEVELS, RENDER_LADDER, cached_hardware, describe, detect_hardware,
                         nvidia_ai_tips, open_nvidia_app, recommended_scale)
-from .widgets import label
+from .widgets import fit_to_screen, label
 
 LADDER_TITLES = {k: t for k, t, *_r in RENDER_LADDER}
 
@@ -20,7 +20,7 @@ class OptimizeDialog(QDialog):
         self.cfg, self.root, self.name, self.exe, self.title_id = cfg, root, name, exe, title_id
         self.o = GameOptions.load(root)
         self.setWindowTitle(f"Optimizar · {name}")
-        self.resize(720, 860)
+        fit_to_screen(self, 720, 860, limitar=True)
         self.setMinimumSize(620, 600)
         outer = QVBoxLayout(self)
         sc = QScrollArea()

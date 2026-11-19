@@ -236,3 +236,25 @@ class PathField(QWidget):
             p, _ = QFileDialog.getOpenFileName(self, "Seleccionar archivo", start, self.filt)
         if p:
             self.setText(p)
+
+
+def fit_to_screen(dialog, ancho, alto, limitar=False):
+    """Abre el diálogo del tamaño pedido sin salirse nunca de la pantalla.
+
+    Una pantalla de 1080 píxeles de alto (o cualquiera con el escalado de Windows subido) deja menos
+    sitio del que parece, y un diálogo que pide más altura de la que hay se abre con los botones de
+    Guardar y Cancelar por debajo del borde, fuera del alcance del ratón. `limitar` pone además un
+    máximo: solo para diálogos cuyo contenido va dentro de una zona con barra de desplazamiento, donde
+    recortar la altura no esconde nada.
+    """
+    from PySide6.QtWidgets import QApplication
+    try:
+        pantalla = dialog.screen() or QApplication.primaryScreen()
+        libre = pantalla.availableGeometry()
+        ancho = min(ancho, libre.width() - 60)
+        alto = min(alto, libre.height() - 60)
+        if limitar:
+            dialog.setMaximumHeight(libre.height() - 40)
+    except Exception:      # noqa: BLE001
+        pass
+    dialog.resize(max(520, ancho), max(380, alto))
