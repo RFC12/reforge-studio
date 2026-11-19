@@ -102,12 +102,12 @@ class GameOptions:
     pc_offer_dismissed: bool = False
     # Controles
     input_backend: str = "auto"    # auto: XInput si hay un mando tipo Xbox conectado, si no SDL
-    mnk_mode: bool = False
+    mnk_mode: bool = True          # teclado y ratón siempre disponibles: el SDK los suma al mando (MergeInto)
     mnk_mouse: bool = False
     mnk_sensitivity: float = 1.0
     keybinds: dict = field(default_factory=lambda: dict(DEFAULT_KEYBINDS))
     mnk_layout: str = "auto"       # reparto de teclas (reforge/mnklayouts.py); «auto» = el del tipo de juego
-    mnk_auto: bool = True          # encender el teclado y el ratón solo cuando no hay ningún mando conectado
+    mnk_auto: bool = True          # ReForge enciende el teclado y el ratón y pone el reparto que pide el juego
     # Audio e idioma (-1 = automático: el de Windows · 0 = el que decida el juego)
     audio_mute: bool = False
     language: int = -1
@@ -134,6 +134,13 @@ class GameOptions:
                 o.ask_engine_on_play = False  # antes venía activado: ahora se configura solo al abrir
             if data.get("input_backend") == "sdl" and not data.get("input_backend_chosen"):
                 o.input_backend = "auto"      # «sdl» era el valor por defecto de versiones anteriores
+            if "mnk_layout" not in data:
+                # Proyecto de antes de los repartos por juego: el teclado y el ratón estaban apagados
+                # porque el reparto del SDK no servía para jugar. Ahora hay uno por juego y conviven con
+                # el mando (el SDK suma los dos estados), así que se encienden y se deja el reparto en
+                # automático para que el Taller ponga el del juego.
+                o.mnk_mode = True
+                o.mnk_layout = "auto"
             kb = dict(DEFAULT_KEYBINDS)
             kb.update({k: v for k, v in (o.keybinds or {}).items() if k in DEFAULT_KEYBINDS})
             o.keybinds = kb

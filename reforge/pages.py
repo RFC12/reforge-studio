@@ -965,6 +965,10 @@ class WorkshopPage(QWidget):
                 game.prepare_game_runtime(self.win.cfg, outputs[0], p.root)
                 bat = game.write_launcher(outputs[0], p.root, p.name)
                 self.log.write(f"Lanzador: {bat}", "ok")
+                from . import mnklayouts
+                _layout, teclas = mnklayouts.configure(p.root, outputs[0], p.name)
+                if teclas:
+                    self.log.write(teclas, "ok")
                 cfg_path = write_runtime_config(outputs[0], GameOptions.load(p.root))
                 self.log.write(f"Opciones del juego: {cfg_path}", "ok")
             except (OSError, RuntimeError) as e:

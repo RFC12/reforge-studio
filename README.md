@@ -1,4 +1,4 @@
-# ReForge Studio 1.32.1
+# ReForge Studio 1.33.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,32 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.33.0 — el teclado y el ratón ya vienen puestos
+
+La 1.31.0 trajo los repartos por juego, pero los dejaba apagados mientras hubiera un
+mando conectado, así que en la práctica no se usaban: Gears of War seguía arrancando
+sin ratón para apuntar. Esa precaución sobraba. El SDK combina el estado de todos los
+dispositivos en el mismo mando del juego (`src/input/state_merge.cpp`: los botones se
+suman, los gatillos y los sticks se quedan con el valor más fuerte), y el teclado y el
+ratón entran como un dispositivo más del jugador 1. **No hay que elegir**: el teclado y
+el ratón quedan siempre disponibles y el mando sigue funcionando igual, a la vez, sin
+cambiar nada en ninguna opción.
+
+Qué cambia:
+
+* **Al compilar un juego**, el Taller elige el reparto que le toca, enciende el ratón
+  para la cámara y lo guarda en las opciones del proyecto. Sale escrito en el registro
+  de la compilación, y las teclas quedan a la vista en 🎮 Opciones del juego →
+  Controles por si quieres cambiar alguna. Al recompilar no se vuelven a pisar.
+* **Los proyectos que ya tenías** se actualizan solos: al abrirlos se les enciende el
+  teclado y el ratón y se les pone el reparto del juego, sin tener que recompilar.
+* El teclado y el ratón vienen **activados de serie** en los proyectos nuevos.
+
+Por ejemplo, Gears of War 2 queda así sin tocar nada: ratón para la cámara, clic
+izquierdo disparar (`keybind_right_trigger = "MouseLeft"`), clic derecho apuntar, WASD
+para moverse, Espacio para cubrirse y correr, R recargar, F cambiar arma, G granada,
+Mayús correr. Y si prefieres el mando, lo enchufas y juegas con el mando.
 
 ## Novedades 1.32.1
 

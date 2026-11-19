@@ -222,7 +222,7 @@ class GameOptionsDialog(QDialog):
                              "Hint", wrap=True))
         self.mnk = QCheckBox("Jugar con teclado y ratón (se emula un mando de Xbox 360)")
         self.mnk.setChecked(self.o.mnk_mode)
-        self.mnk_auto = QCheckBox("Encenderlo solo cuando no haya ningún mando conectado")
+        self.mnk_auto = QCheckBox("Dejar que ReForge ponga el reparto del juego al compilarlo")
         self.mnk_auto.setChecked(bool(getattr(self.o, "mnk_auto", True)))
         self.layout_cb = QComboBox()
         self.layout_cb.addItem("Automático · el que le toque al juego", mnklayouts.AUTO)
@@ -238,6 +238,9 @@ class GameOptionsDialog(QDialog):
         self.sens.setSingleStep(0.1)
         self.sens.setValue(float(self.o.mnk_sensitivity))
         top.addRow(self.mnk)
+        top.addRow("", label("El mando no estorba: rexglue suma lo que haces con el teclado y el ratón a lo "
+                             "que haces con el mando, así que los dos funcionan a la vez sin cambiar nada.",
+                             "Hint", wrap=True))
         top.addRow(self.mnk_auto)
         top.addRow("Reparto de teclas", self.layout_cb)
         top.addRow("", self.layout_hint)

@@ -17,6 +17,7 @@ Nombres válidos (los del driver mnk del SDK): las letras y los números, `Space
 `MouseLeft`, `MouseRight`, `MouseMiddle`, `MouseX1`, `MouseX2`.
 Varias teclas para un mismo botón se separan por coma; una combinación lleva `+`.
 """
+import os
 import re
 
 AUTO = "auto"
@@ -313,3 +314,41 @@ def title(layout):
 def describe(layout):
     data = LAYOUTS.get(layout)
     return f"{data['titulo']}: {data['ayuda']}" if data else ""
+
+
+def for_game(root, exe="", name=""):
+    """El reparto que le toca a un proyecto («teclado» si el juego no se reconoce)."""
+    from .game_options import title_id_for_exe
+    tid = ""
+    if exe:
+        try:
+            tid = title_id_for_exe(exe) or ""
+        except Exception:      # noqa: BLE001
+            tid = ""
+    base = os.path.splitext(os.path.basename(exe))[0] if exe else ""
+    layout, _ = suggest(name or os.path.basename(os.path.normpath(root or "")), tid, base)
+    return layout or "teclado"
+
+
+def configure(root, exe="", name=""):
+    """Deja el teclado y el ratón listos para jugar y lo guarda en las opciones del proyecto.
+
+    Se llama al terminar de compilar: es el momento en el que ya se sabe qué juego es y el jugador
+    todavía no ha tocado nada. Si el reparto ya está elegido (porque lo puso a mano o porque se compiló
+    antes) no se toca: solo se rellena la primera vez.
+
+    Devuelve (reparto, texto) o ("", "") si no había nada que hacer.
+    """
+    from .game_options import GameOptions
+    o = GameOptions.load(root)
+    if not getattr(o, "mnk_auto", True) or getattr(o, "mnk_layout", AUTO) in LAYOUTS:
+        return "", ""
+    layout = for_game(root, exe, name)
+    o.mnk_mode = True
+    apply(o, layout)                 # deja mnk_layout con el reparto concreto, visible y editable
+    o.save(root)
+    data = LAYOUTS[layout]
+    texto = f"Teclado y ratón · {data['titulo']}: {data['ayuda']}"
+    if data["mouse"]:
+        texto += " El mando sigue funcionando a la vez."
+    return layout, texto

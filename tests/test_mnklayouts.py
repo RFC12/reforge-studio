@@ -72,6 +72,48 @@ check(o.keybinds["keybind_right_trigger"] == "MouseLeft" and o.mnk_mouse is True
 check(o.mnk_layout == "shooter", "recuerda cuál se aplicó")
 check(M.apply(o, "inventado") is False, "un reparto que no existe no cambia nada")
 
+print("Dejarlo listo al compilar")
+import tempfile                                               # noqa: E402
+from reforge.game_options import GameOptions                  # noqa: E402
+
+raiz = tempfile.mkdtemp(prefix="reforge-mnk-")
+lay, texto = M.configure(raiz, "", "Gears of War 2")
+guardado = GameOptions.load(raiz)
+check(lay == "cobertura", "al compilar Gears of War le pone el reparto de coberturas")
+check(guardado.mnk_mode is True, "deja el teclado y el ratón encendidos")
+check(guardado.mnk_mouse is True, "y el ratón moviendo la cámara")
+check(guardado.keybinds["keybind_right_trigger"] == "MouseLeft", "disparar queda en el clic izquierdo")
+check(guardado.mnk_layout == "cobertura", "el reparto queda escrito, no en «auto»")
+check("mando" in texto.lower(), "y lo dice en el registro del Taller")
+check(M.configure(raiz, "", "Gears of War 2") == ("", ""), "al recompilar no vuelve a pisar las teclas")
+
+raiz2 = tempfile.mkdtemp(prefix="reforge-mnk-")
+o2 = GameOptions()
+o2.mnk_auto = False
+o2.save(raiz2)
+check(M.configure(raiz2, "", "Halo 3") == ("", ""), "si el jugador lo lleva a mano, no se toca nada")
+
+print("Proyectos de antes de los repartos")
+raiz3 = tempfile.mkdtemp(prefix="reforge-mnk-")
+import json                                                   # noqa: E402
+import os as _os                                              # noqa: E402
+from reforge.game_options import OPTIONS_FILE                 # noqa: E402
+
+with open(_os.path.join(raiz3, OPTIONS_FILE), "w", encoding="utf-8") as f:
+    json.dump({"mnk_mode": False, "mnk_mouse": False, "gpu_plugin": "xenos"}, f)
+viejo = GameOptions.load(raiz3)
+check(viejo.mnk_mode is True, "se les enciende el teclado y el ratón")
+check(viejo.mnk_layout == "auto", "y el reparto queda pendiente de elegir")
+
+print("Mando y teclado a la vez")
+o3 = GameOptions()
+o3.mnk_layout, o3.mnk_mode = "shooter", True
+M.apply(o3, "shooter")
+vals = o3.runtime_values()
+check(vals["mnk_mode"] is True and vals["mnk_mouse"] is True, "el .toml enciende los dos")
+check(vals["keybind_left_trigger"] == "MouseRight", "y escribe las teclas del reparto")
+check(vals["input_backend"] in ("sdl", "xinput"), "el mando conserva su propio backend")
+
 print()
 print(f"{len(fallos)} fallos" if fallos else "0 fallos")
 sys.exit(1 if fallos else 0)
