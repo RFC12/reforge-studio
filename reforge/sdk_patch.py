@@ -42,6 +42,12 @@ class PatchError(Exception):
     pass
 
 
+class PatchFileMissing(PatchError):
+    """El archivo que el parche toca no existe en esta versión del SDK (la reorganizaron). Se salta siempre,
+    también para los parches imprescindibles: no es que el parche esté roto, es que esa versión movió el
+    código y hay que re-anclarlo. ReForge compila igual y avisa."""
+
+
 def _gfx(src, *relparts):
     """Ruta de un archivo del árbol de gráficos, tanto en el diseño viejo (src/graphics/…) como en el nuevo
     de rexglue 0.11 (src/gpu/xenos/…). Devuelve la primera que exista, o la nueva si ninguna existe todavía."""
@@ -302,7 +308,7 @@ def apply_resolve_noop(src):
     """Un resolve de región vacía no aborta el frame: se trata como «nada que copiar»."""
     path = _gfx(src, "util", "draw.cpp")
     if not os.path.isfile(path):
-        return False
+        raise PatchFileMissing(f"{os.path.basename(path)}: no está en esta versión del SDK (reorganizada)")
     return _patch_text(path, [
         (RESOLVE_ANCHOR, RESOLVE_HOOK, "un resolve vacío no es un error"),
     ])
@@ -312,7 +318,7 @@ def apply_funcmap_tolerant(src):
     """El arranque no se aborta porque una función caiga fuera del módulo: se salta con un aviso."""
     path = os.path.join(src, "src", "system", "runtime.cpp")
     if not os.path.isfile(path):
-        return False
+        raise PatchFileMissing(f"{os.path.basename(path)}: no está en esta versión del SDK (reorganizada)")
     return _patch_text(path, [
         (FUNCMAP_ANCHOR, FUNCMAP_HOOK, "func_mappings entries skipped (outside module range)"),
     ])
@@ -322,7 +328,7 @@ def apply_mouseaim(src):
     """Puntería con el ratón en el driver mnk. Devuelve True si cambió algo."""
     path = os.path.join(src, "src", "input", "mnk", "mnk_input_driver.cpp")
     if not os.path.isfile(path):
-        return False
+        raise PatchFileMissing(f"{os.path.basename(path)}: no está en esta versión del SDK (reorganizada)")
     return _patch_text(path, [
         # Cada marca tiene que ser exclusiva de su trozo: si una aparece también en otro, ese
         # trozo se da por puesto y se queda sin aplicar.
@@ -358,7 +364,15 @@ def apply_all(src, on_skip=None):
             if fn(src):
                 changed = True
             aplicados.append(nombre)
+        except PatchFileMissing as e:
+            # El SDK reorganizó el código: el parche no puede aplicarse aquí. Nunca aborta, ni siquiera
+            # un imprescindible, para no impedir usar una versión nueva de rexglue.
+            saltados.append((nombre, str(e)))
+            if on_skip:
+                on_skip(nombre, str(e))
         except PatchError as e:
+            # El archivo está pero el punto exacto cambió: un parche cosmético se salta; uno imprescindible
+            # sí detiene la compilación, porque indica que algo no es como se esperaba.
             if imprescindible:
                 raise
             saltados.append((nombre, str(e)))
