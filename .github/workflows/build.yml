@@ -94,8 +94,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ver = "${{ steps.ver.outputs.version }}"
+          $tag = $env:GITHUB_REF_NAME
           $exe = "dist\ReForgeStudio-Setup-$ver.exe"
           if (-not (Test-Path $exe)) { Write-Host "No existe $exe"; exit 1 }
+          # El programa verifica lo que descarga con el SHA-256 que lee de estas notas
+          # (reforge/update.py); sin el numero se baja la actualizacion a ciegas.
+          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          Set-Content "$exe.sha256" "$sha  ReForgeStudio-Setup-$ver.exe" -Encoding ASCII
           $notas = "notas.md"
           Set-Content $notas "Instalador de ReForge Studio $ver para Windows." -Encoding UTF8
           Add-Content $notas ""
@@ -103,7 +108,16 @@ jobs:
           Add-Content $notas ""
           Add-Content $notas "Si ya tienes ReForge Studio instalado no hace falta descargarlo a mano: el programa consulta esta pagina al arrancar y te ofrece actualizarse solo."
           Add-Content $notas ""
-          Add-Content $notas "Publicado automaticamente desde la etiqueta $env:GITHUB_REF_NAME."
-          $assets = @($exe)
+          Add-Content $notas "SHA-256 del instalador: ``$sha``"
+          Add-Content $notas ""
+          Add-Content $notas "Publicado automaticamente desde la etiqueta $tag."
+          $assets = @($exe, "$exe.sha256")
           $assets += (Get-ChildItem dist\patches\*.rfpatch | ForEach-Object { $_.FullName })
-          gh release create $env:GITHUB_REF_NAME $assets --title "ReForge Studio $ver" --notes-file $notas
+          # Crear o actualizar: asi se puede volver a lanzar el flujo sobre la misma etiqueta.
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release edit $tag --title "ReForge Studio $ver" --notes-file $notas --latest
+            gh release upload $tag $assets --clobber
+          } else {
+            gh release create $tag $assets --title "ReForge Studio $ver" --notes-file $notas --latest
+          }

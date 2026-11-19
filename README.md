@@ -1,4 +1,4 @@
-# ReForge Studio 1.32.0
+# ReForge Studio 1.32.1
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,12 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.32.1
+
+Las publicaciones de GitHub llevan ahora el SHA-256 del instalador en sus notas y
+como archivo aparte. El actualizador del programa lo lee y comprueba lo que se ha
+descargado antes de instalarlo: sin ese número se instalaba a ciegas.
 
 ## Novedades 1.32.0 — pantalla panorámica sin bandas negras
 
