@@ -1106,7 +1106,13 @@ def sdk_has_vulkan(exe):
     Devuelve True/False, o None si no se puede comprobar (no está el DLL). Barato: busca la firma del driver
     Vulkan en el binario; no carga nada.
     """
-    dll = os.path.join(os.path.dirname(exe), "rexgpu-xenos.dll")
+    folder = os.path.dirname(exe)
+    # Layout nuevo: el driver Vulkan es un DLL aparte junto al juego.
+    for name in ("rexgpu-xenos-vulkan.dll", "rexgpu-xenos-vulkand.dll", "rexgpu-xenos-vulkanrd.dll"):
+        if os.path.isfile(os.path.join(folder, name)):
+            return True
+    # Layout viejo: todo en rexgpu-xenos.dll; se busca la firma de Vulkan dentro.
+    dll = os.path.join(folder, "rexgpu-xenos.dll")
     if not os.path.isfile(dll):
         return None
     try:
@@ -1143,8 +1149,13 @@ def prepare_game_runtime(cfg, exe, root):
     if not os.path.isfile(source):
         raise RuntimeError(f"No se encuentra {plugin} en el SDK seleccionado. "
                            "Selecciona en Entorno el SDK con el que compilaste el juego.")
+    # Drivers de GPU por separado: los SDK nuevos dividen el plugin xenos en rexgpu-xenos-d3d12/-vulkan/-null.dll
+    # (el rexgpu-xenos.dll los carga desde su misma carpeta). Hay que copiar los que existan, o Vulkan —y en ese
+    # layout también D3D12— no cargaría. En los SDK viejos (un solo rexgpu-xenos.dll) este glob no encuentra nada.
+    import glob as _glob
+    drivers = [os.path.basename(p) for p in _glob.glob(os.path.join(sdk_bin, f"rexgpu-xenos-*{suffix}.dll"))]
     # FidelityFX (FSR/CAS): solo existe en el SDK compilado con él; rexruntime.dll la necesita a su lado
-    for name in (plugin, f"TracyClient{suffix}.dll", "amd_fidelityfx_dx12.dll", "amd_fidelityfx_vk.dll"):
+    for name in (plugin, *drivers, f"TracyClient{suffix}.dll", "amd_fidelityfx_dx12.dll", "amd_fidelityfx_vk.dll"):
         src = os.path.join(sdk_bin, name)
         dst = os.path.join(destination, name)
         if not os.path.isfile(src) or os.path.realpath(src) == os.path.realpath(dst):

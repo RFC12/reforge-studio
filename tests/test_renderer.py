@@ -54,6 +54,14 @@ with tempfile.TemporaryDirectory() as d:
         f.write(b"....vkCreateDevice....VK_KHR_swapchain....")
     check(game.sdk_has_vulkan(exe2) is True, "DLL con firma Vulkan → True")
 
+with tempfile.TemporaryDirectory() as d:
+    exe3 = os.path.join(d, "juego.exe")
+    open(exe3, "wb").close()
+    with open(os.path.join(d, "rexgpu-xenos.dll"), "wb") as f:
+        f.write(b"....solo d3d12....")
+    open(os.path.join(d, "rexgpu-xenos-vulkan.dll"), "wb").close()
+    check(game.sdk_has_vulkan(exe3) is True, "layout nuevo: rexgpu-xenos-vulkan.dll presente → True")
+
 print()
 if fallos:
     print(f"FALLOS: {len(fallos)}")
