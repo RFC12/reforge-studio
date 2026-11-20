@@ -21,6 +21,19 @@ REPO_URL = "https://github.com/rexglue/rexglue-sdk"
 FSR_SUFFIX = "-fsr"
 
 
+def vulkan_sdk_present(env=None):
+    """¿Está instalado el Vulkan SDK de LunarG? (rexglue lo exige para compilar el driver Vulkan).
+
+    Comprueba la variable VULKAN_SDK (la deja el instalador de LunarG) y que apunte a algo real.
+    """
+    env = env or os.environ
+    sdk = env.get("VULKAN_SDK") or os.environ.get("VULKAN_SDK")
+    if not sdk:
+        return False
+    # Basta con que exista la carpeta del SDK; find_package(Vulkan) de rexglue hará la comprobación fina.
+    return os.path.isdir(sdk)
+
+
 def is_fsr_version(version):
     return str(version or "").endswith(FSR_SUFFIX)
 
@@ -158,8 +171,19 @@ def build(cfg, version, ctx):
         # sitio): se avisa y se sigue. Los imprescindibles habrían detenido la compilación antes.
         ctx.log(f"Parche «{nombre}» omitido en esta versión de rexglue ({motivo}). El SDK se compila igual; "
                 "esa mejora concreta no estará hasta actualizar ReForge.", "warn")
+    extra = []
+    # REXGLUE_USE_VULKAN=OFF es el valor por defecto de rexglue: por eso los SDK salían solo con D3D12.
+    # Activarlo compila también el driver Vulkan (segundo renderer, elegible por juego), PERO rexglue exige
+    # el Vulkan SDK de LunarG (find_package(Vulkan) ≥ 1.4.313): sin él, el configure falla y no habría SDK.
+    # Por eso solo se activa si el Vulkan SDK está presente; si no, se compila D3D12 (como siempre) y se avisa.
+    if vulkan_sdk_present(env):
+        extra += ["-DREXGLUE_USE_VULKAN=ON", "-DSDL_VULKAN=ON"]
+        ctx.log("Vulkan SDK detectado: se compila también el renderer Vulkan (experimental).", "dim")
+    else:
+        ctx.log("Sin Vulkan SDK (LunarG): el SDK se compila solo con Direct3D 12. Para probar el renderer "
+                "Vulkan, instala el «Vulkan SDK» desde Entorno y vuelve a compilar.", "warn")
     ctx.log("Configurando con AMD FidelityFX…")
-    _run([cmake, "--preset", tag, "-DREXGLUE_ENABLE_FIDELITYFX=ON"], src, env, ctx, "cmake (configurar)")
+    _run([cmake, "--preset", tag, "-DREXGLUE_ENABLE_FIDELITYFX=ON", *extra], src, env, ctx, "cmake (configurar)")
     ctx.log("Compilando el SDK (tarda: es todo rexglue)…")
     build_dir = os.path.join(src, "out", "build", tag)
     _run([cmake, "--build", build_dir, "--config", "Release", "--target", "install", "--parallel"], src, env, ctx,

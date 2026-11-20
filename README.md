@@ -1,4 +1,4 @@
-# ReForge Studio 1.40.0
+# ReForge Studio 1.40.1
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,17 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.40.1 — el SDK compila el driver Vulkan (si tienes el Vulkan SDK)
+
+El motivo por el que el renderer Vulkan nunca estaba disponible: ReForge compilaba el SDK con
+`REXGLUE_USE_VULKAN=OFF` (el valor por defecto de rexglue). Ahora, al compilar el SDK en Entorno, ReForge
+**activa Vulkan automáticamente si detecta el Vulkan SDK de LunarG** instalado (rexglue lo exige,
+`find_package(Vulkan)` ≥ 1.4.313). Si no está, el SDK se compila solo con D3D12 como hasta ahora (sin
+romperse) y ReForge avisa de que para Vulkan hay que instalar el Vulkan SDK y recompilar.
+
+En resumen, para probar Vulkan: instala el Vulkan SDK de LunarG → recompila el SDK en Entorno → elige
+«Vulkan» en Opciones del juego → Gráficos. Recuerda que es un experimento de fluidez, no una garantía.
 
 ## Novedades 1.40.0 — selector de renderer (D3D12 / Vulkan, experimental)
 
