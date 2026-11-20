@@ -1,4 +1,4 @@
-# ReForge Studio 1.40.1
+# ReForge Studio 1.41.0
 
 Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC con
 [rexglue-sdk](https://github.com/rexglue/rexglue-sdk) y
@@ -6,6 +6,23 @@ Interfaz de escritorio estilo consola para recompilar juegos de Xbox 360 a PC co
 
 > Proyecto independiente, sin relación con Microsoft ni Xbox. Úsalo solo con juegos que
 > poseas legalmente.
+
+## Novedades 1.41.0 — precompilar shaders al cargar (AOT, estilo Pinyon)
+
+Opciones del juego → Gráficos → **Precompilar shaders al cargar**. Lo que hace fluido a Forza Horizon en
+Pinyon Shift no es Vulkan, es que **precompila todos los shaders antes de jugar** (AOT). rexglue ya guarda
+los shaders que va viendo (`gpu.xenos.store_shaders`) y recrea sus pipelines al abrir el juego, pero lo hacía
+**en segundo plano**, así que los primeros segundos aún daban tirones mientras terminaban de compilarse.
+
+Ahora ReForge trae un parche de SDK que añade el cvar `gpu.xenos.shader_storage_blocking` y hace que, con la
+opción activada, rexglue **compile por adelantado todos los pipelines guardados antes del primer frame**: la
+carga inicial tarda un poco más, pero se acaban los tirones de «primera vez que aparece este efecto» en todo
+lo que ya habías jugado. La caché se guarda sola al jugar; esta opción solo decide **cuándo** se compila.
+
+Por defecto está desactivado (comportamiento de siempre). El cvar solo se escribe si el SDK del juego trae el
+parche; si no, se ignora sin romper nada. Para la primera pasada por contenido nuevo sigue sin poder evitarse
+compilar al vuelo (no hay un corpus de shaders prehecho como el que Pinyon capturó para Forza), pero a partir
+de la segunda vez el juego va fluido desde el primer frame.
 
 ## Novedades 1.40.1 — el SDK compila el driver Vulkan (si tienes el Vulkan SDK)
 

@@ -304,6 +304,40 @@ RESOLVE_HOOK = """  if (x0 >= x1 || y0 >= y1) {
 """
 
 
+# --- Precompilado de shaders al cargar (AOT) -------------------------------------------------------------
+# rexglue ya guarda los shaders (gpu.xenos.store_shaders) y recrea sus pipelines al abrir el juego, pero lo
+# hace en segundo plano (InitializeShaderStorage(..., false) fijo), así que los primeros segundos aún pueden
+# tener tirones mientras terminan de compilarse. Este parche añade un cvar para hacerlo BLOQUEANTE: precompila
+# todos los pipelines guardados antes del primer frame (carga más larga, pero sin tirones de shader en juego),
+# al estilo del precompilado AOT de Pinyon Shift. ReForge lo activa por juego como «Precompilar shaders al
+# cargar»; por defecto queda en false, así que sin tocar nada el comportamiento es el de siempre.
+PREWARM_SETTING_ANCHOR = """  REX_SETTING(bool, store_shaders, true,
+              "Keep compiled shaders on disk and load them on later runs to avoid stutter");
+"""
+PREWARM_SETTING_HOOK = """  REX_SETTING(bool, store_shaders, true,
+              "Keep compiled shaders on disk and load them on later runs to avoid stutter");
+  REX_SETTING(bool, shader_storage_blocking, false,
+              "ReForge: precompile every stored shader pipeline before the first frame (longer load, no "
+              "in-game shader stutter)");
+"""
+PREWARM_CALL_ANCHOR = \
+    "    REX_TRY_VOID(InitializeShaderStorage(cache_root, title_info_.title_id, false));"
+PREWARM_CALL_HOOK = \
+    "    REX_TRY_VOID(InitializeShaderStorage(cache_root, title_info_.title_id, shader_storage_blocking.Get()));"
+
+
+def apply_shader_prewarm(src):
+    """Cvar gpu.xenos.shader_storage_blocking: precompilar todos los shaders guardados antes de jugar."""
+    settings = _gfx(src, "xenos_settings.h")
+    driver = _gfx(src, "xenos_graphics_driver_base.cpp")
+    if not (os.path.isfile(settings) and os.path.isfile(driver)):
+        raise PatchFileMissing("xenos_settings.h / xenos_graphics_driver_base.cpp no están donde se esperaba "
+                               "(SDK reorganizado)")
+    a = _patch_text(settings, [(PREWARM_SETTING_ANCHOR, PREWARM_SETTING_HOOK, "shader_storage_blocking")])
+    b = _patch_text(driver, [(PREWARM_CALL_ANCHOR, PREWARM_CALL_HOOK, "shader_storage_blocking.Get()")])
+    return a or b
+
+
 def apply_resolve_noop(src):
     """Un resolve de región vacía no aborta el frame: se trata como «nada que copiar»."""
     path = _gfx(src, "util", "draw.cpp")
@@ -348,6 +382,7 @@ PATCHES = (
     ("puntería con el ratón", apply_mouseaim, False),
     ("el arranque tolera funciones fuera del módulo", apply_funcmap_tolerant, True),
     ("un resolve vacío no aborta el frame", apply_resolve_noop, False),
+    ("precompilar shaders al cargar (AOT)", apply_shader_prewarm, False),
 )
 
 

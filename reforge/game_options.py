@@ -79,6 +79,10 @@ class GameOptions:
     gfx_fuzzy_alpha: bool = False
     gfx_edram_clamp_min: bool = False
     gfx_gamma_unorm16: bool = False
+    # Precompilar shaders al cargar (AOT, estilo Pinyon): compila todos los pipelines guardados antes del
+    # primer frame → carga más larga pero sin tirones de shader en juego. Necesita el cvar del parche
+    # apply_shader_prewarm; si el SDK no lo trae, simplemente no se escribe.
+    shader_prewarm: bool = False
     ask_engine_on_play: bool = False   # menú de motor antes de jugar (por defecto no: autoconfiguración)
     # Optimizador de rendimiento: "fluido", "sin_parpadeo" u "off"
     perf_mode: str = "fluido"
@@ -241,6 +245,8 @@ class GameOptions:
             vals["mrt_edram_used_range_clamp_to_min"] = True
         if getattr(self, "gfx_gamma_unorm16", False):
             vals["gamma_render_target_as_unorm16"] = True
+        if getattr(self, "shader_prewarm", False):
+            vals["shader_storage_blocking"] = True
         try:
             from .engine import profile_values
             vals.update(profile_values(self))
@@ -471,7 +477,7 @@ ADVANCED_CVARS = ("render_target_path_d3d12", "d3d12_readback_resolve", "gpu_all
                   "d3d12_allow_variable_refresh_rate_and_tearing",
                   "gpu_debug_markers", "kernel_debug_monitor", "rexcrt_heap_enable", "rexcrt_heap_size_mb",
                   "half_pixel_offset", "use_fuzzy_alpha_epsilon", "mrt_edram_used_range_clamp_to_min",
-                  "gamma_render_target_as_unorm16")
+                  "gamma_render_target_as_unorm16", "shader_storage_blocking")
 
 
 def supported_cvars(exe):

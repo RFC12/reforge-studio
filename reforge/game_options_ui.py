@@ -235,6 +235,13 @@ class GameOptionsDialog(QDialog):
         self.gfx_gamma.setChecked(bool(getattr(self.o, "gfx_gamma_unorm16", False)))
         for cb in (self.gfx_hpo, self.gfx_alpha, self.gfx_edram, self.gfx_gamma):
             f.addRow(cb)
+        self.prewarm = QCheckBox("Precompilar shaders al cargar (menos tirones, la primera carga tarda más)")
+        self.prewarm.setChecked(bool(getattr(self.o, "shader_prewarm", False)))
+        f.addRow(self.prewarm)
+        f.addRow("", label("Compila por adelantado todos los shaders ya guardados antes de empezar a jugar "
+                           "(como hace Pinyon con Forza). Quita los tirones de la primera vez que aparece cada "
+                           "efecto, a cambio de una carga inicial más larga. La caché se va guardando sola al "
+                           "jugar; este modo solo cambia cuándo se compila.", "Hint", wrap=True))
         return w
 
     def _open_packs(self):
@@ -435,6 +442,7 @@ class GameOptionsDialog(QDialog):
         o.gfx_fuzzy_alpha = self.gfx_alpha.isChecked()
         o.gfx_edram_clamp_min = self.gfx_edram.isChecked()
         o.gfx_gamma_unorm16 = self.gfx_gamma.isChecked()
+        o.shader_prewarm = self.prewarm.isChecked()
         if self.ask.isChecked() != o.ask_engine_on_play:
             o.ask_engine_chosen = True
         o.ask_engine_on_play = self.ask.isChecked()
