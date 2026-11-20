@@ -178,6 +178,11 @@ def build(cfg, version, ctx):
     # Por eso solo se activa si el Vulkan SDK está presente; si no, se compila D3D12 (como siempre) y se avisa.
     if vulkan_sdk_present(env):
         extra += ["-DREXGLUE_USE_VULKAN=ON", "-DSDL_VULKAN=ON"]
+        # rexglue trae VMA (Vulkan Memory Allocator) como submódulo, pero su find_path no siempre da con él;
+        # si está, se le indica la ruta para que el configure no falle buscando vk_mem_alloc.h.
+        vma = os.path.join(src, "thirdparty", "vulkan-memory-allocator", "include")
+        if os.path.isfile(os.path.join(vma, "vk_mem_alloc.h")):
+            extra.append(f"-DREXGLUE_VMA_INCLUDE_DIR={vma}")
         ctx.log("Vulkan SDK detectado: se compila también el renderer Vulkan (experimental).", "dim")
     else:
         ctx.log("Sin Vulkan SDK (LunarG): el SDK se compila solo con Direct3D 12. Para probar el renderer "
