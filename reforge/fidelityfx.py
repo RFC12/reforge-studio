@@ -188,7 +188,10 @@ def build(cfg, version, ctx):
         ctx.log("Sin Vulkan SDK (LunarG): el SDK se compila solo con Direct3D 12. Para probar el renderer "
                 "Vulkan, instala el «Vulkan SDK» desde Entorno y vuelve a compilar.", "warn")
     ctx.log("Configurando con AMD FidelityFX…")
-    _run([cmake, "--preset", tag, "-DREXGLUE_ENABLE_FIDELITYFX=ON", *extra], src, env, ctx, "cmake (configurar)")
+    # REXGLUE_BUILD_TESTS=OFF: ReForge no necesita los tests unitarios de rexglue y así una advertencia como
+    # error (-Werror) en un test nunca tumba la compilación del SDK; además compila más rápido.
+    _run([cmake, "--preset", tag, "-DREXGLUE_ENABLE_FIDELITYFX=ON", "-DREXGLUE_BUILD_TESTS=OFF", *extra],
+         src, env, ctx, "cmake (configurar)")
     ctx.log("Compilando el SDK (tarda: es todo rexglue)…")
     build_dir = os.path.join(src, "out", "build", tag)
     _run([cmake, "--build", build_dir, "--config", "Release", "--target", "install", "--parallel"], src, env, ctx,
