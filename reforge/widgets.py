@@ -1,6 +1,7 @@
 """Componentes visuales: logo, tiles, seguimiento de pasos, consola de log."""
 import html
 import math
+import os
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QLinearGradient, QPainter, QPen, QPixmap, QPolygonF
@@ -258,3 +259,124 @@ def fit_to_screen(dialog, ancho, alto, limitar=False):
     except Exception:      # noqa: BLE001
         pass
     dialog.resize(max(520, ancho), max(380, alto))
+
+
+# ---------------------------------------------------------------- carátulas de juego
+_COVER_CACHE = {}
+
+
+def _cover_bytes(root, name):
+    """PNG de la carátula: la imagen real del juego (del XEX, cacheada en reforge_icon.png) o, si no la
+    hay, una generada a partir del nombre. Nunca lanza: una ficha sin carátula no debe romper la lista."""
+    try:
+        png = os.path.join(root, "reforge_icon.png")
+        if os.path.isfile(png):
+            with open(png, "rb") as f:
+                return f.read()
+    except OSError:
+        pass
+    try:
+        from . import gameicon
+        xex = os.path.join(root, "assets", "default.xex")
+        if os.path.isfile(xex):
+            data, _src = gameicon.title_png(xex)
+            if data:
+                try:
+                    with open(os.path.join(root, "reforge_icon.png"), "wb") as f:
+                        f.write(data)      # cachea para la próxima vez
+                except OSError:
+                    pass
+                return data
+    except Exception:      # noqa: BLE001
+        pass
+    try:
+        from . import gameicon
+        return gameicon.fallback_png(name or "ReForge")
+    except Exception:      # noqa: BLE001
+        return b""
+
+
+def cover_pixmap(root, name, size, radius=12):
+    """QPixmap cuadrado con la carátula del juego, escalada a `size` y con esquinas redondeadas."""
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QBrush, QImage, QPainter, QPainterPath, QPixmap
+
+    key = (os.path.abspath(root), size, radius)
+    if key in _COVER_CACHE:
+        return _COVER_CACHE[key]
+    data = _cover_bytes(root, name)
+    src = QPixmap()
+    if data:
+        img = QImage()
+        img.loadFromData(data)
+        if not img.isNull():
+            src = QPixmap.fromImage(img)
+    if src.isNull():
+        src = logo_pixmap(size, current_accent())
+    scaled = src.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                        Qt.TransformationMode.SmoothTransformation)
+    out = QPixmap(size, size)
+    out.fill(Qt.GlobalColor.transparent)
+    p = QPainter(out)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    path = QPainterPath()
+    path.addRoundedRect(QRectF(0, 0, size, size), radius, radius)
+    p.setClipPath(path)
+    x = (size - scaled.width()) // 2
+    y = (size - scaled.height()) // 2
+    p.drawPixmap(x, y, scaled)
+    # borde sutil
+    p.setClipping(False)
+    from PySide6.QtGui import QColor, QPen
+    p.setPen(QPen(QColor(255, 255, 255, 22), 1))
+    p.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+    p.drawRoundedRect(QRectF(0.5, 0.5, size - 1, size - 1), radius, radius)
+    p.end()
+    _COVER_CACHE[key] = out
+    return out
+
+
+class GameCard(QFrame):
+    """Ficha de juego con carátula para «Recientes» del Inicio: navegable y clicable como un Tile."""
+    clicked = Signal()
+
+    def __init__(self, root, name, subtitle="", w=210, h=116, parent=None):
+        super().__init__(parent)
+        self.setObjectName("Tile")
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setMinimumSize(w, h)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(14, 14, 16, 14)
+        lay.setSpacing(14)
+        cover = QLabel()
+        cover.setPixmap(cover_pixmap(root, name, 62))
+        cover.setFixedSize(62, 62)
+        lay.addWidget(cover, 0, Qt.AlignmentFlag.AlignVCenter)
+        col = QVBoxLayout()
+        col.setSpacing(3)
+        col.addStretch(1)
+        t = label(name, "TileTitle")
+        t.setToolTip(name)
+        col.addWidget(t)
+        if subtitle:
+            col.addWidget(label(subtitle, "TileSub", wrap=True))
+        col.addStretch(1)
+        lay.addLayout(col, 1)
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton and self.rect().contains(e.position().toPoint()):
+            self.clicked.emit()
+
+    def keyPressEvent(self, e):
+        k = e.key()
+        if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.clicked.emit()
+        elif k in (Qt.Key.Key_Right, Qt.Key.Key_Down):
+            self.focusNextChild()
+        elif k in (Qt.Key.Key_Left, Qt.Key.Key_Up):
+            self.focusPreviousChild()
+        else:
+            super().keyPressEvent(e)

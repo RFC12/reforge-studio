@@ -45,7 +45,7 @@ def prepare_project(root, ctx):
         ctx.log("Proyecto preparado (gancho de carpeta y extensión ReForge al día).", "dim")
 from .runner import PipelineRunner, Step
 from .theme import ACCENTS
-from .widgets import LogView, PathField, StepTracker, Tile, label, repolish
+from .widgets import GameCard, LogView, PathField, StepTracker, Tile, cover_pixmap, label, repolish
 from .xex import read_xex_info, read_xex_info_bytes
 from .xcontent import XContentError, XContentPackage, find_package, read_magic
 from .xiso import XisoError, XisoImage
@@ -236,7 +236,7 @@ class HomePage(QWidget):
                                             "Hint"))
         for p in recents:
             sub = " · ".join(x for x in (p.title_id and f"ID {p.title_id}", p.status, p.updated) if x)
-            t = Tile("◈", p.name, sub, w=200, h=110)
+            t = GameCard(p.root, p.name, sub, w=210, h=116)
             t.clicked.connect(lambda pr=p: self.win.open_project(pr))
             self.recent_row.addWidget(t)
         self.recent_row.addStretch(1) if len(recents) < 4 else None
@@ -1749,31 +1749,49 @@ class ProjectCard(QFrame):
     def __init__(self, page, p):
         super().__init__()
         self.setObjectName("Card")
-        self.setFixedHeight(190)
+        self.setFixedHeight(168)
         v = QVBoxLayout(self)
-        v.setContentsMargins(18, 16, 18, 14)
+        v.setContentsMargins(14, 14, 14, 12)
+        v.setSpacing(10)
+
+        # --- fila superior: carátula + datos ---
         top = QHBoxLayout()
-        top.addWidget(label(p.name, "CardTitle"), 1)
+        top.setSpacing(14)
+        cover = QLabel()
+        cover.setPixmap(cover_pixmap(p.root, p.name, 78))
+        cover.setFixedSize(78, 78)
+        top.addWidget(cover, 0, Qt.AlignmentFlag.AlignTop)
+
+        info = QVBoxLayout()
+        info.setSpacing(3)
+        titrow = QHBoxLayout()
+        titrow.setSpacing(8)
+        name = label(p.name, "CardTitle")
+        name.setToolTip(p.name)
+        titrow.addWidget(name, 1)
         chip = label(p.status.upper(), "Chip")
         chip.setProperty("kind", {"Error": "err", "Compilando": "run"}.get(p.status, ""))
-        top.addWidget(chip)
-        v.addLayout(top)
-        meta = " · ".join(x for x in (p.title_id and f"Title ID {p.title_id}", p.updated) if x)
-        v.addWidget(label(meta or "—", "Hint"))
-        rl = label(p.root, "Hint", wrap=True)
-        rl.setToolTip(p.root)
-        v.addWidget(rl)
+        titrow.addWidget(chip, 0, Qt.AlignmentFlag.AlignTop)
+        info.addLayout(titrow)
+        info.addWidget(label(p.title_id and f"Title ID {p.title_id}" or "Sin Title ID", "Hint"))
+        info.addWidget(label(p.updated or "—", "Hint"))
         if not os.path.isdir(p.root):
-            v.addWidget(label("⚠ La carpeta ya no existe", "HintErr"))
-        v.addStretch(1)
+            info.addWidget(label("⚠ La carpeta ya no existe", "HintErr"))
+        info.addStretch(1)
+        top.addLayout(info, 1)
+        v.addLayout(top, 1)
+        self.setToolTip(p.root)
+
+        # --- fila de acciones ---
         row = QHBoxLayout()
-        b1 = QPushButton("⚒ Abrir en Taller")
+        row.setSpacing(8)
+        b1 = QPushButton("⚒  Abrir en Taller")
+        b1.setCursor(Qt.CursorShape.PointingHandCursor)
         b1.clicked.connect(lambda: page.win.open_project(p))
         b2 = QPushButton("📁")
         b2.setToolTip("Abrir carpeta")
         b2.clicked.connect(lambda: open_path(p.root))
         b3 = QPushButton("▶")
-        b3.setToolTip("Ejecutar el juego compilado")
         b3.setEnabled(bool(p.output and os.path.isfile(p.output)))
         b3.setToolTip("Jugar (ejecuta el .exe x64 recompilado)")
         b3.clicked.connect(lambda: page.launch(p))
@@ -1783,7 +1801,8 @@ class ProjectCard(QFrame):
         b4.clicked.connect(lambda: page.remove(p))
         row.addWidget(b1, 1)
         for b in (b2, b3, b4):
-            b.setFixedWidth(44)
+            b.setFixedWidth(42)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
             row.addWidget(b)
         v.addLayout(row)
 
