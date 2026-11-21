@@ -2,6 +2,18 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## Sin publicar (en desarrollo)
+
+- **Arreglos gráficos conocidos por juego** (registro `GFX_HINTS` por Title ID): se aplican solos al preparar
+  el proyecto. Primer caso verificado: **Asura's Wrath** salía con el menú y varias escenas (incluida la
+  pantalla de título) sobreexpuestos/lavados en blanco y con ruido verde; activar la gamma del render target
+  a UNORM16 (`gfx_gamma_unorm16`) lo corrige. Verificado con capturas antes/después.
+- **Precompilación de shaders (AOT) activada por defecto**: `shader_prewarm` pasa a estar encendido, así que
+  al abrir un juego se precompilan los pipelines guardados antes del primer frame y desaparecen los tirones
+  de transición en escenas ya vistas (la carga inicial es un poco más larga). Necesita que el SDK traiga el
+  parche de prewarm, que ReForge aplica solo al compilar el SDK; si no lo trae, el ajuste se ignora sin romper
+  nada. Se puede desactivar en 🎮 Opciones → Gráficos.
+
 ## 1.43.0 — actualizador integrado y Biblioteca con carátulas
 
 - **Actualizador integrado y pulido**: ReForge compara tu versión con la última publicada en GitHub y, si hay

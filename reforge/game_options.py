@@ -80,9 +80,11 @@ class GameOptions:
     gfx_edram_clamp_min: bool = False
     gfx_gamma_unorm16: bool = False
     # Precompilar shaders al cargar (AOT, estilo Pinyon): compila todos los pipelines guardados antes del
-    # primer frame → carga más larga pero sin tirones de shader en juego. Necesita el cvar del parche
-    # apply_shader_prewarm; si el SDK no lo trae, simplemente no se escribe.
-    shader_prewarm: bool = False
+    # primer frame → carga un poco más larga pero sin tirones de shader en las transiciones y escenas ya
+    # vistas. Activado por defecto: quita el «retraso» de la primera vez que aparece un efecto. Necesita el
+    # cvar del parche apply_shader_prewarm (ReForge lo mete al compilar el SDK); si el SDK no lo trae, el
+    # cvar simplemente se ignora y no pasa nada.
+    shader_prewarm: bool = True
     ask_engine_on_play: bool = False   # menú de motor antes de jugar (por defecto no: autoconfiguración)
     # Optimizador de rendimiento: "fluido", "sin_parpadeo" u "off"
     perf_mode: str = "fluido"
