@@ -223,56 +223,9 @@ class MainWindow(QMainWindow):
         Thread(target=work, daemon=True).start()
 
     def offer_update(self, info):
-        """Ofrece instalar la versión nueva (o la instala sola si así está configurado)."""
-        from . import update as upd
-        cfg = upd.load_config()
-        if not cfg.get("auto_install"):
-            box = QMessageBox(self)
-            box.setWindowTitle("Hay una versión nueva")
-            box.setText(f"ReForge Studio {info['version']} está disponible (tienes la {upd.current_version()}).")
-            if info.get("notes"):
-                box.setDetailedText(info["notes"][:4000])
-            now = box.addButton("Actualizar ahora", QMessageBox.ButtonRole.AcceptRole)
-            box.addButton("Más tarde", QMessageBox.ButtonRole.RejectRole)
-            skip = box.addButton("Omitir esta versión", QMessageBox.ButtonRole.DestructiveRole)
-            box.exec()
-            if box.clickedButton() is skip:
-                upd.save_config(skip=info["version"])
-                return
-            if box.clickedButton() is not now:
-                return
-        self._download_update(info, silent=bool(cfg.get("auto_install")))
-
-    def _download_update(self, info, silent=False):
-        from . import update as upd
-        cfg = upd.load_config()
-        dlg = QProgressDialog(f"Descargando ReForge Studio {info['version']}…", "Cancelar", 0, 1000, self)
-        dlg.setWindowTitle("Actualización")
-        dlg.setMinimumDuration(0)
-        state = {"path": "", "error": ""}
-
-        def work(ctx):
-            state["path"] = upd.download(
-                info, progress=lambda d, t: ctx.progress(int(d * 1000 / t), 1000),
-                cancelled=ctx.cancelled, token=cfg.get("token") or "")
-
-        def done(ok, err):
-            dlg.close()
-            if not ok:
-                QMessageBox.warning(self, "Actualización", f"No se pudo descargar: {err}")
-                return
-            upd.cleanup(keep=state["path"])
-            try:
-                upd.install(state["path"], silent=silent)
-            except upd.UpdateError as e:
-                QMessageBox.warning(self, "Actualización", str(e))
-                return
-            QApplication.quit()
-
-        from .runner import run_in_thread
-        th = run_in_thread(work, done)
-        th.progress_signal.connect(lambda v, m: dlg.setValue(v))
-        dlg.canceled.connect(lambda: th.cancel_event.set())
+        """Ofrece instalar la versión nueva con la ventana pulida (logo, versiones y novedades)."""
+        from . import update_ui
+        update_ui.offer(self, info)
 
     # ---------------------------------------------------------------- páginas
     def add_page(self, key, nav_text, title, widget, owner="", tail=False):
