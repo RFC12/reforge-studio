@@ -379,6 +379,54 @@ def fix_truncated_functions(root, ctx=None):
     return fixed
 
 
+def empty_function_entries(root):
+    """Direcciones declaradas como «0xADDR = {}» (sin end/size/parent): las «líneas vacías» que rexglue no
+    pudo acotar y que, si no se resuelven, había que completar a mano."""
+    path = os.path.join(root, FUNCTIONS_FILE)
+    if not os.path.isfile(path):
+        return set()
+    txt = Path(path).read_text(encoding="utf-8", errors="replace")
+    return {int(a, 16) for a in re.findall(r"^\s*(0x[0-9A-Fa-f]+)\s*=\s*\{\s*\}", txt, re.M)}
+
+
+# Distancia máxima razonable para inferir el final de una función (si la siguiente conocida está más lejos,
+# seguramente hay datos en medio y es mejor no inventar un tamaño enorme).
+MAX_INFERRED_FUNC_SIZE = 0x8000
+
+
+def infer_empty_function_ends(root, addresses, ctx=None):
+    """Para las funciones declaradas sin tamaño que siguen sin resolverse, declara su final = el inicio de la
+    siguiente función conocida (lo mismo que haría rexglue con el .pdata). Así se evita el trabajo manual de
+    poner «size»/«parent». Si el final inferido queda mal, las siguientes rondas del autofix lo corrigen.
+
+    Devuelve [(addr, end)] inferidas."""
+    gen = generated_dir(root)
+    starts = set()
+    try:
+        starts |= set(registered_functions(gen).values())
+    except Exception:      # noqa: BLE001
+        pass
+    starts |= declared_functions(root)
+    starts = sorted(starts)
+    ends = function_ends(root)
+    empty = empty_function_entries(root)
+    out = []
+    for addr in sorted(set(addresses)):
+        if addr in ends or addr not in empty or not in_module(root, addr):
+            continue            # ya tiene final, no es una «línea vacía», o cae fuera del módulo
+        nxt = [a for a in starts if a > addr]
+        if not nxt:
+            continue
+        end = nxt[0]
+        if end - addr <= 0 or end - addr > MAX_INFERRED_FUNC_SIZE:
+            continue            # demasiado lejos: probablemente hay datos en medio, no inventamos el tamaño
+        set_function_end(root, addr, end, "fin inferido: inicio de la siguiente función (antes manual)")
+        out.append((addr, end))
+        if ctx:
+            ctx.log(f"  0x{addr:08X}: fin inferido 0x{end:08X} ({end - addr} bytes)", "dim")
+    return out
+
+
 REMOVABLE_NOTE_RE = re.compile(r"análisis profundo|salto desde|otro hilo", re.I)
 
 
@@ -947,8 +995,18 @@ def codegen_with_autofix(cfg, root, build, name, env, ctx):
         ensure_include(root)
         new = add_functions(root, unresolved)
         if not new:
+            # «Líneas vacías» que no resuelven: en vez de pedirlas a mano, se infiere su final (el inicio de la
+            # siguiente función conocida). Si queda mal, las siguientes rondas lo corrigen.
+            inferred = infer_empty_function_ends(root, unresolved, ctx)
+            if inferred:
+                ctx.log(f"↻ Corrección automática {rnd}: inferido el final de {len(inferred)} función(es) sin "
+                        f"tamaño (el inicio de la siguiente función conocida), antes había que ponerlo a mano. "
+                        "Regenerando…", "warn")
+                invalidate_codegen(root)
+                continue
             raise RuntimeError(f"{len(unresolved)} llamada(s) siguen sin resolverse aunque ya están declaradas "
-                               f"en {FUNCTIONS_FILE}. Puede que necesiten 'size' o 'parent' a mano.")
+                               f"en {FUNCTIONS_FILE}. No se pudo inferir su tamaño automáticamente (seguramente "
+                               "saltan a datos o fuera del módulo).")
         ctx.log(f"↻ Corrección automática {rnd}: declaradas {len(new)} función(es) en {FUNCTIONS_FILE} "
                 f"({', '.join(f'0x{t:08X}' for t, _s in new[:6])}{'…' if len(new) > 6 else ''}). Reintentando…",
                 "warn")
