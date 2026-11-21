@@ -22,10 +22,13 @@ def prepare_project(root, ctx):
     if ensure_paths_hook(root):
         ctx.log("Gancho OnConfigurePaths añadido a src/*_app.h: el .exe encuentra assets aunque se abra "
                 "con doble clic.", "dim")
-    from .optimizer import apply_title_hint
+    from .optimizer import apply_gfx_hint, apply_title_hint
     hint = apply_title_hint(root)
     if hint:
         ctx.log(hint, "ok")
+    gfx = apply_gfx_hint(root)
+    if gfx:
+        ctx.log(gfx, "ok")
     try:
         from .engine import apply_engine_profile
         apply_engine_profile(root, ctx.log)

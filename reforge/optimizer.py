@@ -73,6 +73,46 @@ def apply_title_hint(root):
     return f"Modo de imagen para este juego: {dict((k, t) for k, t, *_r in RENDER_LADDER)[hint[0]]} ({hint[1]})."
 
 
+# Arreglos gráficos conocidos por juego (Title ID): banderas gfx/render que corrigen un error concreto y
+# verificado de ese juego. Se aplican al preparar el proyecto si todavía no se tocaron a mano.
+GFX_HINTS = {
+    # Asura's Wrath (UE3): sin esto el menú y varias escenas salen lavados/sobreexpuestos (blancos). El
+    # render target con gamma a UNORM16 devuelve el contraste y el color correctos. Verificado con capturas.
+    "43430817": ({"gfx_gamma_unorm16": True},
+                 "Asura's Wrath: el menú y algunas escenas salían sobreexpuestos (lavados en blanco); "
+                 "gamma del render target a UNORM16 lo corrige"),
+}
+
+
+def gfx_hint(root):
+    """(banderas, motivo) de arreglo gráfico conocido para el juego del proyecto, o None."""
+    try:
+        from .xex import read_xex_info
+        tid = read_xex_info(os.path.join(root, "assets", "default.xex")).get("title_id", "").upper()
+    except Exception:      # noqa: BLE001
+        return None
+    return GFX_HINTS.get(tid)
+
+
+def apply_gfx_hint(root):
+    """Aplica el arreglo gráfico conocido si esas banderas siguen en su valor por defecto. Devuelve el aviso o ''."""
+    from .game_options import GameOptions
+    hint = gfx_hint(root)
+    if not hint:
+        return ""
+    flags, motivo = hint
+    o = GameOptions.load(root)
+    cambiado = False
+    for k, v in flags.items():
+        if getattr(o, k, None) != v:
+            setattr(o, k, v)
+            cambiado = True
+    if cambiado:
+        o.save(root)
+        return f"Arreglo gráfico aplicado — {motivo}."
+    return ""
+
+
 def hardware_path():
     return os.path.join(config_dir(), "hardware.json")
 
