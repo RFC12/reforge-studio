@@ -4,6 +4,12 @@
 
 ## Sin publicar (en desarrollo)
 
+- **Validación de SDK compatible al recompilar** (`sdkcompat.py`): antes de configurar se comprueba que el SDK
+  seleccionado provee los targets `rex::*` que el proyecto generado necesita. Si no (p. ej. tras instalar o
+  cambiar a un SDK de otra familia como rexglue 0.11, que renombró `rex::runtime`), ReForge **cambia solo a un
+  SDK instalado compatible** —dejando una copia de respaldo de la configuración— y limpia la caché de CMake,
+  para que la recompilación no se rompa; si no hay ninguno compatible, se detiene con un mensaje claro en vez
+  de un error de CMake incomprensible. Así, actualizar o cambiar componentes ya no deja el proyecto roto.
 - **Arreglos gráficos conocidos por juego** (registro `GFX_HINTS` por Title ID): se aplican solos al preparar
   el proyecto. Primer caso verificado: **Asura's Wrath** salía con el menú y varias escenas (incluida la
   pantalla de título) sobreexpuestos/lavados en blanco y con ruido verde; activar la gamma del render target

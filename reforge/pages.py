@@ -872,6 +872,9 @@ class WorkshopPage(QWidget):
                     do_extras(ctx)
                 steps.append(Step(key, "Verificar default.xex", func=verify_and_extras))
             elif key == "configure":
+                steps.append(Step("sdkcheck", "Validar SDK compatible",
+                                  func=lambda ctx: __import__("reforge.sdkcompat", fromlist=["ensure_compatible"])
+                                  .ensure_compatible(cfg, root, build, env, ctx)))
                 if self.clean.isChecked():
                     steps.append(Step("clean", "Limpiar build", func=do_clean))
                 else:
@@ -888,6 +891,9 @@ class WorkshopPage(QWidget):
                 # Refresh even for build-only retries of an existing project.
                 steps.append(Step("hooks", "Preparar el proyecto (carpeta del juego, perfil y logros)",
                                   func=lambda ctx: prepare_project(root, ctx)))
+                steps.append(Step("sdkcheck2", "Validar SDK compatible",
+                                  func=lambda ctx: __import__("reforge.sdkcompat", fromlist=["ensure_compatible"])
+                                  .ensure_compatible(cfg, root, build, env, ctx)))
                 steps.append(Step("reconfigure", "Actualizar CMake con las fuentes generadas",
                                   cmd=lambda: cmake_configure_cmd(cfg, root, build), cwd=root, env=env))
                 steps.append(Step(key, "Compilar ejecutable",
@@ -898,9 +904,9 @@ class WorkshopPage(QWidget):
 
     def _tracker_index(self, runner_index):
         key = self._step_keys[runner_index] if runner_index < len(self._step_keys) else ""
-        if key in ("clean", "cache"):
+        if key in ("clean", "cache", "sdkcheck"):
             key = "configure"
-        elif key in ("reconfigure", "hooks", "watch"):
+        elif key in ("reconfigure", "hooks", "watch", "sdkcheck2"):
             key = "build"
         elif key == "declare":
             key = "codegen"
