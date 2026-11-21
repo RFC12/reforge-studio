@@ -2,6 +2,18 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.43.0 — actualizador integrado y Biblioteca con carátulas
+
+- **Actualizador integrado y pulido**: ReForge compara tu versión con la última publicada en GitHub y, si hay
+  una nueva, lo avisa con una ventana propia (logo, «tu versión → la nueva» y las novedades de la release
+  renderizadas) y la descarga e instala sin que tengas que entrar a GitHub ni ejecutar el instalador a mano.
+  La descarga se verifica por tamaño y SHA-256 antes de ejecutarse. La comprobación es automática (una vez al
+  día) y se puede dejar en automático desde Ajustes.
+- **Biblioteca con carátulas**: las fichas de la Biblioteca y de «Recientes» muestran la carátula real del
+  juego (la imagen del título embebida en el XEX), con un respaldo generado cuando no hay arte. Fichas
+  rediseñadas (carátula + título + estado + Title ID + acciones) para una vista más limpia y ordenada.
+- README renovado con banner animado y capturas de la interfaz.
+
 ## 1.42.0 — inferir el final de las «líneas vacías» del functions.toml
 
 Cuando rexglue no puede acotar una función deja `0xADDR = {}` en `reforge_functions.toml` y antes el

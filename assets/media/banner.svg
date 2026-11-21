@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" fill="none" role="img" aria-label="ReForge Studio — Recompila juegos de Xbox 360 a PC">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0e12"/>
+      <stop offset="0.55" stop-color="#0c1512"/>
+      <stop offset="1" stop-color="#081010"/>
+    </linearGradient>
+    <linearGradient id="hex" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3ee9b0"/>
+      <stop offset="1" stop-color="#0c6b4e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#19d3a2" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#19d3a2" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e9edf0"/>
+      <stop offset="0.5" stop-color="#e9edf0"/>
+      <stop offset="1" stop-color="#e9edf0"/>
+      <animateTransform attributeName="gradientTransform" type="translate" from="-600 0" to="600 0" dur="3.2s" repeatCount="indefinite"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(-600 0)">
+      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="0.65" stop-color="#ffffff" stop-opacity="0"/>
+      <animateTransform attributeName="gradientTransform" type="translate" from="-600 0" to="900 0" dur="3.2s" repeatCount="indefinite"/>
+    </linearGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+
+  <!-- fondo -->
+  <rect width="1200" height="300" rx="0" fill="url(#bg)"/>
+  <!-- halo verde difuso animado tras el logo -->
+  <circle cx="170" cy="150" r="140" fill="url(#glow)" filter="url(#soft)">
+    <animate attributeName="r" values="120;150;120" dur="4s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.6;1;0.6" dur="4s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- puntos de acento que suben lentamente -->
+  <g fill="#19d3a2">
+    <circle cx="1040" cy="240" r="2.5" opacity="0.6"><animate attributeName="cy" values="240;60" dur="7s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0.7;0" dur="7s" repeatCount="indefinite"/></circle>
+    <circle cx="1110" cy="210" r="2" opacity="0.5"><animate attributeName="cy" values="260;40" dur="9s" begin="1s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0.6;0" dur="9s" begin="1s" repeatCount="indefinite"/></circle>
+    <circle cx="980" cy="250" r="1.8" opacity="0.5"><animate attributeName="cy" values="250;70" dur="8s" begin="2.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0.6;0" dur="8s" begin="2.5s" repeatCount="indefinite"/></circle>
+    <circle cx="1150" cy="230" r="2.2" opacity="0.5"><animate attributeName="cy" values="250;50" dur="10s" begin="0.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0.55;0" dur="10s" begin="0.5s" repeatCount="indefinite"/></circle>
+  </g>
+
+  <!-- logo hexagonal con latido suave -->
+  <g transform="translate(170 150)">
+    <g>
+      <animateTransform attributeName="transform" type="scale" values="0.97;1.03;0.97" dur="4s" repeatCount="indefinite"/>
+      <polygon points="0,-72 62,-36 62,36 0,72 -62,36 -62,-36" fill="url(#hex)"/>
+      <polygon points="0,-56 48,-28 48,28 0,56 -48,28 -48,-28" fill="none" stroke="#ffffff" stroke-opacity="0.28" stroke-width="4"/>
+      <text x="0" y="24" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="78" font-weight="800" fill="#ffffff">R</text>
+    </g>
+  </g>
+
+  <!-- título con barrido de luz -->
+  <text x="290" y="138" font-family="Segoe UI, Arial, sans-serif" font-size="68" font-weight="800" fill="url(#title)">ReForge Studio</text>
+  <text x="290" y="138" font-family="Segoe UI, Arial, sans-serif" font-size="68" font-weight="800" fill="url(#shine)">ReForge Studio</text>
+
+  <!-- línea de acento que se dibuja -->
+  <rect x="292" y="158" width="430" height="3" rx="1.5" fill="#19d3a2">
+    <animate attributeName="width" values="0;430;430;0" keyTimes="0;0.25;0.85;1" dur="5s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.9;0.9;0.9;0.3" dur="5s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- subtítulo -->
+  <text x="294" y="196" font-family="Segoe UI, Arial, sans-serif" font-size="25" font-weight="500" fill="#9fcbbb">
+    Recompila juegos de Xbox 360 a PC — con una interfaz, no una terminal
+    <animate attributeName="opacity" values="0.55;1;0.55" dur="4s" repeatCount="indefinite"/>
+  </text>
+  <text x="296" y="232" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#6f9a8a" letter-spacing="1">rexglue · XenonRecomp · parches · Vulkan</text>
+</svg>
