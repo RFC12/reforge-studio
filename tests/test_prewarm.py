@@ -63,7 +63,10 @@ print("Opción → cvar en runtime_values")
 o = GameOptions()
 o.shader_prewarm = True
 check(o.runtime_values().get("shader_storage_blocking") is True, "shader_prewarm=True escribe el cvar")
-check("shader_storage_blocking" not in GameOptions().runtime_values(), "por defecto no lo escribe")
+check(GameOptions().runtime_values().get("shader_storage_blocking") is True, "por defecto (AOT activado) escribe el cvar")
+off = GameOptions()
+off.shader_prewarm = False
+check("shader_storage_blocking" not in off.runtime_values(), "desactivado no lo escribe")
 check("shader_storage_blocking" in ADVANCED_CVARS, "está en ADVANCED_CVARS (solo si el SDK lo soporta)")
 
 print()
