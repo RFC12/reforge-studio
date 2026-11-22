@@ -6,8 +6,10 @@ recompilables), pero maximiza el éxito sin intervención manual. El algoritmo s
 viven integradas en el pipeline del Taller:
 
 1. **Mejores componentes por defecto** (game_options): optimizador en modo *Fluido*, precompilación de shaders
-   (AOT) y auto-ajuste activados; arreglos conocidos por juego (optimizer.apply_title_hint / apply_gfx_hint);
-   motor detectado (engine.apply_engine_profile). `cpu_native` queda opt-in por seguridad.
+   (AOT) y auto-ajuste activados; **base de datos de compatibilidad por Title ID** (gamedb.apply: modo de
+   imagen idóneo, gamma, alpha, guardas de fetch y banderas verificadas por juego, ampliable y con la config
+   que el propio PC va aprendiendo); motor detectado (engine.apply_engine_profile). `cpu_native` queda
+   opt-in por seguridad.
 2. **SDK siempre compatible** (sdkcompat.ensure_compatible): antes de configurar valida que el SDK provee los
    targets que el proyecto necesita; si no, cambia solo a un SDK instalado compatible o se detiene con un
    mensaje claro. Así, actualizar/cambiar componentes no rompe la recompilación.

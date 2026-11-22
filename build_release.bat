@@ -52,6 +52,7 @@ echo [5/6] Instalador
 %PY% -m PyInstaller --noconfirm --clean --onefile --windowed ^
   --name ReForgeStudio-Setup-%VER% --icon assets\icon.ico --paths . ^
   --hidden-import reforge.toolchain --hidden-import reforge.sdkcompat --hidden-import reforge.autorecompile ^
+  --hidden-import reforge.gamedb ^
   --add-data "build\installer\payload.zip;." --add-data "build\installer\payload.json;." ^
   --add-data "assets\icon.ico;." ^
   --distpath dist --workpath build\work-setup installer\setup.py || goto :err

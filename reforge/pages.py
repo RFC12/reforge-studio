@@ -34,13 +34,15 @@ def prepare_project(root, ctx):
     if ensure_paths_hook(root):
         ctx.log("Gancho OnConfigurePaths añadido a src/*_app.h: el .exe encuentra assets aunque se abra "
                 "con doble clic.", "dim")
-    from .optimizer import apply_gfx_hint, apply_title_hint
-    hint = apply_title_hint(root)
-    if hint:
-        ctx.log(hint, "ok")
-    gfx = apply_gfx_hint(root)
-    if gfx:
-        ctx.log(gfx, "ok")
+    try:
+        from .gamedb import apply as apply_gamedb
+        apply_gamedb(root, ctx.log)
+    except Exception as e:      # noqa: BLE001 — la base de compatibilidad nunca debe tumbar la preparación
+        ctx.log(f"(base de compatibilidad omitida por un fallo interno: {e})", "dim")
+        from .optimizer import apply_gfx_hint, apply_title_hint
+        for m in (apply_title_hint(root), apply_gfx_hint(root)):
+            if m:
+                ctx.log(m, "ok")
     try:
         from .engine import apply_engine_profile
         apply_engine_profile(root, ctx.log)

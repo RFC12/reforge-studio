@@ -2,6 +2,21 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.45.0 — Base de datos de compatibilidad por juego
+
+- **Base de datos de compatibilidad propia, por Title ID** (`reforge/gamedb.py`): por cada juego guarda solo los
+  parámetros que de verdad mapean a la recompilación **nativa** (modo de imagen ROV/RTV, gamma, lectura de
+  resolves, alpha, guardas de fetch, FPS) con su guía y su fuente. Al preparar el proyecto, el **Taller aplica
+  la configuración idónea automáticamente**; para un juego que no está en la base, sigue usando el heurístico
+  seguro de siempre. Respeta siempre lo que el usuario ya eligió a mano.
+- **Tres capas**: semilla verificada (los arreglos ya probados, p. ej. el gamma de Asura's Wrath), capa curada
+  ampliable y **base de usuario persistente** que el propio PC va aprendiendo: con `remember` queda guardada la
+  config de un juego que confirmas que va bien, y se puede **exportar e importar** para compartirla.
+- **Referencia de Xenia, no importación a ciegas**: Xenia es otro motor (un emulador) y sus ajustes no se
+  trasladan 1:1 a un `.exe` nativo. La base enlaza la **ficha de compatibilidad de Xenia** de cada Title ID como
+  referencia informativa (a verificar), sin aplicarla sola. También incluye **notas por motor** (UE3, MT
+  Framework, Unity) como guía de por dónde empezar.
+
 ## 1.44.8 — Launcher claro y con la temática del juego
 
 - **Los «Jugar ….bat» ahora son launchers claros y temáticos**: usan el **nombre real** del juego
