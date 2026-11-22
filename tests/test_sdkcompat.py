@@ -46,6 +46,24 @@ check(sdkcompat.sdk_covers(sdk10, needed) is True, "SDK con rex::runtime es comp
 check(sdkcompat.sdk_covers(sdk11, needed) is False, "SDK que renombró el target NO es compatible")
 check(sdkcompat.sdk_covers(tempfile.mkdtemp(), needed) is True, "SDK ilegible no bloquea (fail-open)")
 
+print("rex::rexglue como ejecutable importado (add_executable)")
+# El proyecto usa rex::rexglue (herramienta de codegen) además de rex::runtime.
+proj2 = tempfile.mkdtemp()
+os.makedirs(os.path.join(proj2, "generated"))
+with open(os.path.join(proj2, "generated", "rexglue.cmake"), "w", encoding="utf-8") as f:
+    f.write("target_link_libraries(j PRIVATE rex::runtime)\n"
+            "add_custom_command(COMMAND $<TARGET_FILE:rex::rexglue> codegen j.toml)\n")
+needed2 = sdkcompat.needed_targets(proj2)
+check("rex::rexglue" in needed2 and "rex::runtime" in needed2, "detecta rex::rexglue y rex::runtime")
+# SDK que define rex::runtime (add_library) y rex::rexglue (add_executable)
+p = tempfile.mkdtemp()
+dd = os.path.join(p, "lib", "cmake", "rexglue")
+os.makedirs(dd)
+with open(os.path.join(dd, "rexglueTargets.cmake"), "w", encoding="utf-8") as f:
+    f.write("add_library(rex::runtime SHARED IMPORTED)\nadd_executable(rex::rexglue IMPORTED)\n")
+check("rex::rexglue" in sdkcompat.provided_targets(p), "provee rex::rexglue (ejecutable importado)")
+check(sdkcompat.sdk_covers(p, needed2) is True, "SDK con el ejecutable rex::rexglue SÍ es compatible")
+
 print("Orden de versión (elige el mejor)")
 vs = ["0.9.0.1", "0.10.0.24-dev.gfff-fsr", "0.11.0.13-dev.gaaa", "0.10.0.24-dev.gfff"]
 best = sorted(vs, key=lambda v: (sdkcompat._version_key(v), v.endswith("-fsr")), reverse=True)[0]

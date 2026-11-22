@@ -4,7 +4,7 @@
 
 **Recompila juegos de Xbox 360 a PC desde una interfaz de escritorio — sin pelearte con la terminal.**
 
-[![Versión](https://img.shields.io/badge/versión-1.44.2-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
+[![Versión](https://img.shields.io/badge/versión-1.44.3-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
 [![Plataforma](https://img.shields.io/badge/Windows-10%20%2F%2011-19d3a2?style=flat-square&logo=windows&logoColor=white)](#instalación)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-19d3a2?style=flat-square&logo=python&logoColor=white)](#desarrollo)
 [![SDK](https://img.shields.io/badge/motor-rexglue%20%C2%B7%20XenonRecomp-19d3a2?style=flat-square)](https://github.com/rexglue/rexglue-sdk)
@@ -137,7 +137,7 @@ Atajos: `F11` pantalla completa · `Ctrl+1…9` secciones · flechas + `Enter` e
 
 ## 📜 Historial de versiones
 
-Lo más reciente es **1.44.2** (recompilado resiliente, SDK a prueba de errores y arreglos gráficos).
+Lo más reciente es **1.44.3** (recompilado resiliente, SDK a prueba de errores y arreglos gráficos).
 El detalle de cada versión está en [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 🙏 Créditos

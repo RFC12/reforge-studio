@@ -15,8 +15,9 @@ import os
 import re
 import shutil
 
-# Targets tipo rex::runtime / rexglue::runtime que aparecen en el CMake generado o que define un SDK.
-_REX = re.compile(r"\b(rex(?:glue)?::[A-Za-z0-9_]+)")
+# Targets tipo rex::runtime / rex::gpu-xenos / rexglue::runtime que aparecen en el CMake generado o que
+# define un SDK (admite guiones en el nombre, p. ej. rex::gpu-xenos).
+_REX = re.compile(r"\b(rex(?:glue)?::[A-Za-z0-9_-]+)")
 
 
 def _version_key(ver):
@@ -47,8 +48,11 @@ def provided_targets(prefix):
     found = set()
     for f in glob.glob(os.path.join(d, "*.cmake")):
         txt = _read(f)
-        # add_library(rex::runtime SHARED IMPORTED) y add_library(rex::foo ALIAS ...)
-        for m in re.finditer(r"add_library\(\s*(rex(?:glue)?::[A-Za-z0-9_]+)", txt):
+        # Targets del SDK: bibliotecas (add_library ... SHARED/STATIC/INTERFACE/ALIAS IMPORTED) y también
+        # EJECUTABLES importados (add_executable(rex::rexglue IMPORTED)), que es la herramienta de codegen y
+        # el proyecto usa como $<TARGET_FILE:rex::rexglue>. Sin contar los ejecutables, un SDK válido parecía
+        # «no proveer» rex::rexglue y se descartaba por error.
+        for m in re.finditer(r"add_(?:library|executable)\(\s*(rex(?:glue)?::[A-Za-z0-9_-]+)", txt):
             found.add(m.group(1))
     return found
 
@@ -118,8 +122,10 @@ def ensure_compatible(cfg, root, build, env, ctx):
                 f"no provee). Cambiado automáticamente al mejor SDK compatible instalado ({ver}) y limpiada la "
                 "caché de CMake para que la recompilación no se rompa. La selección anterior quedó respaldada.", "warn")
         return
-    raise RuntimeError(
-        f"El SDK seleccionado no es compatible con este proyecto: se generó usando {pedido}, que este SDK ya "
-        "no provee (p. ej. al pasar de rexglue 0.10 a 0.11 cambió el nombre del target). Soluciones: en "
-        "Entorno selecciona un SDK de la familia con la que generaste el proyecto (p. ej. 0.10.x), o pulsa "
-        "«Limpiar build» para regenerar el proyecto desde cero con el SDK nuevo.")
+    # No hay ningún SDK instalado que parezca compatible. En vez de bloquear (podría ser un punto ciego del
+    # detector), se avisa y se deja continuar: si de verdad es incompatible, el propio CMake lo dirá; y si no,
+    # la compilación sigue. Nunca un muro automático.
+    ctx.log(f"⚠ El SDK seleccionado podría no ser compatible con este proyecto (necesita {pedido}). No encontré "
+            "un SDK instalado claramente compatible. Continúo igual; si CMake falla por un target que no existe, "
+            "instala/selecciona en Entorno un SDK de la familia con la que generaste el proyecto (p. ej. 0.10.x) "
+            "o pulsa «Limpiar build» para regenerarlo con el SDK actual.", "warn")

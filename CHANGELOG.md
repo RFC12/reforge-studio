@@ -2,6 +2,16 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.44.3 — la validación de SDK reconoce el ejecutable de codegen y nunca bloquea
+
+- **Corregida la falsa incompatibilidad**: el proyecto usa `rex::rexglue` (la herramienta de codegen, un
+  `add_executable(rex::rexglue IMPORTED)` del SDK) además de `rex::runtime`. El detector solo miraba
+  `add_library`, así que creía que ningún SDK proveía `rex::rexglue` y marcaba todo como incompatible, incluso
+  el SDK correcto. Ahora reconoce bibliotecas **y** ejecutables importados (y nombres con guion como
+  `rex::gpu-xenos`).
+- **La validación ya no pone muros**: si no encuentra un SDK claramente compatible, avisa y **continúa** en vez
+  de detener (que CMake decida); solo cambia de SDK cuando encuentra uno mejor. Automático de verdad.
+
 ## 1.44.2 — arreglo: la validación de SDK del Taller ya no crashea
 
 - **Corregido el crash «No module named 'reforge.sdkcompat'»** al recompilar: el paso «Validar SDK compatible»
