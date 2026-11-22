@@ -395,3 +395,80 @@ def _ensure(exe, root, title, force):
     return {"xex": "icono oficial del juego aplicado al .exe",
             "imagen": "icono oficial del juego aplicado al .exe (sacado de la partida)",
             "iniciales": "el juego no trae imagen: icono con sus iniciales aplicado al .exe"}[source]
+
+
+def dominant_color(root):
+    """(r, g, b) del color más característico del icono del juego (reforge_icon.png / imagen del XEX), o None.
+
+    Elige el píxel más vivo (mayor saturación × brillo) entre los opacos: así coge el color de marca del
+    juego (el rojo de Asura, el verde de un logo…) y evita negros, blancos y grises de fondo."""
+    import os
+    data = None
+    png = os.path.join(root, PNG_FILE)
+    if os.path.isfile(png):
+        try:
+            with open(png, "rb") as f:
+                data = f.read()
+        except OSError:
+            data = None
+    if not data:
+        xex = os.path.join(root, "assets", "default.xex")
+        if os.path.isfile(xex):
+            try:
+                data, _src = title_png(xex)
+            except Exception:      # noqa: BLE001
+                data = None
+    if not data:
+        return None
+    try:
+        _QBuffer, _QByteArray, _QIODevice, _Qt, QImage = _qt()
+        img = QImage.fromData(data)
+        if img.isNull():
+            return None
+        img = img.convertToFormat(QImage.Format.Format_ARGB32).scaled(24, 24)
+        best, best_score = None, -1
+        for y in range(img.height()):
+            for x in range(img.width()):
+                c = img.pixelColor(x, y)
+                if c.alpha() < 128:
+                    continue
+                _h, s, v, _a = c.getHsv()
+                score = s * v
+                if score > best_score:
+                    best_score, best = score, (c.red(), c.green(), c.blue())
+        return best
+    except Exception:      # noqa: BLE001
+        return None
+
+
+def write_ico(root, dest):
+    """Guarda el icono del juego como .ico en `dest` (para accesos directos). True si pudo."""
+    import os
+    data = None
+    png = os.path.join(root, PNG_FILE)
+    if os.path.isfile(png):
+        try:
+            with open(png, "rb") as f:
+                data = f.read()
+        except OSError:
+            data = None
+    if not data:
+        xex = os.path.join(root, "assets", "default.xex")
+        if os.path.isfile(xex):
+            try:
+                data, _src = title_png(xex)
+            except Exception:      # noqa: BLE001
+                data = None
+    if not data:
+        return False
+    try:
+        _QBuffer, _QByteArray, _QIODevice, _Qt, QImage = _qt()
+        img = QImage.fromData(data)
+        if img.isNull():
+            return False
+        if img.width() > 256 or img.height() > 256:
+            img = img.scaled(256, 256, _Qt.AspectRatioMode.KeepAspectRatio,
+                             _Qt.TransformationMode.SmoothTransformation)
+        return bool(img.save(dest, "ICO"))
+    except Exception:      # noqa: BLE001
+        return False

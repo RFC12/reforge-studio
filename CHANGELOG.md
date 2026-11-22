@@ -2,6 +2,14 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.44.8 — Launcher claro y con la temática del juego
+
+- **Los «Jugar ….bat» ahora son launchers claros y temáticos**: usan el **nombre real** del juego
+  («asura_s_wrath» → «Asura's Wrath»), ponen ese nombre en el título de la ventana, **colorean la consola con
+  el color característico del icono** del juego (el rojo de Asura, etc.) y muestran una cabecera limpia antes de
+  arrancar. Además se genera un `.ico` del juego y el acceso directo del Escritorio usa el **icono del juego**,
+  no el genérico. Se limpian los launchers antiguos para no dejar duplicados.
+
 ## 1.44.7 — Movimiento suave por driver (cinemáticas a velocidad correcta y fluidas)
 
 - **Nueva opción «Movimiento suave por driver (NVIDIA Smooth Motion / AMD Fluid Motion)»** (🎮 Opciones →

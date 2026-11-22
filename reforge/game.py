@@ -1337,9 +1337,52 @@ def reforge_executable():
     return ""
 
 
+def display_name(name):
+    """Nombre bonito del juego a partir del nombre de carpeta: «asura_s_wrath» → «Asura's Wrath»,
+    «gears_of_war_2_latino» → «Gears Of War 2 Latino»."""
+    out = []
+    for p in str(name or "").split("_"):
+        if p == "s" and out:
+            out[-1] += "'s"
+        elif p:
+            out.append(p[:1].upper() + p[1:])
+    return " ".join(out) or str(name or "Juego")
+
+
+# Paleta de la consola de Windows (color NN): solo los tonos vivos/claros, legibles sobre fondo negro.
+_CONSOLE_COLORS = {"9": (0, 0, 255), "A": (0, 255, 0), "B": (0, 255, 255), "C": (255, 0, 0),
+                   "D": (255, 0, 255), "E": (255, 255, 0), "F": (255, 255, 255), "7": (192, 192, 192)}
+
+
+def _console_color(rgb):
+    """Dígito de color de consola (foreground) más cercano al color del icono del juego; 'F' por defecto."""
+    if not rgb:
+        return "F"
+    r, g, b = rgb
+    best, bestd = "F", 1e18
+    for code, (cr, cg, cb) in _CONSOLE_COLORS.items():
+        d = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2
+        if d < bestd:
+            bestd, best = d, code
+    return best
+
+
+def _clean_old_launchers(folder):
+    """Quita los «Jugar *.bat» anteriores (p. ej. con el nombre de carpeta) para no dejar duplicados."""
+    try:
+        for f in os.listdir(folder):
+            if f.lower().startswith("jugar ") and f.lower().endswith(".bat"):
+                try:
+                    os.remove(os.path.join(folder, f))
+                except OSError:
+                    pass
+    except OSError:
+        pass
+
+
 def write_launcher(exe, root, title):
-    """Crea «Jugar <título>.bat» (abre el lanzador del juego) y «Jugar <título> (directo).bat»
-    junto al .exe. Devuelve la ruta del principal."""
+    """Crea un launcher claro y con la temática del juego junto al .exe: «Jugar <Nombre>.bat» (abre el
+    lanzador de ReForge) y «Jugar <Nombre> (directo).bat» (arranca el .exe). Devuelve la ruta del principal."""
     if sys.platform != "win32":
         path = os.path.join(os.path.dirname(exe), f"jugar_{os.path.basename(exe)}.sh")
         with open(path, "w", encoding="utf-8") as f:
@@ -1347,19 +1390,41 @@ def write_launcher(exe, root, title):
                     f'"--game_data_root={os.path.join(root, "assets")}" --gpu_plugin=xenos{_driver_flag(root)} "$@"\n')
         os.chmod(path, 0o755)
         return path
-    direct = os.path.join(os.path.dirname(exe), f"Jugar {title} (directo).bat")
+    folder = os.path.dirname(exe)
+    pretty = display_name(title)
+    try:
+        from . import gameicon
+        fg = _console_color(gameicon.dominant_color(root))
+        gameicon.write_ico(root, os.path.join(folder, "reforge_icon.ico"))   # para el acceso directo
+    except Exception:      # noqa: BLE001
+        fg = "F"
+    _clean_old_launchers(folder)
+
+    def _head():
+        # Cabecera temática: título de ventana con el nombre del juego y color del icono.
+        return ("@echo off\r\nchcp 65001 >nul\r\n"
+                f"title  ▶  {pretty}\r\ncolor 0{fg}\r\ncd /d \"%~dp0\"\r\n"
+                "echo.\r\n"
+                "echo    ══════════════════════════════════════════════════\r\n"
+                f"echo       {pretty}\r\n"
+                "echo       Recompilado para PC  ·  ReForge Studio\r\n"
+                "echo    ══════════════════════════════════════════════════\r\n"
+                "echo.\r\n")
+
+    direct = os.path.join(folder, f"Jugar {pretty} (directo).bat")
     with open(direct, "w", encoding="utf-8") as f:
-        f.write("@echo off\r\nchcp 65001 >nul\r\ncd /d \"%~dp0\"\r\n"
-                f"start \"\" \"%~dp0{os.path.basename(exe)}\" \"--game_data_root={os.path.join(root, 'assets')}\" --gpu_plugin=xenos{_driver_flag(root)} %*\r\n")
+        f.write(_head() + "echo    Iniciando el juego…\r\n"
+                f"start \"\" \"%~dp0{os.path.basename(exe)}\" \"--game_data_root={os.path.join(root, 'assets')}\" "
+                f"--gpu_plugin=xenos{_driver_flag(root)} %*\r\n")
     rf = reforge_executable()
-    path = os.path.join(os.path.dirname(exe), f"Jugar {title}.bat")
+    path = os.path.join(folder, f"Jugar {pretty}.bat")
     if not rf:
         shutil.copyfile(direct, path)
         return path
     with open(path, "w", encoding="utf-8") as f:
-        f.write("@echo off\r\nchcp 65001 >nul\r\n"
+        f.write(_head() + "echo    Abriendo el lanzador…\r\n"
                 f"if exist \"{rf}\" (\r\n  start \"\" \"{rf}\" --launcher \"{os.path.abspath(root)}\"\r\n) else (\r\n"
-                f"  call \"%~dp0Jugar {title} (directo).bat\"\r\n)\r\n")
+                f"  call \"%~dp0Jugar {pretty} (directo).bat\"\r\n)\r\n")
     return path
 
 
@@ -1370,8 +1435,18 @@ def desktop_shortcut(exe, root, title):
     r = subprocess.run(["powershell", "-NoProfile", "-Command", "[Environment]::GetFolderPath('Desktop')"],
                        capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL, timeout=30, creationflags=NO_WINDOW)
     desk = r.stdout.strip()
-    lnk = os.path.join(desk, f"{title}.lnk")
+    pretty = display_name(title)
+    lnk = os.path.join(desk, f"{pretty}.lnk")
     esc = lambda s: s.replace("'", "''")  # noqa: E731
+    # Icono del juego para el acceso directo: el .ico extraído del juego si existe; si no, el del .exe.
+    try:
+        from . import gameicon
+        ico = os.path.join(os.path.dirname(exe), "reforge_icon.ico")
+        if not os.path.isfile(ico):
+            gameicon.write_ico(root, ico)
+        icon_loc = f"{ico},0" if os.path.isfile(ico) else f"{exe},0"
+    except Exception:      # noqa: BLE001
+        icon_loc = f"{exe},0"
     rf = reforge_executable()
     if rf:
         target, args, workdir = rf, f'--launcher "{os.path.abspath(root)}"', os.path.dirname(rf)
@@ -1380,8 +1455,8 @@ def desktop_shortcut(exe, root, title):
     subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
                     f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{esc(lnk)}');"
                     f"$s.TargetPath='{esc(target)}';$s.Arguments='{esc(args)}';"
-                    f"$s.WorkingDirectory='{esc(workdir)}';$s.IconLocation='{esc(exe)},0';"
-                    f"$s.Description='{esc(title)} · ReForge';$s.Save()"],
+                    f"$s.WorkingDirectory='{esc(workdir)}';$s.IconLocation='{esc(icon_loc)}';"
+                    f"$s.Description='{esc(pretty)} · ReForge';$s.Save()"],
                    capture_output=True, timeout=60, creationflags=NO_WINDOW, stdin=subprocess.DEVNULL)
     return lnk
 
