@@ -4,6 +4,13 @@
 
 ## Sin publicar (en desarrollo)
 
+- **Recompilación automática resiliente** (`autorecompile.py`): la recompilación arranca con los mejores
+  componentes (optimizador Fluido, AOT, auto-ajuste, arreglos por juego, SDK compatible) y, si la compilación
+  falla con una optimización agresiva, **baja sola por una escalera de seguridad** (`max → safe → off`),
+  regenerando y recompilando, hasta lograrlo. Junto con las recuperaciones que ya existían (encabezado SEH,
+  funciones cortadas, «líneas vacías», compilar sin la extensión), hace que recompilar cualquier juego sea lo
+  más a prueba de errores posible; solo si el nivel más seguro también falla se reporta, claro, que ese juego
+  necesita trabajo específico. (No promete 0 % de errores: hay juegos aún no recompilables.)
 - **Validación de SDK compatible al recompilar** (`sdkcompat.py`): antes de configurar se comprueba que el SDK
   seleccionado provee los targets `rex::*` que el proyecto generado necesita. Si no (p. ej. tras instalar o
   cambiar a un SDK de otra familia como rexglue 0.11, que renombró `rex::runtime`), ReForge **cambia solo a un

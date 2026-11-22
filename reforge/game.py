@@ -1733,4 +1733,23 @@ def build_with_ext_fallback(cfg, root, build, env, ctx):
             ctx.log("✔ Compilado sin la extensión ReForge. Perfil, idioma y notificación de logros quedan "
                     "desactivados en este juego (puedes reactivarlos en 🎮 Opciones tras actualizar ReForge).", "warn")
             return
-    raise RuntimeError(f"El proceso terminó con código {rc}")
+    # Escalera de seguridad de la optimización del código: si la compilación falla con un nivel agresivo,
+    # se baja al siguiente (max → safe → off) y se regenera, de forma automática. Así «usar lo mejor» no
+    # significa «romperse»: se intenta lo mejor y, solo si falla, se cede rendimiento por compatibilidad.
+    from .autorecompile import next_safer_level
+    from .game_options import GameOptions
+    o = GameOptions.load(root)
+    cur = o.codegen_level()
+    nxt = next_safer_level(cur)
+    if nxt:
+        ctx.log(f"La compilación falló con optimización «{cur}». Bajo automáticamente a «{nxt}» (más compatible) "
+                "y recompilo…", "warn")
+        o.codegen_opt = nxt
+        o.save(root)
+        apply_codegen_opt(root, nxt)
+        name = manifest_project_name(root) or os.path.basename(root)
+        codegen_with_autofix(cfg, root, build, name, env, ctx)
+        return build_with_ext_fallback(cfg, root, build, env, ctx)
+    raise RuntimeError(
+        f"El proceso terminó con código {rc}. Se probaron todas las optimizaciones (hasta la más segura) y aun "
+        "así la compilación falla: este juego necesita trabajo específico para recompilarse (revisa el log).")
