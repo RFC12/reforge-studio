@@ -2,6 +2,14 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.44.5 — ReForge ya no se queda «No responde» al compilar
+
+- **La ventana responde durante la compilación**: el árbol de compilación (cmake → ninja → clang) se lanza con
+  prioridad por debajo de lo normal. Con `--parallel` usando todos los núcleos, a prioridad normal esos
+  procesos ahogaban el hilo de la interfaz y Windows marcaba ReForge como «No responde» hasta terminar. Ahora
+  el sistema sigue dando tiempo a la UI (prioridad normal) y la ventana se mantiene fluida; apenas cambia el
+  tiempo total de compilación, porque los núcleos siguen libres cuando la interfaz no los necesita.
+
 ## 1.44.4 — el SDK incompatible entra en la base de datos de problemas conocidos
 
 - **`knownissues` (la base de datos de problemas) ahora conoce el fallo de SDK incompatible**: reconoce el

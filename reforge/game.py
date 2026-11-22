@@ -564,8 +564,17 @@ def ensure_include(root):
 
 def run_streaming(cmd, cwd, env, ctx):
     ctx.log("$ " + " ".join(f'"{a}"' if " " in a else a for a in cmd), "cmd")
+    # Prioridad por debajo de lo normal para todo el árbol de compilación (cmake → ninja → clang): con
+    # --parallel usando todos los núcleos, a prioridad normal esos procesos ahogan al hilo de la interfaz y
+    # Windows marca ReForge como «No responde». Al bajarles la prioridad, el sistema sigue dando tiempo a la
+    # UI (que va a prioridad normal) y la ventana responde durante la compilación. Los procesos hijos heredan
+    # la clase de prioridad del padre, así que basta con ponerla aquí. Apenas afecta al tiempo total: los
+    # núcleos siguen libres para compilar cuando la UI no los necesita.
+    flags = NO_WINDOW
+    if sys.platform == "win32":
+        flags |= getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0x00004000)
     p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                         text=True, encoding="utf-8", errors="replace", bufsize=1, creationflags=NO_WINDOW,
+                         text=True, encoding="utf-8", errors="replace", bufsize=1, creationflags=flags,
                          start_new_session=sys.platform != "win32")
     from .processes import stop_process_tree
     lines = []

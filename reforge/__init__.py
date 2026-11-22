@@ -1,5 +1,5 @@
 APP_NAME = "ReForge Studio"
-__version__ = "1.44.4"
+__version__ = "1.44.5"
 # Versión del contrato con los parches. Solo cambia si se rompe la compatibilidad.
 API_VERSION = 1
 SUPPORTED_APIS = {1}
