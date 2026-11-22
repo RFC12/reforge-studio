@@ -1349,7 +1349,7 @@ class WorkshopPage(QWidget):
             pending = [a for a in cands if a not in game.declared_functions(p.root)]
         except Exception:      # noqa: BLE001
             pending = []
-        if pending and o.auto_repair and p.root not in self._auto_maint:
+        if pending and o.auto_repair and o.auto_relaunch and p.root not in self._auto_maint:
             self._auto_maint.add(p.root)
             self.log.write(f"🩺 Mantenimiento automático: {len(pending)} entrada(s) de función que aún no están en el "
                            "código recompilado. Se añaden y se recompila ahora para evitar cierres en otras partes "
@@ -1367,18 +1367,31 @@ class WorkshopPage(QWidget):
         con los ajustes nuevos (el jugador no tiene que hacer nada)."""
         if self.runner.running or p is not self.current:
             return
-        if self.offer_pc_enhancements(p, exe):
-            self._play_after_build = True
-            return
         o = GameOptions.load(p.root)
+        if self.offer_pc_enhancements(p, exe):
+            # Reabrir el juego al terminar de recompilar SOLO si el jugador activó el relanzamiento automático.
+            self._play_after_build = bool(o.auto_relaunch)
+            if not o.auto_relaunch:
+                self.log.write("Recompilando con las mejoras. Al terminar, pulsa «▶ Jugar» cuando quieras "
+                               "(no se reabrirá solo).", "dim")
+            return
         reason = game.rebuild_reason(p.root, exe, self.win.cfg)
         if reason and o.auto_repair:
-            self.log.write(f"↻ Recompilando para la próxima partida: {reason}. El juego se abrirá solo al "
-                           "terminar.", "warn")
-            self.rebuild_and_play()
+            if o.auto_relaunch:
+                self.log.write(f"↻ Recompilando para la próxima partida: {reason}. El juego se abrirá solo al "
+                               "terminar.", "warn")
+                self.rebuild_and_play()
+            else:
+                self.log.write(f"↻ Conviene recompilar para la próxima partida: {reason}. Se recompila ahora; "
+                               "pulsa «▶ Jugar» cuando quieras (no se reabrirá solo).", "dim")
+                self.rebuild_current()
             return
         if tuned and o.auto_tune:
-            self.relaunch_countdown(p, "ReForge ajustó el juego tras esta partida:\n\n• " + "\n• ".join(tuned))
+            if o.auto_relaunch:
+                self.relaunch_countdown(p, "ReForge ajustó el juego tras esta partida:\n\n• " + "\n• ".join(tuned))
+            else:
+                self.log.write("🔧 Ajustes aplicados para la próxima partida: " + "; ".join(tuned)
+                               + ". Pulsa «▶ Jugar» cuando quieras.", "ok")
 
     def show_perf_report(self, p, exe, log_path):
         """Resumen de rendimiento de la partida y ajustes automáticos (la extensión anota los tirones)."""

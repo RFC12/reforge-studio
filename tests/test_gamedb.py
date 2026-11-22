@@ -89,6 +89,24 @@ print("summary() cuenta los juegos de la base")
 s = gamedb.summary()
 check("juego" in s.lower(), "resume el contenido")
 
+print("Candado de framerate: Asura's Wrath está marcado (fuente: catálogo de Xenia/boma)")
+fl = gamedb.frame_lock("43430817")
+check(fl is not None and fl.get("locked") is True, "Asura marcado como frame-locked")
+check(fl and "boma" in (fl.get("source") or "").lower(), "cita la fuente del catálogo")
+
+print("frame_advice avisa en un juego con candado y desbloqueo de FPS activo")
+_TID["v"] = "43430817"
+oa = GameOptions.load(proj)
+oa.fps_unlocked = True
+oa.smooth_motion = False
+oa.save(proj)
+locked, adv = gamedb.frame_advice(proj)
+check(locked is True and "Movimiento Suave" in adv, "recomienda Movimiento Suave")
+check(adv.startswith("⚠"), "avisa porque el desbloqueo está activo")
+
+print("auto_relaunch está desactivado por defecto (cerrar un juego no lo reabre solo)")
+check(GameOptions().auto_relaunch is False, "auto_relaunch por defecto = False")
+
 print()
 if fallos:
     print(f"FALLOS: {len(fallos)}")

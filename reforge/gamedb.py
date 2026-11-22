@@ -37,6 +37,29 @@ CURATED = {
     # (vacío de serie: la semilla verificada vive en optimizer. Aquí se van añadiendo casos nuevos.)
 }
 
+# Juegos con candado de framerate (animación/física/QTE atadas al ritmo de fotogramas).
+#
+# Cómo lo "detectamos": NO del binario (eso no es fiable), sino del catálogo de parches de la comunidad de
+# Xenia (xenia-canary/game-patches). Que exista un parche «Unlock FPS» para un juego es la señal fiable de que
+# ese juego es frame-locked: alguien ya localizó dónde fija el tope y, a menudo, deja anotado qué se acelera.
+#
+# OJO (honestidad técnica): la dirección del parche es una escritura de MEMORIA GUEST de Xenia (0x8xxxxxxx).
+# Xenia reinterpreta el código al vuelo, por eso allí basta escribir un `nop` sobre la instrucción. En la
+# recompilación NATIVA el código ya está traducido a C++, así que esa escritura en runtime NO surte efecto:
+# para portar un desbloqueo de FPS habría que parchear la imagen PPC ANTES de generar el código. Por eso aquí
+# el parche se guarda solo como REFERENCIA; no se aplica solo.
+FRAME_LOCKED = {
+    "43430817": {
+        "locked": True,
+        "note": "Asura's Wrath: los QTE de machaque de botones van atados al framerate; desbloquear los FPS "
+                "acelera cinemáticas y QTEs.",
+        "source": "xenia-canary/game-patches (boma): parche «Unlock FPS»",
+        "patch": [{"type": "be32", "address": "0x824d7130", "value": "0x60000000"},
+                  {"type": "be8", "address": "0x8299a70f", "value": "0x01"}],
+    },
+}
+
+
 # Notas por motor: NO se aplican solas (no fabricamos arreglos por juego sin verificar); se muestran como
 # guía para quien prepara un juego de ese motor y quiere saber por dónde empezar.
 ENGINE_NOTES = {
@@ -129,6 +152,38 @@ def record_for(root):
     return title_id_of(root), record(title_id_of(root))
 
 
+def frame_lock(tid):
+    """{'locked','note','source','patch'} si el juego tiene candado de framerate conocido, o None.
+
+    Combina el catálogo (semilla de la comunidad de Xenia) con lo que la base de usuario haya anotado.
+    """
+    tid = (tid or "").upper()
+    seed = FRAME_LOCKED.get(tid)
+    uf = (_load_user().get(tid) or {}).get("frame_lock")
+    if uf:
+        return {**(seed or {}), **uf}
+    return seed
+
+
+def frame_advice(root):
+    """(frame_locked, mensaje) para el juego del proyecto. El mensaje recomienda Movimiento Suave y avisa si el
+    desbloqueo de FPS está activo en un juego con animación atada al framerate."""
+    fl = frame_lock(title_id_of(root))
+    if not fl or not fl.get("locked"):
+        return False, ""
+    msg = ("Juego con candado de 30 FPS: la animación y los QTE van atados al framerate ("
+           + fl.get("source", "catálogo de la comunidad") + "). Para más fluidez SIN acelerar las cinemáticas, "
+           "usa Movimiento Suave (mantiene el ritmo real e interpola); desbloquear los FPS a secas las acelera.")
+    try:
+        from .game_options import GameOptions
+        o = GameOptions.load(root)
+        if getattr(o, "fps_unlocked", False) and not getattr(o, "smooth_motion", False):
+            msg = "⚠ Tienes el desbloqueo de FPS activo. " + msg
+    except Exception:      # noqa: BLE001
+        pass
+    return True, msg
+
+
 def all_games():
     """[(title_id, ficha)] de todo lo que hay en la base, ordenado por nombre/Title ID."""
     from . import optimizer
@@ -169,6 +224,9 @@ def apply(root, log=None):
         # _apply_record solo toca lo que siga por defecto y el preset solo si está en automático, así que no
         # repite lo que la semilla ya dejó puesto arriba.
         msgs += _apply_record(root, extra)
+    _locked, adv = frame_advice(root)
+    if adv:
+        msgs.append(adv)
     if log:
         for m in msgs:
             log(m, "ok")
@@ -302,5 +360,9 @@ def guide(root):
     else:
         lineas.append("Sin ficha propia todavía: se usará el heurístico seguro (ruta de imagen automática). "
                       "Cuando confirmes que va bien, guárdalo para que quede en la base.")
+    fl = frame_lock(tid)
+    if fl and fl.get("locked"):
+        lineas.append("Candado de framerate: SÍ — " + fl.get("note", "animación atada al framerate")
+                      + " → usa Movimiento Suave en vez de desbloquear los FPS.")
     lineas.append("Referencia de Xenia (emulador, a verificar — no se aplica sola): " + xenia_reference_url(tid))
     return "\n".join(lineas)

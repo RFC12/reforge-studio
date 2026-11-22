@@ -118,6 +118,8 @@ class GameOptions:
     audio_queue: int = 0           # fotogramas de audio en cola (audio_maxqframes); 0 = el del optimizador
     heap_size_mb: int = 0          # montón del CRT del juego (rexcrt_heap_size_mb); 0 = el de rexglue
     auto_tune: bool = True         # el Taller ajusta solo tras cada partida (audio, diagnóstico, avisos)
+    auto_relaunch: bool = False    # volver a ABRIR el juego solo al cerrarlo (recompilar/ajustar). Desactivado:
+    #                                cerrar el juego nunca lo reabre; los ajustes se dejan listos para la próxima vez.
     input_backend_chosen: bool = False  # el jugador eligió SDL/XInput a mano (no se cambia a automático)
     pc_offer_dismissed: bool = False
     # Controles

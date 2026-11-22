@@ -425,6 +425,12 @@ class GameOptionsDialog(QDialog):
         f.addRow("Considerar que arrancó si sigue abierto", self.watch)
         f.addRow("", label("Cada ronda declara la dirección del fallo, regenera el código, compila y vuelve a "
                            "lanzar el juego. Las direcciones quedan en reforge_functions.toml.", "Hint", wrap=True))
+        self.relaunch = QCheckBox("Volver a abrir el juego solo al cerrarlo (tras recompilar o ajustar)")
+        self.relaunch.setChecked(self.o.auto_relaunch)
+        f.addRow(self.relaunch)
+        f.addRow("", label("Desactivado (recomendado): cerrar el juego NUNCA lo reabre solo; los ajustes y la "
+                           "recompilación quedan listos para la próxima vez que pulses «▶ Jugar». Actívalo si "
+                           "quieres que ReForge cierre el ciclo y reabra el juego por ti.", "Hint", wrap=True))
         return w
 
     # ---------------------------------------------------------------- guardar
@@ -484,6 +490,7 @@ class GameOptionsDialog(QDialog):
         o.license = self.lic.currentData()
         set_language_key(o, self.lang.currentData())
         o.auto_repair = self.auto.isChecked()
+        o.auto_relaunch = self.relaunch.isChecked()
         o.reforge_ext = self.ext.isChecked()
         o.repair_max_rounds = int(self.rounds.value())
         o.repair_watch_seconds = int(self.watch.value())

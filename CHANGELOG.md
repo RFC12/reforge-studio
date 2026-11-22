@@ -2,6 +2,21 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.45.1 — Cerrar el juego ya no lo reabre solo + candado de FPS por juego
+
+- **Arreglado: al cerrar un juego ya no se relanza solo.** Cerrar el juego nunca lo vuelve a abrir por su cuenta.
+  Los ajustes automáticos y la recompilación recomendada se dejan **listos para la próxima vez** que pulses
+  «▶ Jugar», y se avisa en el log. Se quitó la cuenta atrás que reabría el juego sola, y se gatearon todas las
+  vías de reapertura tras una partida (mejoras de la base de datos, recompilación por cambios, ajustes de
+  rendimiento y mantenimiento de funciones). Hay un interruptor nuevo en 🎮 Opciones → Reparación del arranque,
+  **«Volver a abrir el juego solo al cerrarlo»** (desactivado por defecto) para quien sí quiera cerrar el ciclo.
+- **Candado de framerate por juego** (`gamedb.frame_lock`): a partir del catálogo de parches de la comunidad de
+  Xenia (xenia-canary/game-patches), ReForge sabe qué juegos tienen la animación/física/QTE atadas al ritmo de
+  fotogramas (p. ej. Asura's Wrath, confirmado por el autor del parche «Unlock FPS»). En esos juegos recomienda
+  **Movimiento Suave** en vez del desbloqueo crudo, que acelera las cinemáticas. La dirección del parche se
+  guarda solo como **referencia**: es memoria *guest* de Xenia y en la recompilación nativa habría que aplicarla
+  al generar el código, no en runtime.
+
 ## 1.45.0 — Base de datos de compatibilidad por juego
 
 - **Base de datos de compatibilidad propia, por Title ID** (`reforge/gamedb.py`): por cada juego guarda solo los
