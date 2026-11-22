@@ -78,9 +78,18 @@ check(iss.remedio is None and iss.consejo, "no finge un arreglo automático: da 
 msgs, rec = knownissues.auto_heal(root_e, "", LOG_EXEC, {"root": root_e})
 check(rec is False, "auto_heal no recompila por esto (no hay nada que tocar)")
 
+print("El SDK incompatible con el proyecto se reconoce en la base de datos")
+LOG_SDK = ('CMake Error at generated/rexglue.cmake:102 (target_link_libraries):\n'
+           '  Target "asuraswrath" links to:\n    rex::runtime\n'
+           '  but the target was not found.\n')
+iss_sdk = knownissues.diagnose(LOG_SDK, {})
+check(iss_sdk is not None and iss_sdk.id == "sdk_incompatible_con_proyecto", "identifica el error de CMake del SDK")
+check(iss_sdk.remedio is not None and iss_sdk.recompila, "trae remedio automático (cambiar de SDK) y pide recompilar")
+
 print("Otros problemas conocidos están en la tabla")
 ids = {i.id for i in knownissues.ISSUES}
-for esperado in ("heap_agotado", "cache_shaders_danada", "mando_reconectado", "llamada_fuera_rango"):
+for esperado in ("heap_agotado", "cache_shaders_danada", "mando_reconectado", "llamada_fuera_rango",
+                 "sdk_incompatible_con_proyecto"):
     check(esperado in ids, f"está «{esperado}»")
 check(knownissues.diagnose("todo bien, nada que ver aquí", {}) is None, "un log limpio no inventa un problema")
 

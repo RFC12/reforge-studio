@@ -2,6 +2,13 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.44.4 — el SDK incompatible entra en la base de datos de problemas conocidos
+
+- **`knownissues` (la base de datos de problemas) ahora conoce el fallo de SDK incompatible**: reconoce el
+  error de CMake «links to rex::runtime but the target was not found» y trae **remedio automático** — cambia al
+  SDK instalado compatible (la misma lógica que el Taller) y pide recompilar. Así, este tipo de problema queda
+  documentado con su causa y se corrige solo, como el resto de entradas de la base de datos.
+
 ## 1.44.3 — la validación de SDK reconoce el ejecutable de codegen y nunca bloquea
 
 - **Corregida la falsa incompatibilidad**: el proyecto usa `rex::rexglue` (la herramienta de codegen, un

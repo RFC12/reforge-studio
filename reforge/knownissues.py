@@ -63,6 +63,35 @@ def _fix_heap(root, exe, log_text, info):
                   f"{actual or 'el valor por defecto'}): se quedó sin memoria para sus reservas.")
 
 
+def _fix_sdk_incompat(root, exe, log_text, info):
+    """El proyecto se generó con un SDK cuyos targets (rex::runtime / rex::rexglue) el SDK seleccionado ya no
+    provee (p. ej. 0.10 → 0.11). Se cambia solo al mejor SDK instalado que sí los trae (misma lógica que el
+    Taller), dejando respaldo de la configuración. Hay que reconfigurar y recompilar."""
+    from . import sdkcompat
+    from .core import AppConfig
+    cfg = AppConfig.load()
+    build = os.path.join(root, "build")
+    env = cfg.environment()
+    antes = cfg.rexglue_sdk
+
+    class _C:
+        def __init__(self):
+            self.msgs = []
+
+        def log(self, m, _k=""):
+            self.msgs.append(m)
+
+    c = _C()
+    try:
+        sdkcompat.ensure_compatible(cfg, root, build, env, c)
+    except Exception:      # noqa: BLE001
+        return False, ""
+    if cfg.rexglue_sdk and cfg.rexglue_sdk != antes:
+        return True, (c.msgs[-1] if c.msgs else
+                      "Se cambió automáticamente al SDK instalado compatible con este proyecto.")
+    return False, ""
+
+
 def _fix_shaders(root, exe, log_text, info):
     from . import shadercache
     from .game_options import GameOptions
@@ -85,6 +114,24 @@ def _tiene(*trozos):
 
 
 ISSUES = [
+    Issue(
+        id="sdk_incompatible_con_proyecto",
+        titulo="El SDK seleccionado no encaja con el proyecto generado",
+        sintomas="Al recompilar, CMake se detiene con «Target \"…\" links to: rex::runtime but the target was "
+                 "not found» (o rex::rexglue). El juego ni llega a compilar.",
+        causa="El proyecto se generó con un SDK de rexglue (p. ej. 0.10) que expone los targets rex::runtime y "
+              "rex::rexglue; luego se instaló o seleccionó un SDK de otra familia (0.11 los renombró), y el "
+              "CMake del proyecto ya no los encuentra. No es un fallo del juego: es el SDK que cambió de nombre "
+              "a sus piezas.",
+        match=lambda log, info: ("but the target was not found" in (log or "")
+                                 and ("rex::runtime" in (log or "") or "rex::rexglue" in (log or "")
+                                      or "rex::" in (log or ""))),
+        remedio=_fix_sdk_incompat,
+        consejo="ReForge lo corrige solo: el Taller valida el SDK antes de recompilar y cambia al SDK instalado "
+                "compatible. Si no tienes uno, instala en Entorno un SDK de la familia con la que generaste el "
+                "proyecto (p. ej. 0.10.x), o pulsa «Limpiar build» para regenerarlo con el SDK nuevo.",
+        recompila=True,
+    ),
     Issue(
         id="import_dinamico_sin_resolver",
         titulo="El juego pide una función de un módulo que no está",
