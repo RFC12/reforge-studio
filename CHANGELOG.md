@@ -2,7 +2,7 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
-## 1.44.0 — recompilado resiliente, SDK a prueba de errores y arreglos gráficos
+## 1.44.1 — recompilado resiliente, SDK a prueba de errores y arreglos gráficos
 
 - **Aviso de actualización al abrir y mientras ReForge está abierto**: además del chequeo al arrancar, ReForge
   vuelve a mirar GitHub cada 3 h durante la sesión (la consulta real sigue limitada a una vez al día), así el
