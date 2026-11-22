@@ -185,12 +185,21 @@ class LogView(QPlainTextEdit):
             self._pending.append(f'<span style="color:{color};{weight}white-space:pre">'
                                  f'{html.escape(line)}</span>')
 
+    # Máximo de líneas que se vuelcan en un solo tick. Un appendHtml con miles de líneas de golpe bloquea el
+    # hilo de la interfaz varios segundos (o minutos si son decenas de miles): la ventana queda «No responde».
+    # Volcando por trozos acotados —y dejando el resto para los siguientes ticks (80 ms)— la UI nunca se
+    # congela aunque una compilación haya soltado un diluvio de líneas que se acumularon en el buffer.
+    _MAX_FLUSH = 600
+
     def _flush(self):
         if not self._pending:
             return
         bar = self.verticalScrollBar()
         at_bottom = bar.value() >= bar.maximum() - 4
-        chunk, self._pending = self._pending, []
+        if len(self._pending) > self._MAX_FLUSH:
+            chunk, self._pending = self._pending[:self._MAX_FLUSH], self._pending[self._MAX_FLUSH:]
+        else:
+            chunk, self._pending = self._pending, []
         self.appendHtml("<br>".join(chunk))
         if at_bottom:
             bar.setValue(bar.maximum())

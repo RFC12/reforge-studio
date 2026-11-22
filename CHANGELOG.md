@@ -2,13 +2,18 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
-## 1.44.5 — ReForge ya no se queda «No responde» al compilar
+## 1.44.6 — ReForge ya no se queda «No responde» al compilar (durante y al terminar)
 
-- **La ventana responde durante la compilación**: el árbol de compilación (cmake → ninja → clang) se lanza con
-  prioridad por debajo de lo normal. Con `--parallel` usando todos los núcleos, a prioridad normal esos
-  procesos ahogaban el hilo de la interfaz y Windows marcaba ReForge como «No responde» hasta terminar. Ahora
-  el sistema sigue dando tiempo a la UI (prioridad normal) y la ventana se mantiene fluida; apenas cambia el
-  tiempo total de compilación, porque los núcleos siguen libres cuando la interfaz no los necesita.
+Dos arreglos para que la ventana nunca se congele al recompilar:
+
+- **Durante la compilación**: el árbol de compilación (cmake → ninja → clang) se lanza con prioridad por debajo
+  de lo normal. Con `--parallel` usando todos los núcleos, a prioridad normal esos procesos ahogaban el hilo de
+  la interfaz y Windows marcaba ReForge como «No responde». Ahora el sistema sigue dando tiempo a la UI y la
+  ventana se mantiene fluida; apenas cambia el tiempo total, porque los núcleos siguen libres cuando la UI no
+  los necesita.
+- **Al terminar**: el log vuelca como mucho 600 líneas por tick. Antes, una compilación que soltaba miles de
+  líneas las acumulaba y, al final, intentaba pintarlas todas de golpe en un solo `appendHtml` que bloqueaba la
+  ventana varios minutos. Ahora se pintan por trozos y la UI nunca se congela, aunque el buffer esté lleno.
 
 ## 1.44.4 — el SDK incompatible entra en la base de datos de problemas conocidos
 
