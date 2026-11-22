@@ -2,6 +2,18 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.46.0 — Base para el desbloqueo de FPS NATIVO (mid-asm hooks)
+
+- **Framework de parches nativos a nivel de codegen** (`reforge/nativepatch.py`): genera *mid-asm hooks* reales de
+  rexglue (`REX_MIDASM_BRANCH` + `REX_MIDASM_AT`, verificados en el SDK) para portar a nativo cosas como el
+  desbloqueo de FPS. A diferencia de Xenia, rexglue no hace «pokes» de memoria en runtime: el cambio se hace al
+  generar el código. Incluye **guarda de versión** (un parche del juego base NO se aplica si hay title update,
+  porque las direcciones se desplazan), es **opt-in, reversible** (`apply`/`remove`) y **experimental**.
+- **Catálogo**: la ficha de Asura's Wrath lleva el desbloqueo nativo portado de la dirección de boma
+  (`xenia-canary/game-patches`), marcado **solo para el juego base** y con el aviso de que **acelera** lo atado
+  al framerate (para fluidez sin acelerar: Movimiento Suave o un parche de *timestep* específico del juego).
+- Todavía **no se engancha solo** al pipeline: no toca ninguna recompilación hasta validarlo por juego.
+
 ## 1.45.1 — Cerrar el juego ya no lo reabre solo + candado de FPS por juego
 
 - **Arreglado: al cerrar un juego ya no se relanza solo.** Cerrar el juego nunca lo vuelve a abrir por su cuenta.

@@ -107,6 +107,8 @@ class GameOptions:
     # y es el driver de la gráfica quien interpola fotogramas para que SE VEA fluido a 60+. Cuando está activo,
     # ignora el desbloqueo de FPS (son incompatibles: uno acelera, el otro interpola).
     smooth_motion: bool = False
+    native_fps_unlock: bool = False  # EXPERIMENTAL: desbloqueo de FPS a nivel de codegen (mid-asm hook). Opt-in,
+    #                                  con guarda de versión; acelera lo atado al framerate. No se aplica solo.
     hide_cursor: bool = True       # esconder el puntero del ratón mientras se juega con mando
     guide_menu: bool = True        # menú Guía con el botón Xbox/PS del mando (o la tecla Inicio)
     button_style: str = "auto"     # iconos de botones: auto (según el mando conectado) / xbox / playstation

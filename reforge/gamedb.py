@@ -54,8 +54,18 @@ FRAME_LOCKED = {
         "note": "Asura's Wrath: los QTE de machaque de botones van atados al framerate; desbloquear los FPS "
                 "acelera cinemáticas y QTEs.",
         "source": "xenia-canary/game-patches (boma): parche «Unlock FPS»",
+        # Referencia Xenia (memoria guest, no se aplica en nativo):
         "patch": [{"type": "be32", "address": "0x824d7130", "value": "0x60000000"},
                   {"type": "be8", "address": "0x8299a70f", "value": "0x01"}],
+        # Desbloqueo NATIVO (mid-asm hook de rexglue). Portado de la dirección de boma: nopear la instrucción
+        # del tope = saltar de 0x824d7130 a la siguiente (0x824d7134). OJO: la dirección es del juego BASE; con
+        # title update NO coincide (version_ok lo rechaza). Acelera lo atado al framerate.
+        "native_unlock": {
+            "ops": [{"kind": "skip_to", "address": 0x824d7130, "target": 0x824d7134}],
+            "applies_to_version": "base",
+            "accelerates": True,
+            "source": "portado de xenia-canary/game-patches (boma): «Unlock FPS»",
+        },
     },
 }
 
@@ -163,6 +173,17 @@ def frame_lock(tid):
     if uf:
         return {**(seed or {}), **uf}
     return seed
+
+
+def native_unlock(tid):
+    """Definición de desbloqueo NATIVO de FPS conocida para el juego (mid-asm hooks), o None.
+
+    Es una referencia para aplicar con reforge.nativepatch; opt-in y con guarda de versión. No se aplica sola.
+    """
+    tid = (tid or "").upper()
+    seed = (FRAME_LOCKED.get(tid) or {}).get("native_unlock")
+    u = (_load_user().get(tid) or {}).get("native_unlock")
+    return u or seed
 
 
 def frame_advice(root):
