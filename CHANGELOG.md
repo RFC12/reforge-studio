@@ -2,6 +2,16 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.44.7 — Movimiento suave por driver (cinemáticas a velocidad correcta y fluidas)
+
+- **Nueva opción «Movimiento suave por driver (NVIDIA Smooth Motion / AMD Fluid Motion)»** (🎮 Opciones →
+  Gráficos). Resuelve el problema de las cinemáticas aceleradas al desbloquear los FPS: en los juegos de 30 FPS,
+  en vez de desbloquear (que acelera cinemáticas y físicas porque atan su lógica al fotograma), el juego corre a
+  su **velocidad real y estable** y es el **driver de la gráfica** quien interpola fotogramas para que *se vea*
+  fluido a 60+. Al activarla, ReForge fija vsync y un ritmo base estable (sin «sin límite» ni tearing variable) e
+  ignora el desbloqueo de FPS, y te guía a activar «Smooth Motion» (NVIDIA app, RTX 40/50) o «Fluid Motion
+  Frames» (AMD Adrenalin) para tu `.exe`. Velocidad correcta + imagen fluida, sin trucos que rompan el juego.
+
 ## 1.44.6 — ReForge ya no se queda «No responde» al compilar (durante y al terminar)
 
 Dos arreglos para que la ventana nunca se congele al recompilar:

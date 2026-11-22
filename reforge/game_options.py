@@ -102,6 +102,11 @@ class GameOptions:
     pc_enhanced: bool = False      # se aplicaron las mejoras para PC de la base de datos (FPS, correcciones)
     fps_unlocked: bool = False     # hay un parche de FPS desbloqueados activo (lo anota cheats.apply_cheats)
     fps_cap: float = 0.0           # tope del ritmo automático que fija el Taller si el juego no aguanta más (0 = sin tope)
+    # Movimiento suave por driver (NVIDIA Smooth Motion / AMD Fluid Motion Frames): el juego corre a su
+    # velocidad REAL (sin desbloquear FPS, para que cinemáticas y físicas no se aceleren) con un ritmo estable,
+    # y es el driver de la gráfica quien interpola fotogramas para que SE VEA fluido a 60+. Cuando está activo,
+    # ignora el desbloqueo de FPS (son incompatibles: uno acelera, el otro interpola).
+    smooth_motion: bool = False
     hide_cursor: bool = True       # esconder el puntero del ratón mientras se juega con mando
     guide_menu: bool = True        # menú Guía con el botón Xbox/PS del mando (o la tecla Inicio)
     button_style: str = "auto"     # iconos de botones: auto (según el mando conectado) / xbox / playstation
@@ -218,7 +223,16 @@ class GameOptions:
         }
         vals.update({k: v for k, v in self.keybinds.items() if k in DEFAULT_KEYBINDS})
         from .pc_enhance import frame_values, guest_video_mode
-        vals.update(frame_values(self.frame_mode(), self.fps_unlocked, cap=self.fps_cap))
+        # Movimiento suave por driver: el juego a su ritmo real (sin desbloquear) y estable, para que el driver
+        # (NVIDIA Smooth Motion / AMD Fluid Motion) interpole sin acelerar cinemáticas ni físicas.
+        sm = getattr(self, "smooth_motion", False)
+        fmode = self.frame_mode()
+        if sm and fmode == "unlimited":
+            fmode = "auto"      # «sin límite» no sirve para interpolar: se necesita un ritmo base estable
+        vals.update(frame_values(fmode, self.fps_unlocked and not sm, cap=self.fps_cap))
+        if sm:
+            vals["vsync"] = True
+            vals["d3d12_allow_variable_refresh_rate_and_tearing"] = False
         if getattr(self, "widescreen", "auto") != "off":
             modo = guest_video_mode()
             if modo:

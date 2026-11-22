@@ -136,6 +136,17 @@ class GameOptionsDialog(QDialog):
                            "juego tiene los FPS desbloqueados (🎯 Trucos → «✨ Recomendadas para PC»; muchos juegos del "
                            "Xbox 360 se limitan a 30 aunque el contador marque más). Si tu monitor tiene G-Sync o "
                            "FreeSync, actívalo en el panel de NVIDIA/AMD: elimina el resto de tirones.", "Hint", wrap=True))
+        self.smooth = QCheckBox("Movimiento suave por driver (NVIDIA Smooth Motion / AMD Fluid Motion)")
+        self.smooth.setChecked(bool(getattr(self.o, "smooth_motion", False)))
+        f.addRow(self.smooth)
+        f.addRow("", label("Para juegos de 30 FPS y la mejor experiencia: en vez de desbloquear los FPS (que "
+                           "acelera cinemáticas y físicas), deja el juego a su velocidad REAL y estable y que el "
+                           "driver de tu gráfica interpole fotogramas para que SE VEA fluido a 60+. Actívalo aquí "
+                           "y luego en la app de NVIDIA → Gráficos → tu .exe → «Smooth Motion» (RTX 40/50), o en "
+                           "AMD Adrenalin → «Fluid Motion Frames». Importante: es la ALTERNATIVA al truco de «FPS "
+                           "desbloqueados» —no los combines—, porque ese truco acelera el juego a nivel de código "
+                           "y el movimiento suave no podría frenarlo. Déjalo a 30 reales + movimiento suave: "
+                           "velocidad correcta y imagen fluida.", "Hint", wrap=True))
         self.scale = QComboBox()
         self.scale.addItem(f"Automática · según tu tarjeta (ahora {int(self.o.resolution_scale or 1)}×)", 0)
         for n in (1, 2, 3):
@@ -424,6 +435,7 @@ class GameOptionsDialog(QDialog):
             o.fps_cap = 0.0        # elegido a mano: se quita el tope automático
         o.fps_mode = self.fps.currentData()
         o.vsync = o.fps_mode != "unlimited"
+        o.smooth_motion = self.smooth.isChecked()
         if int(self.scale.currentData()) == 0:
             o.resolution_auto = True
         else:
