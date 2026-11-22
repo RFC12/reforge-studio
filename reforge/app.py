@@ -203,7 +203,14 @@ class MainWindow(QMainWindow):
         if self.args.get("install_patch"):
             QTimer.singleShot(300, lambda: self.install_patch(self.args["install_patch"]))
         self._handle_project_args(self.args, 400)
+        # Aviso de actualización al abrir…
         QTimer.singleShot(3000, self.check_updates_quietly)
+        # …y mientras ReForge sigue abierto: re-chequea cada 3 h (update.check() limita la consulta real a
+        # GitHub a una vez al día, así que esto no satura; sirve para sesiones largas y para que el aviso
+        # aparezca aunque se dejara abierto antes de publicarse la versión nueva).
+        self._update_timer = QTimer(self)
+        self._update_timer.timeout.connect(self.check_updates_quietly)
+        self._update_timer.start(3 * 60 * 60 * 1000)
 
     # ---------------------------------------------------------------- actualizaciones
     def check_updates_quietly(self):
@@ -224,8 +231,14 @@ class MainWindow(QMainWindow):
 
     def offer_update(self, info):
         """Ofrece instalar la versión nueva con la ventana pulida (logo, versiones y novedades)."""
+        if getattr(self, "_update_open", False):
+            return      # ya hay un aviso de actualización abierto: no apilar otro
         from . import update_ui
-        update_ui.offer(self, info)
+        self._update_open = True
+        try:
+            update_ui.offer(self, info)
+        finally:
+            self._update_open = False
 
     # ---------------------------------------------------------------- páginas
     def add_page(self, key, nav_text, title, widget, owner="", tail=False):
