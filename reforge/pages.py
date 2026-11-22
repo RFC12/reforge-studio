@@ -13,8 +13,20 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, 
 from .core import (Project, cmake_build_cmd, cmake_codegen_cmd, cmake_configure_cmd, copy_tree,
                    detect_tools, find_outputs, human_size, open_path, rexglue_init_cmd, sanitize_name,
                    NO_WINDOW)
-from . import game
+from . import autorecompile, game, sdkcompat   # noqa: F401 — import estático para que PyInstaller los empaquete
 from .game_options import GameOptions, ensure_paths_hook, write_runtime_config
+
+
+def _validate_sdk(cfg, root, build, env, ctx):
+    """Valida el SDK contra el proyecto. Nunca tumba la compilación por un fallo propio: si la validación no
+    está disponible o revienta por un motivo inesperado, se avisa y se sigue; solo detiene el build cuando el
+    SDK es de verdad incompatible y no hay alternativa (sdkcompat lanza ese error a propósito, con mensaje claro)."""
+    try:
+        sdkcompat.ensure_compatible(cfg, root, build, env, ctx)
+    except RuntimeError:
+        raise            # incompatibilidad real y sin recambio: mensaje claro, debe detenerse
+    except Exception as e:      # noqa: BLE001 — cualquier otro fallo del salvaguarda no debe romper el build
+        ctx.log(f"(validación de SDK omitida por un fallo interno: {e})", "dim")
 
 
 def prepare_project(root, ctx):
@@ -873,8 +885,7 @@ class WorkshopPage(QWidget):
                 steps.append(Step(key, "Verificar default.xex", func=verify_and_extras))
             elif key == "configure":
                 steps.append(Step("sdkcheck", "Validar SDK compatible",
-                                  func=lambda ctx: __import__("reforge.sdkcompat", fromlist=["ensure_compatible"])
-                                  .ensure_compatible(cfg, root, build, env, ctx)))
+                                  func=lambda ctx: _validate_sdk(cfg, root, build, env, ctx)))
                 if self.clean.isChecked():
                     steps.append(Step("clean", "Limpiar build", func=do_clean))
                 else:
@@ -892,8 +903,7 @@ class WorkshopPage(QWidget):
                 steps.append(Step("hooks", "Preparar el proyecto (carpeta del juego, perfil y logros)",
                                   func=lambda ctx: prepare_project(root, ctx)))
                 steps.append(Step("sdkcheck2", "Validar SDK compatible",
-                                  func=lambda ctx: __import__("reforge.sdkcompat", fromlist=["ensure_compatible"])
-                                  .ensure_compatible(cfg, root, build, env, ctx)))
+                                  func=lambda ctx: _validate_sdk(cfg, root, build, env, ctx)))
                 steps.append(Step("reconfigure", "Actualizar CMake con las fuentes generadas",
                                   cmd=lambda: cmake_configure_cmd(cfg, root, build), cwd=root, env=env))
                 steps.append(Step(key, "Compilar ejecutable",

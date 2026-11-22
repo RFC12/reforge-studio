@@ -2,6 +2,19 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.44.2 — arreglo: la validación de SDK del Taller ya no crashea
+
+- **Corregido el crash «No module named 'reforge.sdkcompat'»** al recompilar: el paso «Validar SDK compatible»
+  importaba el módulo de forma dinámica (por string) y PyInstaller no lo incluía en la app empaquetada, así
+  que el salvaguarda tumbaba justo la compilación que debía proteger. Ahora se importa de forma estática (y se
+  añade como hidden-import), y el paso es **a prueba de fallos**: si por lo que sea la validación no está
+  disponible, avisa y sigue en vez de detener el build; solo se detiene cuando el SDK es de verdad incompatible
+  y no hay recambio.
+- **El Taller elige el mejor SDK por sí mismo**: cuando un proyecto necesita un SDK distinto del seleccionado,
+  cambia automáticamente al **mejor SDK compatible instalado** (versión más alta, con FSR/CAS si está), sin
+  pasar por el Entorno. Así, aunque no entres a «Entorno», el Taller se encarga de elegir lo necesario para
+  recompilar cualquier juego.
+
 ## 1.44.1 — recompilado resiliente, SDK a prueba de errores y arreglos gráficos
 
 - **Aviso de actualización al abrir y mientras ReForge está abierto**: además del chequeo al arrancar, ReForge

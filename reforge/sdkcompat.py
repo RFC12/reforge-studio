@@ -19,6 +19,12 @@ import shutil
 _REX = re.compile(r"\b(rex(?:glue)?::[A-Za-z0-9_]+)")
 
 
+def _version_key(ver):
+    """Clave numérica para ordenar versiones de SDK (p. ej. «0.10.0.24-dev.gbd833a2-fsr» → (0,10,0,24))."""
+    nums = re.findall(r"\d+", str(ver).split("-")[0])
+    return tuple(int(n) for n in nums[:4]) + (0,) * (4 - len(nums[:4]))
+
+
 def _read(path):
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -84,31 +90,34 @@ def ensure_compatible(cfg, root, build, env, ctx):
         return
     pedido = ", ".join(sorted(needed))
     from .toolchain import installed_sdks
-    for ver, pfx, exe in installed_sdks():
-        if pfx == prefix:
-            continue
-        if sdk_covers(pfx, needed):
-            _backup_config(cfg)
-            cfg.rexglue = exe
-            cfg.rexglue_sdk = pfx
-            try:
-                cfg.save()
-            except Exception:      # noqa: BLE001
-                pass
-            # recalcular el entorno in situ para que el configure use el SDK nuevo
-            env.clear()
-            env.update(cfg.environment())
-            # la caché de CMake tiene cacheado el SDK viejo: se borra para forzar un configure limpio
-            cache = os.path.join(build, "CMakeCache.txt")
-            try:
-                if os.path.isfile(cache):
-                    os.remove(cache)
-            except OSError:
-                pass
-            ctx.log(f"⚠ El SDK seleccionado no era compatible con este proyecto (necesita {pedido}, que ese SDK "
-                    f"ya no provee). Cambiado automáticamente al SDK {ver}, que sí lo trae, y limpiada la caché "
-                    "de CMake para que la recompilación no se rompa. La selección anterior quedó respaldada.", "warn")
-            return
+    # Entre los SDK instalados que SÍ sirven para este proyecto, elegir el mejor: versión más alta y, a igualdad,
+    # la variante con FSR/CAS (mejores componentes). Así el Taller no solo evita el error: escoge lo óptimo.
+    compatibles = [(ver, pfx, exe) for ver, pfx, exe in installed_sdks()
+                   if pfx != prefix and sdk_covers(pfx, needed)]
+    compatibles.sort(key=lambda c: (_version_key(c[0]), c[0].endswith("-fsr")), reverse=True)
+    if compatibles:
+        ver, pfx, exe = compatibles[0]
+        _backup_config(cfg)
+        cfg.rexglue = exe
+        cfg.rexglue_sdk = pfx
+        try:
+            cfg.save()
+        except Exception:      # noqa: BLE001
+            pass
+        # recalcular el entorno in situ para que el configure use el SDK nuevo
+        env.clear()
+        env.update(cfg.environment())
+        # la caché de CMake tiene cacheado el SDK viejo: se borra para forzar un configure limpio
+        cache = os.path.join(build, "CMakeCache.txt")
+        try:
+            if os.path.isfile(cache):
+                os.remove(cache)
+        except OSError:
+            pass
+        ctx.log(f"⚠ El SDK seleccionado no era compatible con este proyecto (necesita {pedido}, que ese SDK ya "
+                f"no provee). Cambiado automáticamente al mejor SDK compatible instalado ({ver}) y limpiada la "
+                "caché de CMake para que la recompilación no se rompa. La selección anterior quedó respaldada.", "warn")
+        return
     raise RuntimeError(
         f"El SDK seleccionado no es compatible con este proyecto: se generó usando {pedido}, que este SDK ya "
         "no provee (p. ej. al pasar de rexglue 0.10 a 0.11 cambió el nombre del target). Soluciones: en "
