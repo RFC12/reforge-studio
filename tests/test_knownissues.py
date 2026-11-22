@@ -86,10 +86,24 @@ iss_sdk = knownissues.diagnose(LOG_SDK, {})
 check(iss_sdk is not None and iss_sdk.id == "sdk_incompatible_con_proyecto", "identifica el error de CMake del SDK")
 check(iss_sdk.remedio is not None and iss_sdk.recompila, "trae remedio automático (cambiar de SDK) y pide recompilar")
 
+print("El cierre UTF-8 en el login de Live se reconoce y se arregla con el modo local (Xenia)")
+LOG_UTF8 = ("[warning] [krnl] [t1] __imp__XNetLogonGetTitleID STUB\n"
+            "[critical] [core] [t2] [FATAL] Dispatch thread: deferred completion threw 'Invalid UTF-8'\n")
+iss_utf = knownissues.diagnose(LOG_UTF8, {})
+check(iss_utf is not None and iss_utf.id == "utf8_en_login_de_live", "identifica el cierre por UTF-8 en Live")
+check(iss_utf.remedio is not None and not iss_utf.recompila, "trae remedio automático y NO pide recompilar")
+root_u = proyecto_con_rango()
+from reforge.game_options import GameOptions   # noqa: E402
+GameOptions().save(root_u) if False else None
+msgs_u, rec_u = knownissues.auto_heal(root_u, "", LOG_UTF8, {})
+check(rec_u is False, "no recompila por esto")
+check(GameOptions.load(root_u).live_offline is True, "deja el perfil en Live local sin conexión")
+check(any("Xenia" in m for m in msgs_u), "explica que es el modo local tipo Xenia")
+
 print("Otros problemas conocidos están en la tabla")
 ids = {i.id for i in knownissues.ISSUES}
 for esperado in ("heap_agotado", "cache_shaders_danada", "mando_reconectado", "llamada_fuera_rango",
-                 "sdk_incompatible_con_proyecto"):
+                 "sdk_incompatible_con_proyecto", "utf8_en_login_de_live"):
     check(esperado in ids, f"está «{esperado}»")
 check(knownissues.diagnose("todo bien, nada que ver aquí", {}) is None, "un log limpio no inventa un problema")
 

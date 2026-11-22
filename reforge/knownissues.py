@@ -92,6 +92,28 @@ def _fix_sdk_incompat(root, exe, log_text, info):
     return False, ""
 
 
+def _fix_live_offline(root, exe, log_text, info):
+    """Cierre en una tarea de red que decodifica texto no válido (UTF-8) durante el inicio de sesión de Live.
+    Se pone el perfil en modo LOCAL sin conexión (como hace Xenia por defecto): el juego ya no intenta el
+    logon online que revienta. Surte efecto reescribiendo reforge_ext.ini; no hace falta recompilar."""
+    from .game_options import GameOptions
+    o = GameOptions.load(root)
+    if getattr(o, "live_offline", False):
+        return False, ""        # ya está en local/sin conexión
+    o.live_offline = True
+    o.save(root)
+    try:
+        from . import game
+        from .profile import write_ext_ini
+        write_ext_ini(exe or game.game_exe(root, os.path.basename(root.rstrip("/\\"))), o)
+    except Exception:      # noqa: BLE001 — basta con guardar la opción; el próximo arranque reescribe el .ini
+        pass
+    return True, ("Modo Live local (como Xenia): el juego queda firmado en LOCAL y sin conexión, así no entra "
+                  "en el inicio de sesión de Xbox Live que provocaba el cierre (una tarea de red devolvía texto "
+                  "con bytes no válidos). Tu gamertag y tus logros siguen funcionando. No hace falta recompilar: "
+                  "vuelve a abrir el juego.")
+
+
 def _fix_shaders(root, exe, log_text, info):
     from . import shadercache
     from .game_options import GameOptions
@@ -114,6 +136,24 @@ def _tiene(*trozos):
 
 
 ISSUES = [
+    Issue(
+        id="utf8_en_login_de_live",
+        titulo="Cierre en el inicio de sesión de Xbox Live (texto no válido)",
+        sintomas="Tras jugar un rato (a menudo en el menú o al conectar con Live) el juego se cierra con "
+                 "«[FATAL] Dispatch thread: deferred completion threw 'Invalid UTF-8'». En el log aparece justo "
+                 "después de llamadas de red como XNetLogonGetTitleID.",
+        causa="Con el Xbox Live simulado, ReForge decía que había conexión y sesión en Live, así que el juego "
+              "entraba en el inicio de sesión online. Una tarea de red asíncrona devolvía una cadena con bytes "
+              "que no son UTF-8 válido (de un stub de red), y al decodificarla el runtime lanza una excepción "
+              "que mata el hilo de despacho. Xenia evita esto dejándote firmado en LOCAL y sin conexión por "
+              "defecto, para que el juego no haga ese logon.",
+        match=lambda log, info: ("Invalid UTF-8" in (log or "")
+                                 and ("deferred completion" in (log or "") or "Dispatch thread" in (log or ""))),
+        remedio=_fix_live_offline,
+        consejo="Actívalo tú mismo en 🎮 Opciones / Perfil: «Xbox Live → local sin conexión». El perfil y los "
+                "logros siguen funcionando; solo se evita el inicio de sesión online que falla.",
+        recompila=False,
+    ),
     Issue(
         id="sdk_incompatible_con_proyecto",
         titulo="El SDK seleccionado no encaja con el proyecto generado",

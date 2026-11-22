@@ -2,6 +2,17 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.46.1 — Arreglo: cierre «Invalid UTF-8» en el inicio de sesión de Live (modo local tipo Xenia)
+
+- **Nuevo problema conocido con arreglo automático** (`knownissues`): algunos juegos (p. ej. Asura's Wrath) se
+  cerraban con «[FATAL] Dispatch thread: deferred completion threw 'Invalid UTF-8'» tras entrar en el inicio de
+  sesión de Xbox Live. Causa: con el Live simulado ReForge decía que había conexión y sesión online, el juego
+  intentaba el logon, y una tarea de red asíncrona devolvía texto con bytes no válidos que el runtime no podía
+  decodificar. **Como hace Xenia por defecto**, ahora ReForge deja el perfil **firmado en LOCAL y sin conexión**
+  cuando detecta este cierre: el juego no entra en el logon online que falla, y el gamertag y los logros siguen
+  funcionando. Sin recompilar (se reescribe `reforge_ext.ini`); solo hay que volver a abrir el juego. También se
+  puede activar a mano con «Live → local sin conexión».
+
 ## 1.46.0 — Base para el desbloqueo de FPS NATIVO (mid-asm hooks)
 
 - **Framework de parches nativos a nivel de codegen** (`reforge/nativepatch.py`): genera *mid-asm hooks* reales de
