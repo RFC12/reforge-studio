@@ -1412,10 +1412,24 @@ def write_launcher(exe, root, title):
                 "echo.\r\n")
 
     direct = os.path.join(folder, f"Jugar {pretty} (directo).bat")
+    args = (f"\"--game_data_root={os.path.join(root, 'assets')}\" --gpu_plugin=xenos{_driver_flag(root)} %*")
+    launch = f"\"%~dp0{os.path.basename(exe)}\""
     with open(direct, "w", encoding="utf-8") as f:
+        # Reintento automático: algunos juegos tienen un cierre INTERMITENTE al arrancar (una carrera en una
+        # tarea asíncrona del runtime de rexglue que a veces lanza y el despachador lo vuelve fatal). Como solo
+        # pasa en parte de los arranques, reintentar un par de veces hace que el juego abra casi siempre. Solo
+        # reintenta si el juego se cerró con un código distinto de 0 (un cierre normal del jugador es 0).
         f.write(_head() + "echo    Iniciando el juego…\r\n"
-                f"start \"\" \"%~dp0{os.path.basename(exe)}\" \"--game_data_root={os.path.join(root, 'assets')}\" "
-                f"--gpu_plugin=xenos{_driver_flag(root)} %*\r\n")
+                "set \"RF_TRY=0\"\r\n"
+                ":rf_go\r\n"
+                "set /a RF_TRY+=1\r\n"
+                f"start \"\" /wait {launch} {args}\r\n"
+                "set \"RF_EC=%ERRORLEVEL%\"\r\n"
+                "if not \"%RF_EC%\"==\"0\" if %RF_TRY% LSS 3 (\r\n"
+                "  echo    El juego se cerro de forma inesperada; reintentando %RF_TRY%/3...\r\n"
+                "  timeout /t 1 >nul\r\n"
+                "  goto rf_go\r\n"
+                ")\r\n")
     rf = reforge_executable()
     path = os.path.join(folder, f"Jugar {pretty}.bat")
     if not rf:

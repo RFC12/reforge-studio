@@ -2,6 +2,19 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.46.2 — Reintento automático ante el cierre INTERMITENTE «Invalid UTF-8»
+
+- **Corrección honesta:** el cierre «deferred completion threw 'Invalid UTF-8'» **no** era el logon de Live (el
+  arreglo de 1.46.1 no lo evitaba). Diagnóstico real: es una **carrera** en una completion asíncrona de
+  XOVERLAPPED del runtime de rexglue (UI/enumeración de contenido) que decodifica una cadena con un conversor
+  UTF-8 que lanza, y el despachador la vuelve fatal. Es **intermitente** (~1 de cada 2 arranques) y vive en el
+  runtime **precompilado** del SDK, así que no tiene arreglo por proyecto; recompilar no ayuda.
+- **Mitigación universal:** el lanzador (la ventana de ReForge y el `.bat` directo) ahora **reintenta solo el
+  arranque hasta 3 veces** cuando detecta este cierre. Como falla solo en parte de los arranques, el juego abre
+  casi siempre sin que hagas nada.
+- La ficha de la base de problemas se corrigió para describirlo con honestidad (bug del SDK, intermitente, sin
+  recompilar) y recomendar reportarlo al autor de rexglue.
+
 ## 1.46.1 — Arreglo: cierre «Invalid UTF-8» en el inicio de sesión de Live (modo local tipo Xenia)
 
 - **Nuevo problema conocido con arreglo automático** (`knownissues`): algunos juegos (p. ej. Asura's Wrath) se
