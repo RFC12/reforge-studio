@@ -43,6 +43,8 @@ class AppConfig:
     extra_cmake_args: str = ""
     extra_env: str = ""
     vcvars: str = ""
+    ninja: str = ""              # ruta del Ninja más nuevo (se pasa a CMake como CMAKE_MAKE_PROGRAM)
+    latest_tools: bool = True    # 1.47: al compilar, subir a las versiones más nuevas instaladas de VS/CMake/Ninja/Clang
     xenonrecomp: str = ""
     xenonanalyse: str = ""
     ppc_context: str = ""
@@ -220,6 +222,10 @@ def cmake_configure_cmd(cfg, root, build):
         cmd.append(f"-DCMAKE_C_COMPILER={cfg.c_compiler.strip()}")
     if cfg.cxx_compiler.strip():
         cmd.append(f"-DCMAKE_CXX_COMPILER={cfg.cxx_compiler.strip()}")
+    ninja = (getattr(cfg, "ninja", "") or "").strip()
+    if ninja and cfg.generator.strip().lower() == "ninja":
+        # versión explícita: no depende del PATH ni de la que traiga VS; queda en la caché de CMake
+        cmd.append(f"-DCMAKE_MAKE_PROGRAM={ninja}")
     extra = split_args(cfg.extra_cmake_args)
     if not any(a.startswith("-DCMAKE_CXX_FLAGS") for a in extra):
         # compilación para el procesador de este PC (opción del juego en ⚡ Optimizar). Se pasa siempre para

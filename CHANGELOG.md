@@ -2,6 +2,24 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.47.0 — Cada recompilación usa las versiones más nuevas de VS, CMake, Ninja, Clang y el SDK
+
+- **Selección automática de la última versión instalada** (`toolchain.upgrade_config`) antes de cada compilación y
+  de cada ronda de reparación automática: Visual Studio/Build Tools, CMake, Ninja y Clang. Solo **sube** de versión:
+  si la configurada ya es la más nueva, o no se puede ejecutar, se queda como está. Los cambios se explican en el log
+  («↑ CMake 4.3.1 (la versión más nueva instalada)»).
+- **Visual Studio:** se enumeran *todas* las instalaciones con C++ x64 con su versión (vswhere en JSON) y se usa la
+  de mayor versión; antes se usaba la que vswhere marcaba como «reciente», que puede ser una 17 tras instalar una 18.
+- **CMake, Ninja y Clang:** se elige la versión más alta que responde entre todas las copias instaladas (PATH,
+  WinGet, Visual Studio, LLVM), no la primera que aparezca.
+- **Ninja queda fijado en la caché de CMake** (`-DCMAKE_MAKE_PROGRAM`): ya no depende del PATH ni de la copia que
+  traiga Visual Studio, y si aparece una versión más nueva se reconfigura solo (no se mezclan versiones).
+- **SDK de rexglue:** `installed_sdks()` encuentra los SDK de la carpeta de instalación de ReForge (antes solo
+  miraba `%LOCALAPPDATA%`), los ordena por versión **numérica** (0.11 > 0.10, no alfabética) y prefiere la variante
+  FSR a igual versión. Un proyecto **nuevo** se crea con el SDK más nuevo; en un juego ya compilado **no se cambia
+  solo** (obligaría a recompilar todo y una versión *dev* nueva puede no compilarlo), pero se avisa de que existe.
+- La comprobación se repite en cada reparación de código, así que un arreglo no se recompila con herramientas viejas.
+
 ## 1.46.3 — Recompilación más fiable: el autofix siempre regenera y no oculta saltos rotos
 
 - **El código generado ya no se reutiliza después de corregir la tabla de funciones.** Cuando el autofix cambia

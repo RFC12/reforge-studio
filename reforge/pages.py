@@ -756,8 +756,39 @@ class WorkshopPage(QWidget):
                                 "Entorno → instala LLVM/Clang y pulsa «Aplicar configuración».")
         return problems
 
+    def _refresh_tools(self, root):
+        """Elige las versiones MÁS NUEVAS instaladas de VS, CMake, Ninja y Clang antes de compilar o reparar.
+
+        Solo sube de versión: si la configurada ya es la más nueva (o no se puede ejecutar) no se toca. El SDK
+        de rexglue se cambia solo en proyectos nuevos: en una build que funciona obligaría a recompilar todo y
+        una versión *dev* nueva puede no compilar el juego.
+        """
+        cfg = self.win.cfg
+        if not getattr(cfg, "latest_tools", True):
+            return
+        from . import toolchain
+        build = os.path.join(root, "build")
+        try:
+            changes, info = toolchain.upgrade_config(cfg, allow_sdk=not os.path.isdir(build))
+        except Exception as e:      # noqa: BLE001
+            self.log.write(f"No se pudieron comprobar las últimas versiones de las herramientas: {e}", "dim")
+            return
+        line = toolchain.describe(info)
+        if line:
+            self.log.write("🧰 " + line, "dim")
+        for c in changes:
+            self.log.write("↑ " + c, "ok")
+        if changes:
+            cfg.save()
+        newer_sdk = toolchain.sdk_update_available(cfg, info)
+        if newer_sdk and os.path.isdir(build):
+            self.log.write(f"Hay un SDK de rexglue más nuevo ({newer_sdk}; este proyecto usa "
+                           f"{toolchain.sdk_version(cfg)}). Se usará al crear proyectos nuevos: cambiarlo aquí "
+                           "obliga a recompilar el juego entero.", "dim")
+
     def _build_steps(self, name, root, mode, src, keys):
         cfg = self.win.cfg
+        self._refresh_tools(root)
         env = cfg.environment()
         build = os.path.join(root, "build")
         assets = os.path.join(root, "assets")
@@ -1171,6 +1202,7 @@ class WorkshopPage(QWidget):
         if address is not None:
             self._repair_seen.add(address)
         root, build = p.root, os.path.join(p.root, "build")
+        self._refresh_tools(root)       # cada arreglo de código se compila con las últimas herramientas
         env = cfg.environment()
 
         def do_declare(ctx):

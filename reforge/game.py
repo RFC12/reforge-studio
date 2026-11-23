@@ -1062,6 +1062,10 @@ def cache_mismatch(cfg, build):
     gen = cache_value(build, "CMAKE_GENERATOR")
     if cfg.generator and gen and gen != cfg.generator:
         return f"el build usaba el generador «{gen}» y ahora «{cfg.generator}»"
+    ninja = (getattr(cfg, "ninja", "") or "").strip()
+    cur_ninja = cache_value(build, "CMAKE_MAKE_PROGRAM")
+    if ninja and cur_ninja and norm(cur_ninja) != norm(ninja):
+        return "hay una versión más nueva de Ninja"
     return sdk_mismatch(cfg, build)
 
 

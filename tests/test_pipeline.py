@@ -16,7 +16,8 @@ def wait_until(predicate):
     assert predicate(), 'Timeout'
 class PipelineTests(unittest.TestCase):
     def test_refresh_and_build_only(self):
-        page = SimpleNamespace(win=SimpleNamespace(cfg=AppConfig()), clean=SimpleNamespace(isChecked=lambda: False))
+        page = SimpleNamespace(win=SimpleNamespace(cfg=AppConfig()), clean=SimpleNamespace(isChecked=lambda: False),
+                               _refresh_tools=lambda root: None)   # la herramientas se prueban en test_latest_tools
         for selected in [['configure', 'codegen', 'build'], ['build']]:
             steps = WorkshopPage._build_steps(page, 'demo', '/tmp/demo', 'none', '', selected)
             self.assertEqual([s.key for s in steps][-2:], ['reconfigure', 'build'])

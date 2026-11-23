@@ -48,24 +48,59 @@ def program_files():
     return out or [r"C:\Program Files"]
 
 
-def visual_studio():
-    """Ruta de instalación de Visual Studio / Build Tools con herramientas de C++ (o '')."""
+def _ver_key(text):
+    """Clave numérica para comparar versiones de verdad: 0.11 > 0.10 y 1.10 > 1.9 (no alfabético)."""
+    return tuple(int(x) for x in re.findall(r"\d+", text or "")[:4])
+
+
+def vs_installations():
+    """Todas las instalaciones de Visual Studio / Build Tools con C++ x64, la MÁS NUEVA primero.
+
+    `vswhere -latest` devuelve la última *instalada*, no necesariamente la de mayor versión (puede quedarse
+    una 17 al actualizar a una 18). Aquí se piden todas con versión y se ordenan numéricamente.
+    """
     if not WIN:
-        return ""
+        return []
     vswhere = os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
                            "Microsoft Visual Studio", "Installer", "vswhere.exe")
     if not os.path.isfile(vswhere):
-        return ""
-    for extra in (["-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"], []):
-        try:
-            r = subprocess.run([vswhere, "-latest", "-products", "*", *extra, "-property", "installationPath"],
-                               capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL, timeout=20, creationflags=NO_WINDOW)
-            p = r.stdout.strip().splitlines()
-            if p and os.path.isdir(p[0]):
-                return p[0]
-        except Exception:
-            pass
-    return ""
+        return []
+    out = []
+    try:
+        r = subprocess.run([vswhere, "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                            "-format", "json", "-utf8"],
+                           capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL, timeout=30,
+                           creationflags=NO_WINDOW)
+        for d in json.loads((r.stdout or "").lstrip("\ufeff") or "[]"):
+            root = (d.get("installationPath") or "").strip()
+            vcvars = os.path.join(root, "VC", "Auxiliary", "Build", "vcvars64.bat")
+            if root and os.path.isfile(vcvars):
+                out.append({"path": root, "vcvars": vcvars,
+                            "version": (d.get("installationVersion") or "").split("+")[0],
+                            "name": d.get("displayName") or "Visual Studio"})
+    except Exception:
+        out = []
+    if not out:      # vswhere antiguo o JSON no disponible: al menos la que él considera reciente
+        for extra in (["-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"], []):
+            try:
+                r = subprocess.run([vswhere, "-latest", "-products", "*", *extra, "-property", "installationPath"],
+                                   capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL,
+                                   timeout=20, creationflags=NO_WINDOW)
+                p = (r.stdout or "").strip().splitlines()
+                if p and os.path.isdir(p[0]):
+                    vcvars = os.path.join(p[0], "VC", "Auxiliary", "Build", "vcvars64.bat")
+                    out.append({"path": p[0], "vcvars": vcvars, "version": "", "name": "Visual Studio"})
+                    break
+            except Exception:
+                pass
+    out.sort(key=lambda x: _ver_key(x["version"]), reverse=True)
+    return out
+
+
+def visual_studio():
+    """Ruta de la instalación MÁS NUEVA de Visual Studio / Build Tools con herramientas de C++ (o '')."""
+    inst = vs_installations()
+    return inst[0]["path"] if inst else ""
 
 
 def _first(paths):
@@ -96,6 +131,21 @@ def find_cmake(vs, configured=""):
     return best, ".".join(map(str, best_v))
 
 
+def newest_versioned(paths, args=("--version",)):
+    """De varias rutas de la misma herramienta, la de versión MÁS ALTA que responde. (ruta, versión, línea)."""
+    best = ("", (), "")
+    seen = set()
+    for p in paths:
+        if not p or p in seen or not os.path.isfile(p):
+            continue
+        seen.add(p)
+        ok, line, _ = run_version(p, args)
+        v = _num(line)
+        if ok and v and v > best[1]:
+            best = (p, v, line)
+    return best
+
+
 def find_ninja(vs):
     cands = [shutil.which("ninja")]
     if WIN:
@@ -105,11 +155,8 @@ def find_ninja(vs):
         if vs:
             cands.append(os.path.join(vs, "Common7", "IDE", "CommonExtensions", "Microsoft", "CMake", "Ninja",
                                       "ninja.exe"))
-    p = _first(cands)
-    if not p:
-        return "", ""
-    ok, line, _ = run_version(p)
-    return p, line if ok else ""
+    p, _v, line = newest_versioned(cands)
+    return (p, line) if p else ("", "")
 
 
 def find_clang(vs):
@@ -282,21 +329,177 @@ def _list_api(tag):
     return out
 
 
+def _sdk_key(version):
+    """Orden real de versiones de SDK (0.11.0.13 > 0.10.0.24) y, a igual versión, la variante FSR primero."""
+    return (_ver_key(version), 1 if "fsr" in (version or "").lower() else 0)
+
+
+def sdk_roots():
+    """Carpetas donde puede haber SDK de rexglue: instalación, usuario y rutas típicas de Program Files."""
+    roots = [tools_root(), _user_tools_root()]
+    if WIN:
+        la = os.environ.get("LOCALAPPDATA", "")
+        if la:
+            roots.append(os.path.join(la, "Programs", "ReForge Studio", "tools", "rexglue-sdk"))
+        for pf in program_files():
+            roots.append(os.path.join(pf, "ReForge Studio", "tools", "rexglue-sdk"))
+            roots.append(os.path.join(pf, "rexglue-sdk"))
+            roots.append(os.path.join(pf, "ReForge", "rexglue-sdk"))
+    out = []
+    for r in roots:
+        r = os.path.normpath(r)
+        if r and r not in out and os.path.isdir(r):
+            out.append(r)
+    return out
+
+
 def installed_sdks():
-    """[(versión, prefijo, exe)] de los SDK instalados (carpeta del programa y del usuario)."""
+    """[(versión, prefijo, exe)] de los SDK instalados, el MÁS NUEVO primero."""
     out, seen = [], set()
-    for root in (tools_root(), _user_tools_root()):
-        if not os.path.isdir(root) or root in seen:
+    for root in sdk_roots():
+        try:
+            versions = [v for v in os.listdir(root) if not v.endswith(".tmp")]
+        except OSError:
             continue
-        seen.add(root)
-        for ver in sorted(os.listdir(root), reverse=True):
+        for ver in sorted(versions, key=_sdk_key, reverse=True):
             d = os.path.join(root, ver)
-            if ver.endswith(".tmp"):
+            if not os.path.isdir(d):
                 continue
             exe = find_exe(d)
-            if exe:
+            if exe and exe not in seen:
+                seen.add(exe)
                 out.append((ver, os.path.dirname(os.path.dirname(exe)), exe))
+    out.sort(key=lambda t: _sdk_key(t[0]), reverse=True)
     return out
+
+
+def _version_of(path):
+    """Versión que reporta un ejecutable ((), si no se puede ejecutar)."""
+    if not path:
+        return ()
+    ok, line, _ = run_version(path)
+    return _num(line) if ok else ()
+
+
+def _newer(new, cur):
+    """¿`new` es una versión más nueva que `cur` (o `cur` no existe/no se puede ejecutar)?"""
+    if not new:
+        return False
+    if not cur or not os.path.isfile(cur):
+        return True
+    nv, cv = _version_of(new), _version_of(cur)
+    return bool(nv) and (not cv or nv > cv)
+
+
+def _vs_install_of(vcvars):
+    """Instalación de Visual Studio a la que pertenece un vcvars64.bat (o {})."""
+    p = os.path.normcase(os.path.normpath(vcvars or ""))
+    if not p:
+        return {}
+    for inst in vs_installations():
+        if p.startswith(os.path.normcase(os.path.normpath(inst["path"])) + os.sep):
+            return inst
+    return {}
+
+
+def latest():
+    """Las versiones MÁS NUEVAS instaladas de cada herramienta de compilación (y el SDK más nuevo)."""
+    inst = vs_installations()
+    vs = inst[0] if inst else {}
+    vs_path = vs.get("path", "")
+    cmake, cmake_v = find_cmake(vs_path)
+    ninja, ninja_v = find_ninja(vs_path)
+    cc, cxx, clang_v, clang_origin = find_clang(vs_path)
+    sdks = installed_sdks()
+    sdk_ver, sdk_prefix, sdk_exe = sdks[0] if sdks else ("", "", "")
+    return {
+        "vs": vs,
+        "vcvars": vs.get("vcvars", ""),
+        "cmake": {"path": cmake, "version": cmake_v},
+        "ninja": {"path": ninja, "version": ninja_v},
+        "clang": {"cc": cc, "cxx": cxx, "version": clang_v, "origin": clang_origin},
+        "sdk": {"version": sdk_ver, "prefix": sdk_prefix, "exe": sdk_exe},
+    }
+
+
+def describe(info=None):
+    """Línea legible de las versiones elegidas: «CMake 4.3.1 · Ninja 1.13.2 · Clang 23.1.3 · …»."""
+    i = info if info is not None else latest()
+    parts = []
+    if i.get("cmake", {}).get("path"):
+        parts.append("CMake " + (i["cmake"].get("version") or "?"))
+    if i.get("ninja", {}).get("path"):
+        parts.append("Ninja " + (i["ninja"].get("version") or "?").split()[0])
+    if i.get("clang", {}).get("cc"):
+        parts.append("Clang " + (i["clang"].get("version") or "?"))
+    vs = i.get("vs") or {}
+    if vs.get("version"):
+        parts.append("VS " + ".".join(vs["version"].split(".")[:2]))
+    if i.get("sdk", {}).get("version"):
+        parts.append("SDK " + i["sdk"]["version"])
+    return " · ".join(parts)
+
+
+def sdk_version(cfg):
+    """Versión del SDK de rexglue configurado (…/<versión>/win-amd64[/bin/rexglue.exe]) o ''."""
+    prefix = (getattr(cfg, "rexglue_sdk", "") or "").strip()
+    if prefix:
+        return os.path.basename(os.path.dirname(os.path.normpath(prefix)))
+    exe = (getattr(cfg, "rexglue", "") or "").strip()
+    if exe:
+        return os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(os.path.normpath(exe)))))
+    return ""
+
+
+def upgrade_config(cfg, info=None, allow_sdk=True):
+    """Pone en `cfg` las versiones MÁS NUEVAS instaladas de VS, CMake, Ninja y Clang.
+
+    Solo sube de versión: si la configurada ya es la más nueva (o no se puede ejecutar), se queda como está.
+    El SDK se actualiza solo cuando `allow_sdk` (proyecto nuevo): cambiarlo en una build que funciona fuerza una
+    reconfiguración completa y una versión *dev* nueva puede no compilar ese proyecto.
+    Devuelve (cambios legibles, info de versiones).
+    """
+    i = info if info is not None else latest()
+    changes = []
+
+    def take(attr, new, label, ver=""):
+        cur = (getattr(cfg, attr, "") or "").strip()
+        if new and new != cur and _newer(new, cur):
+            setattr(cfg, attr, new)
+            changes.append(f"{label} {ver}".strip() + " (la versión más nueva instalada)")
+
+    take("cmake", i.get("cmake", {}).get("path", ""), "CMake", i.get("cmake", {}).get("version", ""))
+    take("ninja", i.get("ninja", {}).get("path", ""), "Ninja", i.get("ninja", {}).get("version", ""))
+    clang = i.get("clang", {})
+    if clang.get("cxx"):
+        cur_cxx = (getattr(cfg, "cxx_compiler", "") or "").strip()
+        if cur_cxx != clang["cxx"] and _newer(clang["cxx"], cur_cxx):
+            cfg.cxx_compiler = clang["cxx"]
+            changes.append("Clang más nuevo: " + (clang.get("version") or ""))
+            cur_cc = (getattr(cfg, "c_compiler", "") or "").strip()
+            if clang.get("cc") and (not cur_cc or "clang" in os.path.basename(cur_cc).lower()):
+                cfg.c_compiler = clang["cc"]
+    new_vs = i.get("vs") or {}
+    if new_vs.get("vcvars"):
+        old_vs = _vs_install_of(getattr(cfg, "vcvars", ""))
+        if not old_vs or _ver_key(new_vs.get("version", "")) > _ver_key(old_vs.get("version", "")):
+            if new_vs["vcvars"] != (getattr(cfg, "vcvars", "") or ""):
+                cfg.vcvars = new_vs["vcvars"]
+                changes.append("Visual Studio más nuevo: " + (new_vs.get("version") or new_vs.get("name") or ""))
+    sdk = i.get("sdk") or {}
+    if allow_sdk and sdk.get("prefix") and sdk.get("exe") and os.path.isdir(sdk["prefix"]):
+        if _sdk_key(sdk.get("version", "")) > _sdk_key(sdk_version(cfg)):
+            cfg.rexglue_sdk, cfg.rexglue = sdk["prefix"], sdk["exe"]
+            cfg.cli_flavor = ""
+            changes.append("SDK de rexglue más nuevo: " + sdk["version"])
+    return changes, i
+
+
+def sdk_update_available(cfg, info=None):
+    """Versión del SDK instalado si es más nueva que la configurada (o "")."""
+    i = info if info is not None else latest()
+    v = (i.get("sdk") or {}).get("version", "")
+    return v if v and _sdk_key(v) > _sdk_key(sdk_version(cfg)) else ""
 
 
 def find_exe(folder):

@@ -4,7 +4,7 @@
 
 **Recompila juegos de Xbox 360 a PC desde una interfaz de escritorio — sin pelearte con la terminal.**
 
-[![Versión](https://img.shields.io/badge/versión-1.46.3-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
+[![Versión](https://img.shields.io/badge/versión-1.47.0-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
 [![Plataforma](https://img.shields.io/badge/Windows-10%20%2F%2011-19d3a2?style=flat-square&logo=windows&logoColor=white)](#instalación)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-19d3a2?style=flat-square&logo=python&logoColor=white)](#desarrollo)
 [![SDK](https://img.shields.io/badge/motor-rexglue%20%C2%B7%20XenonRecomp-19d3a2?style=flat-square)](https://github.com/rexglue/rexglue-sdk)
@@ -31,7 +31,7 @@ compilar, configurar y jugar. Por debajo usa [rexglue](https://github.com/rexglu
 | | |
 |---|---|
 | 🧩 **Flujo guiado** | Del ISO al `.exe` en seis pasos, con el estado de cada uno y correcciones automáticas. |
-| ⚙️ **Entorno autoconfigurado** | Detecta y prepara rexglue, Visual Studio Build Tools, Clang, CMake y Ninja. |
+| ⚙️ **Entorno autoconfigurado** | Detecta y prepara rexglue, Visual Studio Build Tools, Clang, CMake y Ninja, y usa siempre la versión más nueva instalada de cada herramienta. |
 | 🗃️ **Base de compatibilidad por juego** | Config idónea de imagen y efectos por Title ID, ampliable; aprende de cada juego que confirmas y enlaza la ficha de Xenia como referencia. |
 | 🩹 **Autofix del codegen** | Resuelve solo las funciones sin acotar (las «líneas vacías» del `functions.toml`) y otros fallos típicos, sin edición manual. |
 | 🎮 **Listo para jugar** | Teclado y ratón, mandos (incl. DualSense), panorámica *hor+* y escalado FSR/CAS según el juego. |
@@ -138,7 +138,7 @@ Atajos: `F11` pantalla completa · `Ctrl+1…9` secciones · flechas + `Enter` e
 
 ## 📜 Historial de versiones
 
-Lo más reciente es **1.46.3** (recompilación más fiable: el autofix siempre regenera el código y no oculta saltos rotos).
+Lo más reciente es **1.47.0** (cada recompilación usa las versiones más nuevas instaladas de VS, CMake, Ninja, Clang y el SDK).
 El detalle de cada versión está en [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 🙏 Créditos

@@ -450,6 +450,7 @@ class EnvPage(QWidget):
             self.s.set("cli_flavor", r.get("flavor", "") or "project")
         cm = st.get("cmake", ("", ""))[0]
         set_field("cmake", cm)
+        set_field("ninja", st.get("ninja", ("",))[0])
         if WIN:
             set_field("vcvars", st.get("vcvars", ""))
         if self.cfg.generator != "Ninja":
