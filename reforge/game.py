@@ -1599,6 +1599,25 @@ def online_crash(log_path, window=12):
     return []
 
 
+def known_runtime_race(log_text):
+    """¿El log es el cierre intermitente CONOCIDO del runtime? (bug del SDK, no del proyecto ni del código).
+
+    Ese fallo aparece solo en parte de los arranques (~1 de cada 2) y vive en el runtime precompilado: no se
+    arregla recompilando ni tiene relación con la optimización del código. Sirve para no confundirlo con un
+    fallo del juego y para reintentar el arranque en vez de degradar el rendimiento.
+    """
+    if not log_text:
+        return False
+    try:
+        from . import knownissues
+        for issue in knownissues.ISSUES:
+            if issue.id == "cierre_intermitente_utf8":
+                return issue.aplica(log_text, {})
+    except Exception:      # noqa: BLE001
+        pass
+    return False
+
+
 def recent_crash_dump(exe, since):
     """Volcado de Windows del juego creado después de `since` (el juego cayó aunque el log no lo diga)."""
     base = os.environ.get("LOCALAPPDATA") or ""

@@ -1249,6 +1249,7 @@ class WorkshopPage(QWidget):
         o = GameOptions.load(p.root)
         kind = res["kind"]
         if kind == "running":
+            self._utf8_retries = 0          # arrancó: la cadena de reintentos del cierre intermitente termina
             if self._sweep:
                 self._sweep_report(res)
             self.status_lbl.setText("✔ El juego arrancó · vigilando mientras juegas")
@@ -1516,6 +1517,26 @@ class WorkshopPage(QWidget):
     def _handle_crash(self, res, o):
         p = self.current
         kind = res["kind"]
+        if kind in ("crash", "guest_av", "fatal") and res.get("path") \
+                and game.known_runtime_race(game._read_log_text(res["path"])):
+            # Bug CONOCIDO del runtime precompilado del SDK (~1 de cada 2 arranques), no del juego ni de la
+            # optimización: no se recompila ni se baja de nivel, solo se vuelve a abrir. Antes el diagnóstico
+            # lo confundía con una optimización agresiva y la apagaba, perdiendo rendimiento sin motivo.
+            tries = getattr(self, "_utf8_retries", 0)
+            if tries < 2:
+                self._utf8_retries = tries + 1
+                self.status_lbl.setText("Reabriendo el juego (fallo intermitente del SDK)…")
+                self.log.write("⚠ El juego se cerró por el fallo INTERMITENTE del runtime de rexglue "
+                               "(«Invalid UTF-8» en una completion diferida): es un bug conocido del SDK, no de "
+                               "tu juego ni de la optimización, y recompilar no lo arregla.", "warn")
+                self.log.write(f"↻ Se vuelve a abrir solo (intento {tries + 2} de 3)…", "warn")
+                QTimer.singleShot(800, lambda: self.play(auto=True))
+            else:
+                self._utf8_retries = 0
+                self.log.write("El fallo intermitente del SDK ha salido 3 veces seguidas. No se toca la "
+                               "optimización ni se recompila: es una carrera interna del runtime; vuelve a "
+                               "abrir el juego en un rato.", "warn")
+            return
         if kind == "unregistered":
             addr = res["address"]
             self.btn_fix.setEnabled(True)
