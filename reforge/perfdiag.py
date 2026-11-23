@@ -338,13 +338,18 @@ def auto_tune(root, exe, log_path):
         washed = False
     med = sorted(fps_play)[len(fps_play) // 2] if len(fps_play) >= 6 else 0
     target = 0.0
+    capped_by_us = 0.0
     try:
-        from .pc_enhance import frame_values
+        from .pc_enhance import frame_cap, frame_values
         target = float(frame_values(o.frame_mode(), o.fps_unlocked, cap=o.fps_cap).get("video_mode_refresh_rate", 0))
+        capped_by_us = frame_cap(o.frame_mode())
+        if 0 < capped_by_us < target:
+            target = capped_by_us      # 30 FPS: el tope lo pone ReForge, no el juego
     except Exception:      # noqa: BLE001
         pass
-    # Un juego con tope propio (30 FPS planos) no va «lento»: no se le baja la resolución ni se le cambia la ruta.
-    own_cap = own_frame_cap(exe, fps_play, target)
+    # Un juego con tope propio (30 FPS planos) o al que se le puso el tope de 30 FPS no va «lento»: no se le
+    # baja la resolución ni se le cambia la ruta de render.
+    own_cap = own_frame_cap(exe, fps_play, target) or capped_by_us > 0
     if o.path_trial == "rtv" and o.render_path == "rtv":
         if med or not washed:
             o.path_trial = ""

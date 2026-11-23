@@ -125,6 +125,7 @@ struct Settings {
   bool guide_menu = true;   // menú Guía con el botón Xbox/PS
   bool playstation = false; // iconos de botones de PlayStation (✕ ○ □ △) en vez de los de Xbox
   bool image_guard = true;  // guardián de imagen (detecta la imagen blanca y lo corrige en caliente)
+  float frame_cap = 0.0f;   // tope de FPS que aplica la extensión (30 = base para Smooth Motion · 0 = sin tope)
 };
 
 static std::string Trim(std::string s) {
@@ -162,10 +163,23 @@ const Settings& Config() {
       else if (key == "guide_menu") s.guide_menu = !(val == "0" || val == "false");
       else if (key == "pad_style") s.playstation = (val == "playstation");
       else if (key == "image_guard") s.image_guard = !(val == "0" || val == "false");
+      else if (key == "frame_cap") s.frame_cap = std::clamp(std::strtof(val.c_str(), nullptr), 0.0f, 240.0f);
     }
     return s;
   }();
   return settings;
+}
+
+// Tope de fotogramas (30 FPS para el movimiento suave del driver). -1 = aún no leído de reforge_ext.ini.
+static std::atomic<float> g_frame_cap{-1.0f};
+
+static float FrameCap() {
+  float cap = g_frame_cap.load(std::memory_order_relaxed);
+  if (cap < 0.0f) {
+    cap = std::clamp(Config().frame_cap, 0.0f, 240.0f);
+    g_frame_cap.store(cap, std::memory_order_relaxed);
+  }
+  return cap;
 }
 
 // ---------------------------------------------------------------- perfil, Live e idioma
@@ -791,12 +805,30 @@ static FramePacer& GuestPacer() {
 }
 
 // El juego entrega cada fotograma con VdSwap: se mide aquí y se pasa a la implementación de rexglue.
+// Si hay un tope (30 FPS con VSync, la base que duplica NVIDIA Smooth Motion), se espera aquí hasta el
+// siguiente hueco: es una vez por fotograma del Xbox 360 y vale para cualquier juego.
+static void WaitFrameCap() {
+  static std::chrono::steady_clock::time_point next{};
+  const float cap = FrameCap();
+  if (cap < 1.0f) {
+    next = {};
+    return;
+  }
+  const auto now = std::chrono::steady_clock::now();
+  const auto period = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+      std::chrono::duration<double>(1.0 / cap));
+  if (next.time_since_epoch().count() == 0 || now - next > period) next = now;  // tras un parón no se acumulan esperas
+  next += period;
+  if (next > now) std::this_thread::sleep_until(next);
+}
+
 static void VdSwap_hook(rex::MappedPtr<void> a, rex::MappedPtr<void> b, rex::MappedPtr<void> c,
                         rex::MappedPtr<void> d, rex::MappedPtr<void> e, rex::MappedPtr<rex::be_u32> f,
                         rex::MappedPtr<rex::be_u32> g, rex::MappedPtr<rex::be_u32> h,
                         rex::MappedPtr<rex::be_u32> i, rex::MappedPtr<rex::be_u32> j) {
   GuestPacer().Tick();
   rex::kernel::xboxkrnl::VdSwap_entry(a, b, c, d, e, f, g, h, i, j);
+  WaitFrameCap();
 }
 
 // ---------------------------------------------------------------- copias de partida (4 ranuras)
@@ -1027,8 +1059,13 @@ struct MenuPrefs {
   std::string toast_position; // vacío = la del perfil
   bool hide_cursor = true;
   int button_style = -1;      // -1 = el de ReForge · 0 = Xbox · 1 = PlayStation (elegido en el menú Guía)
+  int fps_mode = -1;          // -1 = el de ReForge · 0 = 30 FPS · 1 = 60 · 2 = sin límite (menú Guía → Gráficos)
+  int resolution_scale = 0;   // 0 = la de ReForge · 1..3 (menú Guía → Gráficos)
   bool loaded = false;
 };
+
+// Valores que entiende ReForge (reforge_menu.ini → .toml y reforge_ext.ini en el próximo arranque).
+static const char* const kFpsKeys[] = {"30", "60", "unlimited"};
 
 static constexpr uint32_t kAccents[] = {0x19D3A2, 0x107C10, 0x2D7FF9, 0xE8A317, 0xE3306B, 0x9B59F6};
 static const char* const kAccentNames[] = {"Turquesa", "Verde Xbox", "Azul", "Dorado", "Rosa", "Violeta"};
@@ -1058,6 +1095,8 @@ static MenuPrefs& Prefs() {
       else if (key == "toast_position") prefs.toast_position = val;
       else if (key == "hide_cursor") prefs.hide_cursor = (val != "0");
       else if (key == "button_style") prefs.button_style = (val == "playstation") ? 1 : (val == "xbox" ? 0 : -1);
+      else if (key == "fps_mode") prefs.fps_mode = (val == "30") ? 0 : (val == "60" ? 1 : (val == "unlimited" ? 2 : -1));
+      else if (key == "resolution_scale") prefs.resolution_scale = std::clamp(std::atoi(val.c_str()), 0, 3);
     }
   }
   return prefs;
@@ -1072,6 +1111,8 @@ static void SavePrefs() {
     << "toast_position = " << p.toast_position << "\n"
     << "hide_cursor = " << (p.hide_cursor ? 1 : 0) << "\n"
     << "button_style = " << (p.button_style == 1 ? "playstation" : (p.button_style == 0 ? "xbox" : "")) << "\n";
+  if (p.fps_mode >= 0) f << "fps_mode = " << kFpsKeys[std::clamp(p.fps_mode, 0, 2)] << "\n";
+  if (p.resolution_scale > 0) f << "resolution_scale = " << std::clamp(p.resolution_scale, 1, 3) << "\n";
 }
 
 // Iconos de botones: los de PlayStation se ven en el menú Guía y, con el SDK de ReForge, en las texturas del
@@ -1202,7 +1243,7 @@ class GuideMenu {
   }
 
  private:
-  enum Tab { kHome = 0, kSaves = 1, kAchievements = 2, kSettings = 3, kTabs = 4 };
+  enum Tab { kHome = 0, kGraphics = 1, kSaves = 2, kAchievements = 3, kSettings = 4, kTabs = 5 };
 
   uint16_t PollPad() {
     uint16_t buttons = 0;
@@ -1242,6 +1283,7 @@ class GuideMenu {
 
   int ItemCount(int tab) const {
     if (tab == kHome) return 2;
+    if (tab == kGraphics) return 3;
     if (tab == kSettings) return 5;
     if (tab == kSaves) return kSlotCount;
     return static_cast<int>(list_.size());
@@ -1334,12 +1376,69 @@ class GuideMenu {
     if (tab_ == kAchievements) RefreshList();
   }
 
+  // ---------------------------------------------------------------- pestaña Gráficos
+  // Cambia las cvars de rexglue en caliente (escala de resolución, ritmo de fotogramas, contador de FPS) y
+  // guarda lo elegido en reforge_menu.ini: ReForge lo pasa al .toml y al reforge_ext.ini en el próximo arranque.
+  static bool VsyncOn() { return rex::cvar::GetFlagByName("vsync") != "false"; }
+
+  static int CurrentFpsMode() {
+    const float cap = FrameCap();
+    if (cap >= 29.0f && cap <= 31.0f && VsyncOn()) return 0;   // 30 FPS con VSync
+    if (!VsyncOn()) return 2;                                  // sin límite
+    return 1;                                                  // 60 con VSync
+  }
+
+  static void SetCvar(const char* name, const char* value, bool& restart) {
+    if (!rex::cvar::SetFlagByName(name, value)) return;
+    const auto* info = rex::cvar::GetFlagInfo(name);
+    if (info && info->lifecycle != rex::cvar::Lifecycle::kHotReload) restart = true;
+  }
+
+  void ApplyGraphics(int item, int dir) {
+    bool restart = false;
+    std::lock_guard<std::mutex> lock(PrefsMutex());
+    MenuPrefs& p = Prefs();
+    std::string text;
+    if (item == 0) {
+      const int next = (CurrentFpsMode() + 3 + dir) % 3;
+      if (next == 2) {
+        g_frame_cap.store(0.0f);
+        SetCvar("vsync", "false", restart);
+        SetCvar("d3d12_allow_variable_refresh_rate_and_tearing", "true", restart);
+        text = "Sin límite de fotogramas";
+      } else {
+        g_frame_cap.store(next == 0 ? 30.0f : 0.0f);
+        SetCvar("vsync", "true", restart);
+        SetCvar("video_mode_refresh_rate", "60", restart);
+        SetCvar("d3d12_allow_variable_refresh_rate_and_tearing", "false", restart);
+        text = next == 0 ? "30 FPS con VSync · NVIDIA Smooth Motion lo duplica a 60" : "60 FPS con VSync";
+      }
+      p.fps_mode = next;
+    } else if (item == 1) {
+      const int cur = std::clamp(std::atoi(rex::cvar::GetFlagByName("draw_resolution_scale_x").c_str()), 1, 3);
+      const int next = std::clamp(cur + dir, 1, 3);
+      const std::string v = std::to_string(next);
+      SetCvar("draw_resolution_scale_x", v.c_str(), restart);
+      SetCvar("draw_resolution_scale_y", v.c_str(), restart);
+      p.resolution_scale = next;
+      text = "Resolución interna: " + v + "×";
+    } else {
+      p.show_fps = !p.show_fps;
+      text = p.show_fps ? "Contador de FPS activado" : "Contador de FPS desactivado";
+    }
+    SavePrefs();
+    if (restart) text += " (se aplica al reiniciar el juego)";
+    Status(text.c_str());
+  }
+
   void Activate(uint16_t nav) {
     const bool a = nav & 0x1000;
     const int dir = (nav & 0x0004) ? -1 : 1;
     if (tab_ == kHome && a) {
       if (sel_[kHome] == 0) SetOpen(false);
       else confirm_exit_ = true;
+    } else if (tab_ == kGraphics) {
+      ApplyGraphics(sel_[kGraphics], dir);
     } else if (tab_ == kSaves && a) {
       SaveSlot(sel_[kSaves]);
     } else if (tab_ == kSettings) {
@@ -1496,7 +1595,7 @@ class GuideMenu {
     y += fs * 1.8f;
 
     // pestañas (LB / RB)
-    static const char* const kTabNames[] = {"Inicio", "Partidas", "Logros", "Personalizar"};
+    static const char* const kTabNames[] = {"Inicio", "Gráficos", "Partidas", "Logros", "Ajustes"};
     float tx = x;
     for (int t = 0; t < kTabs; ++t) {
       const ImVec2 sz = ImGui::GetFont()->CalcTextSizeA(fs, 1e9f, 0.0f, kTabNames[t]);
@@ -1509,7 +1608,8 @@ class GuideMenu {
       }
       tx += sz.x + 30 * u;
     }
-    Text(dl, fs * 0.75f, ImVec2(x0 + w - pad - 70 * u, y + 2 * u), dim, "LB  ·  RB");
+    if (tx + 70 * u < x0 + w - pad)
+      Text(dl, fs * 0.75f, ImVec2(x0 + w - pad - 70 * u, y + 2 * u), dim, "LB  ·  RB");
     y += fs * 2.2f;
 
     const float list_bottom = y1 - pad - fs * 1.6f;
@@ -1541,6 +1641,28 @@ class GuideMenu {
       } else if (Clicked(io, ImVec2(x, y + fs * 6.4f), ImVec2(x + w - 2 * pad, y + fs * 8.4f))) {
         confirm_exit_ = false;
       }
+    } else if (tab_ == kGraphics) {
+      // pestaña Gráficos: lo que se puede cambiar sin salir del juego
+      static const char* const kFpsNames[] = {"30 · Smooth Motion", "60 · VSync", "Sin límite"};
+      const int sc = std::clamp(std::atoi(rex::cvar::GetFlagByName("draw_resolution_scale_x").c_str()), 1, 3);
+      char scale_txt[64];
+      std::snprintf(scale_txt, sizeof(scale_txt), "%d× (%s interno)", sc,
+                    sc == 1 ? "720p" : (sc == 2 ? "1440p" : "2160p"));
+      std::string vals[3] = {kFpsNames[CurrentFpsMode()], scale_txt, Prefs().show_fps ? "Sí" : "No"};
+      const char* names[] = {"Fotogramas", "Escala de resolución", "Contador de FPS"};
+      for (int i = 0; i < 3; ++i) {
+        const ImVec2 q(x, y + i * fs * 2.6f);
+        DrawButton(dl, io, q, w - 2 * pad, fs, sel_[kGraphics] == i, names[i], u, a, accent, vals[i].c_str());
+        if (open_ && Clicked(io, q, ImVec2(q.x + w - 2 * pad, q.y + fs * 2.2f))) {
+          sel_[kGraphics] = i;
+          Activate(0x1000);
+        }
+      }
+      Text(dl, fs * 0.8f, ImVec2(x, y + 3 * fs * 2.6f + 4 * u), dim,
+           "«30 · Smooth Motion» deja el juego a 30 FPS reales con VSync: activa NVIDIA Smooth Motion "
+           "(RTX 40/50) o AMD Fluid Motion en el driver y será él quien lo vea fluido a 60 sin acelerar el "
+           "juego. La escala dibuja por dentro con más detalle sin tocar la ventana. Se guarda para la "
+           "próxima vez; lo que el runtime no cambie en caliente se aplica al reiniciar.", w - 2 * pad);
     } else if (tab_ == kSaves) {
       // ranuras con miniatura, fecha y botones Guardar / Cargar
       const float th = 72.0f * u, tw = th * 16.0f / 9.0f, row = th + 14 * u;
@@ -1779,7 +1901,7 @@ class GuideMenu {
         hint("Y", 0xE8A317, "Cargar");
         hint("B", 0xC0392B, "Volver");
       } else {
-        hint("A", 0x107C10, tab_ == kSettings ? "Cambiar" : "Seleccionar");
+        hint("A", 0x107C10, (tab_ == kSettings || tab_ == kGraphics) ? "Cambiar" : "Seleccionar");
         hint("B", 0xC0392B, "Volver al juego");
         hint("G", 0x2D7FF9, "Cerrar");
       }
@@ -1812,7 +1934,7 @@ class GuideMenu {
   bool confirm_exit_ = false;
   float anim_ = 0.0f;
   int tab_ = kHome;
-  int sel_[kTabs] = {0, 0, 0, 0};
+  int sel_[kTabs] = {0, 0, 0, 0, 0};
   SaveSlots slots_;
   int confirm_load_ = -1;
   std::string status_;

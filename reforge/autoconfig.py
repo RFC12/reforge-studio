@@ -38,6 +38,8 @@ def summary(o, hw, values):
     parts.append(f"{gpu}{f' {vram // 1024} GB' if vram >= 1024 else ''} · {hw.get('cpu_threads', '?')} hilos")
     if values.get("vsync") is False:
         parts.append("FPS sin límite")
+    elif o.frame_mode() == "30":
+        parts.append("30 FPS con VSync (Smooth Motion)")
     elif values.get("video_mode_refresh_rate"):
         parts.append(f"{float(values['video_mode_refresh_rate']):g} FPS"
                      + (" estables" if o.fps_cap else ""))

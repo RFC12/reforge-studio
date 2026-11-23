@@ -2,6 +2,23 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.0 — 30 FPS con VSync para NVIDIA Smooth Motion y menú Gráficos dentro del juego
+
+- **Nuevo ritmo «30 FPS con VSync»** (Opciones del juego → Fotogramas): el juego se queda a 30 FPS reales, que es la
+  base que NVIDIA Smooth Motion (RTX 40/50) y AMD Fluid Motion duplican a 60. Antes el ritmo automático ponía 60 Hz
+  de vblank y el driver tenía que interpolar desde 30 sin un ritmo declarado.
+- El tope de 30 lo aplica la extensión de ReForge en `VdSwap` (`frame_cap` de `reforge_ext.ini`), una vez por
+  fotograma del Xbox 360: no se baja el vblank a 30, porque los juegos que esperan dos vblancos por imagen (Asura's
+  Wrath entre ellos) caerían a 15 FPS. Con el juego ya limitado a 30 no cambia nada; con uno de 60 lo deja en 30.
+- **Menú Guía → pestaña Gráficos** (botón Xbox/PS del mando o tecla Inicio): fotogramas (30 · Smooth Motion, 60,
+  sin límite), escala de resolución interna (1×/2×/3×) y contador de FPS, cambiables sin salir del juego. Usa las
+  cvars de rexglue en caliente y avisa cuando algo se aplica al reiniciar.
+- Lo elegido en el menú del juego se guarda en `reforge_menu.ini` y ReForge lo pasa al `.toml` y al `reforge_ext.ini`
+  en el próximo arranque, así que sobrevive a cerrar el juego (guardar Opciones del juego vuelve a mandar).
+- El ajuste automático no interpreta los 30 FPS elegidos a mano como «GPU lenta»: no baja resolución ni cambia la
+  ruta de render.
+- Cubierto por `tests/test_guide_graphics.py` y `tests/test_smooth_motion.py`.
+
 ## 1.47.1 — El ajuste automático ya no baja la resolución en juegos con tope propio de FPS
 
 - **Diagnóstico corregido:** tras cada partida, `auto_tune` comparaba los FPS del juego con el refresco de la

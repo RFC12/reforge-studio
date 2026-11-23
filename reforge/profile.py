@@ -129,9 +129,15 @@ def export_avatar(profile, exe_dir, size=128):
         return ""
 
 
-def write_ext_ini(exe, options=None, profile=None):
+def write_ext_ini(exe, options=None, profile=None, frame_cap=None):
     """Escribe reforge_ext.ini junto al .exe del juego (perfil, Live, idioma y notificaciones)."""
     p = profile or Profile.load()
+    if frame_cap is None:
+        try:
+            from .pc_enhance import frame_cap as cap_for
+            frame_cap = cap_for(options.frame_mode()) if options is not None else 0.0
+        except Exception:      # noqa: BLE001
+            frame_cap = 0.0
     lang = options.effective_language()[0] if hasattr(options, "effective_language") else \
         (int(getattr(options, "language", 0) or 0) if options is not None else 0)
     lines = [
@@ -145,6 +151,7 @@ def write_ext_ini(exe, options=None, profile=None):
         f"accent = {p.accent}",
         f"hide_cursor = {0 if options is not None and not getattr(options, 'hide_cursor', True) else 1}",
         f"diagnostics = {1 if options is not None and getattr(options, 'diagnostics', False) else 0}",
+        f"frame_cap = {float(frame_cap or 0.0):.1f}",
     ]
     try:
         from .sound import export_for_game

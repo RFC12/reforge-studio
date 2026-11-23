@@ -145,8 +145,10 @@ class GameOptionsDialog(QDialog):
                            "y luego en la app de NVIDIA → Gráficos → tu .exe → «Smooth Motion» (RTX 40/50), o en "
                            "AMD Adrenalin → «Fluid Motion Frames». Importante: es la ALTERNATIVA al truco de «FPS "
                            "desbloqueados» —no los combines—, porque ese truco acelera el juego a nivel de código "
-                           "y el movimiento suave no podría frenarlo. Déjalo a 30 reales + movimiento suave: "
-                           "velocidad correcta y imagen fluida.", "Hint", wrap=True))
+                           "y el movimiento suave no podría frenarlo. Elige «30 FPS con VSync»: el juego queda a "
+                           "30 reales y el driver lo duplica a 60 — velocidad correcta e imagen fluida. También "
+                           "puedes cambiarlo dentro del juego en el menú Guía (botón Xbox/PS) → Gráficos.",
+                           "Hint", wrap=True))
         self.scale = QComboBox()
         self.scale.addItem(f"Automática · según tu tarjeta (ahora {int(self.o.resolution_scale or 1)}×)", 0)
         for n in (1, 2, 3):

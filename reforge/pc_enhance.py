@@ -33,6 +33,7 @@ ASPECT_RE = re.compile(r"(\d{1,2})\s*[:/]\s*(\d{1,2})")
 PANORAMIC = 1.9       # a partir de aquí el monitor es panorámico (21:9 = 2,37 · 16:9 = 1,78)
 
 FPS_MODES = [
+    ("30", "30 FPS con VSync (para NVIDIA Smooth Motion / AMD Fluid Motion)"),
     ("auto", "Automático · ritmo exacto para tu monitor (recomendado)"),
     ("60", "60 FPS con VSync"),
     ("monitor", "Frecuencia de tu monitor con VSync (experimental)"),
@@ -264,6 +265,15 @@ def paced_rate(hz, unlocked=True):
     return 60.0
 
 
+def frame_cap(fps_mode):
+    """Tope real de fotogramas que aplica la extensión de ReForge dentro del juego (0 = ninguno).
+
+    Se hace en VdSwap (una llamada por fotograma del Xbox 360), así que vale para cualquier juego y no
+    depende de que el juego tenga o no límite propio.
+    """
+    return 30.0 if (fps_mode or "") == "30" else 0.0
+
+
 def frame_values(fps_mode, unlocked=False, hz=None, cap=0.0):
     """Cvars del ritmo de fotogramas. En rexglue «vsync» es el ritmo del vblank del Xbox 360 (la señal que
     usan los juegos para sincronizarse); la presentación en tu monitor la decide el driver (G-Sync/FreeSync
@@ -273,6 +283,12 @@ def frame_values(fps_mode, unlocked=False, hz=None, cap=0.0):
         return {"vsync": False, "d3d12_allow_variable_refresh_rate_and_tearing": True}
     # La presentación queda como la trae rexglue (permite G-Sync/FreeSync): forzarla sin desgarros
     # anulaba el refresco variable y añadía tirones.
+    if mode == "30":
+        # 30 FPS estables con VSync: la base que NVIDIA Smooth Motion / AMD Fluid Motion duplican a 60 sin
+        # acelerar el juego. El vblank se queda en 60 (el de un juego de 30 del Xbox 360): bajarlo a 30 haría
+        # que los juegos que esperan dos vblancos por imagen cayeran a 15. El tope real lo pone la extensión.
+        return {"vsync": True, "video_mode_refresh_rate": 60.0,
+                "d3d12_allow_variable_refresh_rate_and_tearing": False}
     if mode == "60":
         rate = 60.0
     elif mode == "monitor":

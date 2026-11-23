@@ -97,7 +97,8 @@ class GameOptions:
     codegen_opt: str = "auto"
     codegen_opt_level: str = "safe"  # nivel que usa «auto» ahora mismo
     codegen_opt_verified: bool = False   # ya se jugó una partida completa sin cierres con ese nivel
-    # Fotogramas (pc_enhance.py): "60" VSync a 60 · "monitor" VSync a los Hz del monitor · "unlimited" sin límite
+    # Fotogramas (pc_enhance.py): "30" 30 FPS con VSync para Smooth Motion · "60" VSync a 60 ·
+    # "monitor" VSync a los Hz del monitor · "unlimited" sin límite
     fps_mode: str = ""             # "" = según la casilla VSync de versiones anteriores
     pc_enhanced: bool = False      # se aplicaron las mejoras para PC de la base de datos (FPS, correcciones)
     fps_unlocked: bool = False     # hay un parche de FPS desbloqueados activo (lo anota cheats.apply_cheats)
@@ -291,8 +292,8 @@ class GameOptions:
         return self.codegen_opt_level if self.codegen_opt_level in ("max", "safe", "off") else "safe"
 
     def frame_mode(self):
-        """Ritmo de fotogramas: "auto", "60", "monitor" o "unlimited"."""
-        if self.fps_mode in ("auto", "60", "monitor", "unlimited"):
+        """Ritmo de fotogramas: "30", "auto", "60", "monitor" o "unlimited"."""
+        if self.fps_mode in ("30", "auto", "60", "monitor", "unlimited"):
             return self.fps_mode
         return "auto" if self.vsync else "unlimited"
 
@@ -590,6 +591,48 @@ def runtime_config_path(exe):
     return os.path.join(os.path.dirname(exe), os.path.splitext(os.path.basename(exe))[0] + ".toml")
 
 
+# Ajustes de gráficos cambiados desde el menú Guía del propio juego (botón Xbox/PS → Gráficos). La
+# extensión los deja en reforge_menu.ini; aquí se pasan al .toml y al .ini del juego en el próximo arranque.
+MENU_INI = "reforge_menu.ini"
+MENU_GRAPHICS_KEYS = ("fps_mode", "resolution_scale")
+
+
+def menu_ini_path(exe):
+    return os.path.join(os.path.dirname(os.path.abspath(exe)), MENU_INI)
+
+
+def menu_graphics(exe):
+    """Ajustes de gráficos elegidos en el menú Guía (vacío si el jugador no cambió ninguno)."""
+    out = {}
+    try:
+        with open(menu_ini_path(exe), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                key, sep, val = line.partition("=")
+                key, val = key.strip(), val.strip()
+                if sep and key in MENU_GRAPHICS_KEYS and val:
+                    out[key] = val
+    except OSError:
+        pass
+    return out
+
+
+def clear_menu_graphics(exe):
+    """Quita del .ini del menú los ajustes de gráficos ya aplicados (el resto del menú se conserva)."""
+    path = menu_ini_path(exe)
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return
+    keep = [ln for ln in lines if ln.partition("=")[0].strip() not in MENU_GRAPHICS_KEYS]
+    if len(keep) == len(lines):
+        return
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(keep) + "\n")
+    os.replace(tmp, path)
+
+
 def write_runtime_config(exe, options):
     """Escribe el bloque gestionado en <exe>.toml conservando cualquier otra línea del usuario."""
     path = runtime_config_path(exe)
@@ -601,6 +644,21 @@ def write_runtime_config(exe, options):
     sup = supported_cvars(exe)
     if sup is not None:
         values = {k: v for k, v in values.items() if k not in ADVANCED_CVARS or k in sup}
+    from .pc_enhance import frame_cap, frame_values
+    cap = frame_cap(options.frame_mode())
+    over = menu_graphics(exe)          # lo elegido jugando tiene prioridad hasta que cambies Opciones
+    if over:
+        mode = over.get("fps_mode", "")
+        if mode in ("30", "60", "unlimited"):
+            values.update(frame_values(mode, False))
+            cap = frame_cap(mode)
+        try:
+            scale = int(over.get("resolution_scale", "0"))
+        except ValueError:
+            scale = 0
+        if 1 <= scale <= 3:
+            values["draw_resolution_scale_x"] = values["draw_resolution_scale_y"] = scale
+        clear_menu_graphics(exe)
     lic = license_value(options, title_id_for_exe(exe))
     if lic is not None:
         values["license_mask"] = lic
@@ -621,7 +679,7 @@ def write_runtime_config(exe, options):
     os.replace(tmp, path)
     try:      # perfil, Live, idioma y notificaciones para la extensión de ReForge (reforge_ext.cpp)
         from .profile import write_ext_ini
-        write_ext_ini(exe, options)
+        write_ext_ini(exe, options, frame_cap=cap)
     except Exception:      # noqa: BLE001 — nunca impedir que el juego arranque por esto
         pass
     return path
