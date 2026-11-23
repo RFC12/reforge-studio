@@ -198,6 +198,25 @@ open(lp7, "w", encoding="utf-8").write("".join(
 ch = perfdiag.auto_tune(root_e, exe, lp7)
 check(go.GameOptions.load(root_e).resolution_scale == 2, "no llega a 60 → baja la resolución interna")
 
+print("Juego con tope propio (30 FPS) → no se confunde con GPU lenta")
+fps_lines = lambda vals: "".join(f"[2026-10-16 19:10:{i * 5:02d}.000] [info] [core] [t9] [ReForge] FPS {v} · peor 30 ms\n"
+                                 for i, v in enumerate(vals))
+orig_tid = go.title_id_for_exe
+go.title_id_for_exe = lambda e: "43430817"          # Asura's Wrath: candado de 30 FPS conocido
+go.GameOptions(resolution_scale=2, fps_mode="60").save(root_e)
+open(lp7, "w", encoding="utf-8").write(fps_lines([30, 29, 30, 30, 29, 30, 30]))
+ch = perfdiag.auto_tune(root_e, exe, lp7)
+check(go.GameOptions.load(root_e).resolution_scale == 2 and not any("resolución interna" in c for c in ch),
+      "30 FPS planos de un juego frame-locked NO bajan la resolución interna (no es GPU lenta)")
+go.GameOptions(render_path="rov", resolution_scale=2).save(root_e)
+ch = perfdiag.auto_tune(root_e, exe, lp7)
+check(go.GameOptions.load(root_e).render_path == "rov", "tampoco se cambia a la ruta rápida por «30 FPS»")
+go.GameOptions(resolution_scale=2, fps_mode="60").save(root_e)
+open(lp7, "w", encoding="utf-8").write(fps_lines([18, 26, 17, 26, 18, 25, 18]))   # varía y no llega: GPU
+ch = perfdiag.auto_tune(root_e, exe, lp7)
+check(go.GameOptions.load(root_e).resolution_scale == 1, "si el FPS varía por debajo del tope, sí se baja")
+go.title_id_for_exe = orig_tid
+
 print("Ruta de render según rendimiento")
 fps_lines = lambda vals: "".join(f"[2026-10-16 19:10:{i * 5:02d}.000] [info] [core] [t9] [ReForge] FPS {v} · peor 30 ms\n"
                                  for i, v in enumerate(vals))

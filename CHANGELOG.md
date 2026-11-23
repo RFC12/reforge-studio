@@ -2,6 +2,18 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.47.1 — El ajuste automático ya no baja la resolución en juegos con tope propio de FPS
+
+- **Diagnóstico corregido:** tras cada partida, `auto_tune` comparaba los FPS del juego con el refresco de la
+  ventana. Un juego con candado de framerate (Asura's Wrath: 30 FPS) siempre «no llegaba» a 60, así que se
+  interpretaba como GPU lenta y, tras cada sesión, bajaba la resolución interna a 1× y fijaba el techo en 1×
+  (además de desactivar «Lecturas exactas» y probar la ruta rápida sin motivo).
+- **Ahora** se reconoce un juego con tope propio (`gamedb.frame_lock` + FPS plano que no sube del tope): si está
+  cumpliendo su propio tope no se toca la resolución, ni el readback, ni se cambia de ROV a RTV. Si el FPS varía
+  por debajo del tope, se sigue bajando la resolución como antes: ahí el límite sí es la GPU.
+- Cubierto por `tests/test_perfdiag.py`: 30 FPS planos de un juego frame-locked se quedan en 2× y en ROV; 18-26
+  FPS variables siguen bajando la resolución interna.
+
 ## 1.47.0 — Cada recompilación usa las versiones más nuevas de VS, CMake, Ninja, Clang y el SDK
 
 - **Selección automática de la última versión instalada** (`toolchain.upgrade_config`) antes de cada compilación y

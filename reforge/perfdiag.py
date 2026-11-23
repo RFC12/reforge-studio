@@ -195,6 +195,31 @@ def play_fps(log_path):
     return [int(m.group(1)) for t, ln in stamped if (m := FPS_RE.search(ln)) and (start is None or t >= start)]
 
 
+def own_frame_cap(exe, fps, target, title_id=None):
+    """¿El juego tiene su propio tope de FPS y los está cumpliendo (30 planos de un título frame-locked)?
+
+    Un juego con candado de framerate entrega un FPS plano (29-30) aunque la ventana refresque a 60: no está
+    limitado por la GPU, así que bajarle la resolución interna no le da fluidez, solo la pierde. Sin esto, el
+    ajuste automático leía «30 de 60» como «GPU lenta» y apagaba la resolución alta tras cada partida.
+    """
+    if not fps or not target or len(fps) < 4:
+        return False
+    ordered = sorted(fps)
+    med = ordered[len(ordered) // 2]
+    if med >= 0.9 * target:
+        return False                      # llega al refresco: no hay tope propio que valga
+    if ordered[-1] > max(med + 1, med * 1.1):
+        return False                      # hay subidas por encima del tope: GPU limitada, no candado
+    try:
+        if title_id is None:
+            from .game_options import title_id_for_exe
+            title_id = title_id_for_exe(exe) or ""
+        from . import gamedb
+        return bool((gamedb.frame_lock(title_id) or {}).get("locked"))
+    except Exception:      # noqa: BLE001
+        return False
+
+
 def _read_text(path):
     try:
         return open(path, encoding="utf-8", errors="replace").read()
@@ -312,12 +337,20 @@ def auto_tune(root, exe, log_path):
     except OSError:
         washed = False
     med = sorted(fps_play)[len(fps_play) // 2] if len(fps_play) >= 6 else 0
+    target = 0.0
+    try:
+        from .pc_enhance import frame_values
+        target = float(frame_values(o.frame_mode(), o.fps_unlocked, cap=o.fps_cap).get("video_mode_refresh_rate", 0))
+    except Exception:      # noqa: BLE001
+        pass
+    # Un juego con tope propio (30 FPS planos) no va «lento»: no se le baja la resolución ni se le cambia la ruta.
+    own_cap = own_frame_cap(exe, fps_play, target)
     if o.path_trial == "rtv" and o.render_path == "rtv":
         if med or not washed:
             o.path_trial = ""
             dirty = True
             changes.append("Ruta rápida (RTV) confirmada para este juego" + (f" ({med} FPS)." if med else "."))
-    elif o.render_path == "rov" and not o.rov_required and ((med and med < 50) or washed):
+    elif o.render_path == "rov" and not o.rov_required and ((med and med < 50 and not own_cap) or washed):
         o.render_path, o.path_trial = "rtv", "rtv"
         dirty = True
         why = f"iba a {med} FPS" if med and med < 50 else "la imagen salía sobreexpuesta"
@@ -363,14 +396,8 @@ def auto_tune(root, exe, log_path):
     cause = max(known, key=known.get) if known else ""
     if cause and (known[cause] < 3 or known[cause] < 0.25 * max(1, n)):
         cause = ""
-    fps = play_fps(log_path)
-    target = 0.0
-    try:
-        from .pc_enhance import frame_values
-        target = float(frame_values(o.frame_mode(), o.fps_unlocked, cap=o.fps_cap).get("video_mode_refresh_rate", 0))
-    except Exception:      # noqa: BLE001
-        pass
-    slow_gpu = bool(fps and target and sorted(fps)[len(fps) // 2] < 0.9 * target)
+    fps = fps_play
+    slow_gpu = bool(fps and target and sorted(fps)[len(fps) // 2] < 0.9 * target and not own_cap)
     if o.readback_resolve and (n >= 3 or slow_gpu or cause == "resolve"):
         o.readback_resolve = False
         changes.append("«Lecturas exactas» (readback) desactivadas: obligaban a esperar a la GPU en cada copia → "
