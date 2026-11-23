@@ -962,6 +962,7 @@ def codegen_with_autofix(cfg, root, build, name, env, ctx):
     for rnd in range(1, MAX_ROUNDS + 1):
         if normalize_function_overlaps(root):
             ctx.log("Ajustadas entradas que caían dentro de funciones con final declarado (como fragmento).", "dim")
+            invalidate_codegen(root)      # el manifiesto cambió: hay que regenerar, no reutilizar lo anterior
         code, lines = run_streaming(cmake_codegen_cmd(cfg, build, name), root, env, ctx)
         if code == 0:
             split = fix_split_functions(root, ctx)
@@ -986,6 +987,7 @@ def codegen_with_autofix(cfg, root, build, name, env, ctx):
                                 f"({', '.join(f'0x{t:08X}' for t, _s in new[:4])}{'…' if len(new) > 4 else ''})")
                 ctx.log(f"↻ Corrección automática {rnd}: " + "; ".join(what) + f" → {FUNCTIONS_FILE}. Regenerando…",
                         "warn")
+                invalidate_codegen(root)  # el código generado ya no corresponde a la tabla de funciones
                 continue
             sjlj = ensure_setjmp(root)
             if sjlj:
@@ -994,13 +996,26 @@ def codegen_with_autofix(cfg, root, build, name, env, ctx):
                         f"0x{sjlj[1]:08X}); declarados en el manifiesto para que rexglue los recompile bien "
                         "(sin esto el juego se cierra al recuperarse de un error). Regenerando…", "warn")
                 continue
+            # Aviso honesto: si tras regenerar siguen saltos sin resolver en el propio código generado,
+            # el juego se cerraría al llegar ahí. Ya están declaradas (o marcadas como no-función), así que
+            # no hay nada más que ReForge pueda cambiar solo: se dice en vez de dar el codegen por bueno.
+            remaining = sorted({t for t, _s in warned})
+            if remaining:
+                lista = ", ".join(f"0x{t:08X}" for t in remaining[:6]) + ("…" if len(remaining) > 6 else "")
+                ctx.log(f"⚠ Quedan {len(remaining)} salto(s)/llamada(s) sin resolver en el código generado "
+                        f"({lista}): el juego se cerraría al llegar ahí. Esas direcciones ya están declaradas "
+                        f"en {FUNCTIONS_FILE} (o marcadas como no-función en {REJECT_FILE}); revisa si de verdad "
+                        "son código y no datos.", "warn")
             if rnd > 1:
                 ctx.log(f"✔ Codegen completado tras {rnd - 1} corrección(es) automática(s). "
                         f"Funciones declaradas: {len(declared_functions(root))} ({FUNCTIONS_FILE})", "ok")
             return
         unresolved = parse_unresolved(lines)
         if not unresolved:
-            raise RuntimeError(f"codegen terminó con código {code} (revisa el log)")
+            from .toolchain import explain_exit
+            why = explain_exit(code)
+            raise RuntimeError(f"codegen terminó con código {code}"
+                               + (f": {why}" if why else " (revisa el log)"))
         ensure_include(root)
         new = add_functions(root, unresolved)
         if not new:
@@ -1013,9 +1028,11 @@ def codegen_with_autofix(cfg, root, build, name, env, ctx):
                         "Regenerando…", "warn")
                 invalidate_codegen(root)
                 continue
+            lista = ", ".join(f"0x{t:08X}" for t, _s in unresolved[:8]) + ("…" if len(unresolved) > 8 else "")
             raise RuntimeError(f"{len(unresolved)} llamada(s) siguen sin resolverse aunque ya están declaradas "
-                               f"en {FUNCTIONS_FILE}. No se pudo inferir su tamaño automáticamente (seguramente "
-                               "saltan a datos o fuera del módulo).")
+                               f"en {FUNCTIONS_FILE} ({lista}). No se pudo inferir su tamaño automáticamente "
+                               "(seguramente saltan a datos o fuera del módulo): revisa esas entradas y, si no "
+                               "son funciones, quítalas de la lista.")
         ctx.log(f"↻ Corrección automática {rnd}: declaradas {len(new)} función(es) en {FUNCTIONS_FILE} "
                 f"({', '.join(f'0x{t:08X}' for t, _s in new[:6])}{'…' if len(new) > 6 else ''}). Reintentando…",
                 "warn")
@@ -1810,6 +1827,7 @@ def build_with_ext_fallback(cfg, root, build, env, ctx):
         if fixed:
             ctx.log(f"↻ {len(fixed)} función(es) cortadas por el análisis de rexglue: declarado su final real en "
                     f"{FUNCTIONS_FILE}. Regenerando y compilando de nuevo…", "warn")
+            invalidate_codegen(root)  # el final corregido tiene que entrar en el código generado
             name = manifest_project_name(root) or os.path.basename(root)
             codegen_with_autofix(cfg, root, build, name, env, ctx)
             rc, lines = run_streaming(cmake_build_cmd(cfg, build), root, env, ctx)
@@ -1848,6 +1866,9 @@ def build_with_ext_fallback(cfg, root, build, env, ctx):
         name = manifest_project_name(root) or os.path.basename(root)
         codegen_with_autofix(cfg, root, build, name, env, ctx)
         return build_with_ext_fallback(cfg, root, build, env, ctx)
+    from .toolchain import explain_exit
+    why = explain_exit(rc)
     raise RuntimeError(
-        f"El proceso terminó con código {rc}. Se probaron todas las optimizaciones (hasta la más segura) y aun "
-        "así la compilación falla: este juego necesita trabajo específico para recompilarse (revisa el log).")
+        f"El proceso terminó con código {rc}" + (f" ({why})" if why else "") +
+        ". Se probaron todas las optimizaciones (hasta la más segura) y aun así la compilación falla: este "
+        "juego necesita trabajo específico para recompilarse (revisa el log).")

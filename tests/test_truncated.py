@@ -62,6 +62,9 @@ def project(path, generated=BAD):
         "[functions]\n0x820E15E8 = {}  # salto desde 0x820E0D04\n")
     open(os.path.join(path, "generated", "default", "castlecrashers_recomp.16.cpp"), "w").write(generated)
     open(os.path.join(path, "generated", "default", "castlecrashers_register.cpp"), "w").write(REGISTER)
+    # Sello de una generación anterior: cualquier corrección de la tabla de funciones debe borrarlo para
+    # que ninja no reutilice el código generado sin las correcciones.
+    open(os.path.join(path, "generated", "default", "codegen.build.stamp"), "w").write("x")
 
 
 print("Detección y corrección")
@@ -123,6 +126,8 @@ cx = Ctx()
 game.codegen_with_autofix(AppConfig(), p2, os.path.join(p2, "build"), "castlecrashers", dict(os.environ), cx)
 check(game.find_missing_labels(game.generated_dir(p2)) == {} and
       open(os.path.join(p2, "codegen_runs")).read() == "xx", "el codegen lo detecta, lo corrige y regenera")
+check(not os.path.exists(os.path.join(game.generated_dir(p2), "codegen.build.stamp")),
+      "al corregir la tabla de funciones se invalida el código generado (no se reutiliza el sello viejo)")
 check(any("cortadas por el análisis" in m for m in cx.msgs), "lo explica en el log")
 
 p3 = os.path.join(TMP, "p3")                      # proyecto generado con una versión anterior
@@ -154,6 +159,66 @@ game.codegen_with_autofix(AppConfig(), p4, os.path.join(p4, "build"), "castlecra
 game.run_streaming = orig
 check(len(runs) == 2 and {0x82B3EB88, 0x82B64C9C} <= game.declared_functions(p4),
       "los declara y regenera (el juego no se cerrará al llegar ahí)")
+print("Saltos que siguen en el código generado tras regenerar")
+p7 = os.path.join(TMP, "p7")
+project(p7, GOOD + """
+DEFINE_REX_FUNC(sub_82B6D304) {
+\tREX_FATAL("Unresolved call from 0x82B3EAC0 to 0x82B3EB88");
+}
+""")
+corridas = []
+
+
+def fake_stream_warn(cmd, cwd, env, ctx):
+    corridas.append(1)
+    return 0, round1 if len(corridas) == 1 else ["Codegen summary: 449 written"]
+
+
+round1 = ["Unresolved function 0x82B3EB88 from 0x82B3EAC0 (no CallTarget in FunctionNode)"]
+orig = game.run_streaming
+game.run_streaming = fake_stream_warn
+try:
+    cx7 = Ctx()
+    game.codegen_with_autofix(AppConfig(), p7, os.path.join(p7, "build"), "castlecrashers", {}, cx7)
+finally:
+    game.run_streaming = orig
+check(len(corridas) == 2 and 0x82B3EB88 in game.declared_functions(p7),
+      "declara el salto y regenera una sola vez")
+check(any("sin resolver" in m for m in cx7.msgs) and any("0x82B3EB88" in m for m in cx7.msgs),
+      "avisa de lo que sigue en el código generado en vez de darlo por bueno")
+
+print("Diagnóstico cuando ya no hay nada que corregir")
+p8 = os.path.join(TMP, "p8")
+project(p8)
+open(os.path.join(p8, "reforge_functions.toml"), "a").write("0x82478B30 = {}\n")
+
+
+def fake_stream_err(cmd, cwd, env, ctx):
+    return 1, ["UnresolvedCall (1):",
+               "  0x82478B30 from 0x82471480: b 0x82478B30 from 0x82471480 - target not in any function"]
+
+
+mensaje = ""
+game.run_streaming = fake_stream_err
+try:
+    game.codegen_with_autofix(AppConfig(), p8, os.path.join(p8, "build"), "castlecrashers", {}, Ctx())
+except RuntimeError as e:
+    mensaje = str(e)
+finally:
+    game.run_streaming = orig
+check("0x82478B30" in mensaje and "quítalas" in mensaje,
+      "el error final dice qué direcciones siguen sin resolverse y qué hacer")
+
+p9 = os.path.join(TMP, "p9")
+project(p9)
+game.run_streaming = lambda cmd, cwd, env, ctx: (-1073741515, [])
+try:
+    game.codegen_with_autofix(AppConfig(), p9, os.path.join(p9, "build"), "castlecrashers", {}, Ctx())
+except RuntimeError as e:
+    mensaje = str(e)
+finally:
+    game.run_streaming = orig
+check("DLL" in mensaje, "traduce el código de error de Windows (falta una DLL) en vez de solo el número")
 print("Saltos convertidos en REX_FATAL y entradas que chocan")
 gen5 = os.path.join(TMP, "p5", "generated", "default")
 project(os.path.join(TMP, "p5"), GOOD + """
