@@ -2,6 +2,21 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.46.3 — Recompilación más fiable: el autofix siempre regenera y no oculta saltos rotos
+
+- **El código generado ya no se reutiliza después de corregir la tabla de funciones.** Cuando el autofix cambia
+  `reforge_functions.toml` (entradas que se solapan, el final real de una función cortada o direcciones nuevas por
+  saltos sin resolver), se invalida la generación anterior para que la corrección entre de verdad en el `.exe`.
+  Antes solo algunas ramas lo hacían y ninja podía dar el codegen por bueno con el código viejo.
+- Lo mismo al recuperarse durante la compilación del error «use of undeclared label» de una función cortada.
+- **Aviso honesto si quedan saltos rotos:** si tras regenerar el código generado todavía contiene
+  `REX_FATAL("Unresolved …")` en direcciones que ya están declaradas (o marcadas como no-función), el Taller lo
+  dice con las direcciones concretas en vez de terminar como si todo hubiera ido bien; el juego se cerraría al
+  llegar ahí.
+- **Errores más útiles:** el error final de llamadas sin resolver incluye las direcciones pendientes y qué hacer,
+  y los fallos de codegen/compilación traducen los códigos de Windows (falta una DLL del sistema, arquitectura
+  incorrecta) en lugar de mostrar solo el número.
+
 ## 1.46.2 — Reintento automático ante el cierre INTERMITENTE «Invalid UTF-8»
 
 - **Corrección honesta:** el cierre «deferred completion threw 'Invalid UTF-8'» **no** era el logon de Live (el
