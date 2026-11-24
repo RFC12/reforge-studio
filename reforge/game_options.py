@@ -671,19 +671,19 @@ SDK011_KEYS = {
     "video_mode_width": "ui.video_mode_width",
     "video_mode_height": "ui.video_mode_height",
     "video_mode_refresh_rate": "ui.video_mode_refresh_rate",
-    "present_letterbox": "gpu.present_letterbox",
-    "gpu_debug_markers": "gpu.debug_markers",
-    "swap_post_effect": "xenos.swap_post_effect",
-    "readback_resolve": "xenos.readback_resolve",
-    "d3d12_readback_resolve": "xenos.d3d12_readback_resolve",
-    "render_target_path_d3d12": "xenos.d3d12_render_target_path",
-    "gpu_allow_invalid_fetch_constants": "xenos.allow_invalid_fetch_constants",
-    "async_shader_compilation": "xenos.async_shader_compilation",
-    "d3d12_pipeline_creation_threads": "xenos.d3d12_pipeline_creation_threads",
-    "texture_cache_memory_limit_hard": "xenos.texture_cache_memory_limit_hard",
-    "texture_cache_memory_limit_soft": "xenos.texture_cache_memory_limit_soft",
-    "texture_cache_memory_limit_render_to_texture": "xenos.texture_cache_memory_limit_render_to_texture",
-    "texture_cache_memory_limit_soft_lifetime": "xenos.texture_cache_memory_limit_soft_lifetime",
+    "present_letterbox": "gpu.xenos.present_letterbox",
+    "gpu_debug_markers": "gpu.d3d12.debug_markers",
+    "swap_post_effect": "gpu.xenos.swap_post_effect",
+    "readback_resolve": "gpu.xenos.readback_resolve",
+    "d3d12_readback_resolve": "gpu.d3d12.readback_resolve",
+    "render_target_path_d3d12": "gpu.d3d12.render_target_path",
+    "gpu_allow_invalid_fetch_constants": "gpu.xenos.allow_invalid_fetch_constants",
+    "async_shader_compilation": "gpu.xenos.async_shader_compilation",
+    "d3d12_pipeline_creation_threads": "gpu.d3d12.pipeline_creation_threads",
+    "texture_cache_memory_limit_hard": "gpu.xenos.texture_cache_memory_limit_hard",
+    "texture_cache_memory_limit_soft": "gpu.xenos.texture_cache_memory_limit_soft",
+    "texture_cache_memory_limit_render_to_texture": "gpu.xenos.texture_cache_memory_limit_render_to_texture",
+    "texture_cache_memory_limit_soft_lifetime": "gpu.xenos.texture_cache_memory_limit_soft_lifetime",
 }
 
 # Ajustes de 0.10 que el SDK 0.11 ya no tiene: escribirlos solo llenaría el log de «unknown setting».
@@ -819,6 +819,61 @@ def write_runtime_config(exe, options):
 # ---------------------------------------------------------------- gancho de rutas
 HOOK_BEGIN = "  // >>> ReForge Studio: carpeta del juego automática (no editar este bloque)"
 HOOK_END = "  // <<< ReForge Studio"
+HOOK011_MARK = "// >>> ReForge Studio: carpeta del juego automática (SDK 0.11)"
+
+
+def ensure_paths_hook_011(root):
+    """SDK 0.11: sin `--game_data_root` el .exe se cierra con «title failed: --game_data_root was not
+    provided» (por eso solo arrancaba el .bat). Aquí se le da por defecto la carpeta «assets» del proyecto
+    desde `OnConfigure`, que corre antes de la línea de comandos: si alguien pasa el argumento, manda el suyo.
+    Devuelve True si cambió `src/main.cpp`."""
+    main = os.path.join(root, "src", "main.cpp")
+    try:
+        txt = open(main, encoding="utf-8").read()
+    except OSError:
+        return False
+    if "rex::app::TitleApp" not in txt and not re.search(r"class\s+\w+\s*:\s*public\s+rex::app::TitleApp", txt):
+        return False
+    if re.search(r"^\s*(rex::)?Result<void>\s+OnConfigure\s*\(", txt, re.M):
+        return False          # el usuario ya tiene el suyo: no se toca
+    hook = (f"{HOOK011_MARK} (no editar este bloque)\n"
+            "  rex::Result<void> OnConfigure(rex::SettingsRegistry& settings) override {\n"
+            "    const std::filesystem::path exe_dir = [] {\n"
+            "      wchar_t buf[MAX_PATH] = {};\n"
+            "      ::GetModuleFileNameW(nullptr, buf, MAX_PATH);\n"
+            "      return std::filesystem::path(buf).parent_path();\n"
+            "    }();\n"
+            "    std::error_code ec;\n"
+            "    for (const auto& c : {exe_dir / \"assets\", exe_dir.parent_path() / \"assets\"}) {\n"
+            "      if (std::filesystem::is_directory(c, ec)) {\n"
+            "        (void)settings.SetText(rex::SettingLayer::kTitle, \"title.game_root\", c.string());\n"
+            "        break;\n"
+            "      }\n"
+            "    }\n"
+            "    const auto upd = exe_dir.parent_path() / \"update\";\n"
+            "    if (std::filesystem::is_directory(upd, ec))\n"
+            "      (void)settings.SetText(rex::SettingLayer::kTitle, \"title.update_root\", upd.string());\n"
+            "    return rex::app::TitleApp::OnConfigure(settings);\n"
+            "  }\n"
+            "// <<< ReForge Studio: carpeta del juego automática (SDK 0.11)\n")
+    if HOOK011_MARK in txt:
+        new = re.sub(re.escape(HOOK011_MARK) + r".*?// <<< ReForge Studio: carpeta del juego automática \(SDK 0\.11\)\n",
+                     lambda _m: hook, txt, flags=re.S)
+    else:
+        m = re.search(r"(class\s+\w+\s*:\s*public\s+rex::app::TitleApp\s*\{\s*\n\s*public:\s*\n)", txt)
+        if not m:
+            return False
+        new = txt[:m.end()] + hook + "\n" + txt[m.end():]
+    for inc in ("#include <filesystem>", "#include <windows.h>"):
+        if inc not in new:
+            new = new.replace('#include <rex/app/title_app.h>', '#include <rex/app/title_app.h>\n' + inc, 1)
+    if new == txt:
+        return False
+    tmp = main + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+        f.write(new)
+    os.replace(tmp, main)
+    return True
 
 
 def app_header(root):
@@ -831,7 +886,7 @@ def ensure_paths_hook(root):
     instalada). Devuelve True si cambió."""
     path = app_header(root)
     if not path:
-        return False
+        return ensure_paths_hook_011(root)
     txt = open(path, encoding="utf-8").read()
     assets = os.path.join(os.path.abspath(root), "assets").replace("\\", "/")
     hook = (f"{HOOK_BEGIN}\n"

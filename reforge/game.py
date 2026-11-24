@@ -803,38 +803,74 @@ def enable_exception_handlers(root):
 
 
 SEH_MARK = "# ReForge: SEH_TRY header"
+SEH_HEADER = "reforge_seh.h"
 SEH_UNDECLARED_RE = re.compile(r"undeclared identifier '(SEH_TRY|SEH_CATCH|SEH_END|SEH_CATCH_ALL|GetExceptionCode|"
                                r"GetExceptionInformation)'")
 
 
+SEH_SHIMMED = (
+    "// ReForge Studio: SEH del código recompilado (generada; no editar).\n"
+    "// El codegen escribe REX_SEH_TRY/REX_SEH_CATCH del SDK, que en Windows usan __try/__except,\n"
+    "// pero con clang-cl no trae GetExceptionCode/GetExceptionInformation: se definen aquí (lo que\n"
+    "// hace <excpt.h> de MSVC) y así compilan todos los archivos generados.\n"
+    "#pragma once\n"
+    "#if defined(_WIN32)\n"
+    "#include <windows.h>\n"
+    "#ifndef GetExceptionCode\n"
+    "#define GetExceptionCode _exception_code\n"
+    "#endif\n"
+    "#ifndef GetExceptionInformation\n"
+    "#define GetExceptionInformation _exception_info\n"
+    "#endif\n"
+    "#endif\n"
+)
+
+
 def ensure_seh_header(root):
     """Con manejadores de excepciones, el codegen de rexglue escribe SEH_TRY/SEH_CATCH pero el SDK no incluye
-    el encabezado que las define (rex/platform/exceptions.h) ni, en Windows, <excpt.h> (GetExceptionCode):
-    se añaden al precompilado del código recompilado. Devuelve True si cambió CMakeLists.txt."""
+    el encabezado que las define (rex/platform/exceptions.h) ni, con clang-cl, GetExceptionCode. Se genera
+    `src/reforge_seh.h` y se pone en el precompilado del código recompilado. Devuelve True si cambió algo."""
     cml = os.path.join(root, "CMakeLists.txt")
     try:
         txt = Path(cml).read_text(encoding="utf-8", errors="replace")
     except OSError:
         return False
-    if SEH_MARK in txt and "<excpt.h>" in txt:
-        return False
-    if SEH_MARK in txt:          # bloque de una versión anterior (sin excpt.h): se rehace
-        txt = re.sub(re.escape(SEH_MARK) + r".*?\nendif\(\)\n?", "", txt, flags=re.S)
     m = re.search(r"^\s*project\(\s*([A-Za-z0-9_\-]+)", txt, re.M)
     name = (m.group(1) if m else "") or manifest_project_name(root)
     if not name:
         return False
+    header = os.path.join(root, "src", SEH_HEADER)
+    try:
+        old = Path(header).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        old = ""
+    if old != SEH_SHIMMED:
+        os.makedirs(os.path.dirname(header), exist_ok=True)
+        Path(header).write_text(SEH_SHIMMED, encoding="utf-8", newline="\n")
+    if SEH_MARK in txt and SEH_HEADER in txt:
+        return False
+    if SEH_MARK in txt:          # bloque de una versión anterior (con <excpt.h>): se rehace
+        txt = re.sub(re.escape(SEH_MARK) + r".*?\n(?:endforeach|endif)\(\)\n?", "", txt, flags=re.S)
+    # El SDK crea más de un destino con el código recompilado («_recomp», «_recompiled»…), así que la cabecera
+    # va en el precompilado de todos ellos (si no, el .pch de los .cpp generados se queda sin ella).
     block = (f"\n{SEH_MARK} (generate_exception_handlers: the SDK does not include it)\n"
-             f"if(TARGET {name}_recomp)\n"
-             f"    if(WIN32)\n"
-             f"        target_precompile_headers({name}_recomp PRIVATE <excpt.h>)\n"
-             f"    endif()\n"
-             f"    target_precompile_headers({name}_recomp PRIVATE <rex/platform/exceptions.h>)\n"
-             f"endif()\n")
+             "get_property(_reforge_seh_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)\n"
+             "foreach(_reforge_seh_target IN LISTS _reforge_seh_targets)\n"
+             "    if(_reforge_seh_target MATCHES \"_recomp\")\n"
+             f"        target_precompile_headers(${{_reforge_seh_target}} PRIVATE \"${{CMAKE_CURRENT_SOURCE_DIR}}/src/{SEH_HEADER}\")\n"
+             "    endif()\n"
+             "endforeach()\n")
     with open(cml, "w", encoding="utf-8", newline="\n") as f:
         f.write(txt.rstrip("\n") + "\n" + block)
-    # CMake reescribe cmake_pch.hxx pero ninja no siempre rehace el .pch: se borra para forzarlo
-    for d in (os.path.join(root, "build", "CMakeFiles", f"{name}_recomp.dir"),):
+    # CMake reescribe cmake_pch.hxx pero ninja no siempre rehace el .pch (y clang se niega a usarlo:
+    # «modified since the precompiled header was built»): se borran los de todos los destinos recompilados.
+    cmakefiles = os.path.join(root, "build", "CMakeFiles")
+    try:
+        dirs = [os.path.join(cmakefiles, d) for d in os.listdir(cmakefiles) if "_recomp" in d]
+    except OSError:
+        dirs = []
+    dirs.append(os.path.join(cmakefiles, f"{name}_recomp.dir"))
+    for d in dirs:
         for f in ("cmake_pch.hxx.pch", "cmake_pch.hxx.gch"):
             try:
                 os.remove(os.path.join(d, f))

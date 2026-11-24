@@ -2,6 +2,24 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.12 — El .exe de los juegos del SDK 0.11 arranca sin el .bat, y los manejadores de excepciones compilan
+
+- **El ejecutable del juego arranca con doble clic.** En los proyectos del SDK 0.11 solo funcionaba el `.bat`:
+el `.exe` se cerraba con «title failed: --game_data_root was not provided» porque nadie le decía dónde estaba
+la carpeta `assets`. Ahora ReForge añade a `src/main.cpp` un `OnConfigure` que da por defecto `title.game_root`
+(la carpeta del juego junto al `.exe`, o junto al proyecto) y `title.update_root` si hay una actualización
+instalada; si alguien pasa `--game_data_root`, manda el suyo. Comprobado con Resident Evil Zero: el `.exe`
+abierto sin argumentos entra al juego igual que con el `.bat`.
+- **La reparación con manejadores de excepciones ya no rompe la compilación.** El código generado usa
+`REX_SEH_TRY`/`REX_SEH_CATCH`, que en Windows necesitan `GetExceptionCode`/`GetExceptionInformation`, y con
+clang-cl no venían definidos: el build fallaba con «use of undeclared identifier 'GetExceptionCode'» y
+ReForge bajaba la optimización sin arreglarlo. Ahora se genera `src/reforge_seh.h` (definiendo esos dos
+intrínsecos, lo que hace `<excpt.h>` de MSVC) y se añade al precompilado de **todos** los destinos del código
+recompilado (`_recomp`, `_recompiled`…), borrando los `.pch` viejos. Verificado con **Crash of the Titans**:
+compila y enlaza con los manejadores activos.
+- Pequeño ajuste del .toml de 0.11 a los nombres nuevos del SDK (`gpu.xenos.*`, `gpu.d3d12.*`) para que el log
+no avise de renombrados.
+
 ## 1.48.11 — Se acabó la recompilación en bucle y el menú Guía de 0.11 ya funciona con mando
 
 - **Bucle de recompilación arreglado.** El Taller comparaba la carpeta del SDK que había en la caché de CMake
