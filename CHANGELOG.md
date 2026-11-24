@@ -2,6 +2,19 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.3 — El diagnóstico de cierres dice qué pasó, y la optimización no se queda apagada sin motivo
+
+- **El diagnóstico lee el volcado de Windows.** Antes, un 0xC0000005 sin línea en el log se resumía en «sin mensaje
+  en el log». Ahora se abre el `.dmp` de `%LOCALAPPDATA%\CrashDumps` (solo las cabeceras, milisegundos) y se dice
+  qué intentó hacer el proceso, dónde y desde qué código: «escritura en la dirección 0x20D559000 desde
+  VCRUNTIME140.dll+0xF88B». Con eso se distingue una copia de memoria que se pasa de largo de un puntero nulo, y
+  se puede buscar el módulo y el desplazamiento exactos en el log del juego.
+- **La optimización del código vuelve a «Segura» cuando se descarta.** Si el juego se cierra también con
+  «Desactivada», el fallo no viene de la optimización: antes se quedaba apagada para siempre y el juego perdía
+  rendimiento por un problema que no era suyo. Ahora se vuelve a «Segura» (se aplica en la próxima compilación),
+  se anota que la optimización queda descartada y no se vuelve a bajar de nivel en los cierres siguientes. Si
+  eliges el nivel a mano en el optimizador, esa marca se borra y vuelve a decidir solo.
+
 ## 1.48.2 — La notificación de logros sale siempre que el juego desbloquea uno
 
 - **El aviso flotante no aparecía aunque el logro sí se desbloqueaba.** El runtime guarda el desbloqueo y avisa por

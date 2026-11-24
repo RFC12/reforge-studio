@@ -1532,8 +1532,18 @@ class WorkshopPage(QWidget):
         Devuelve True si lo hizo."""
         if o.codegen_opt == "off" or o.codegen_opt_verified or res.get("hotplug") or not o.auto_repair:
             return False
+        if o.codegen_opt_exonerated:      # ya se probó «Desactivada» y también se cerró: no es la optimización
+            return False
         lvl = o.codegen_level()
         if lvl == "off":
+            # El nivel más conservador también se cierra: la optimización queda descartada. Volver a «Segura»
+            # no recompila ahora (se aplica en la próxima compilación) y deja de bajarse en cada cierre.
+            o.codegen_opt_exonerated = True
+            o.codegen_opt, o.codegen_opt_level = "auto", "safe"
+            o.save(p.root)
+            self.log.write("↺ Se cerró también con la optimización del código «Desactivada»: el fallo no viene de "
+                           "ahí. Se vuelve a «Segura» para no perder rendimiento (se aplica en la próxima "
+                           "compilación) y ya no se baja más de nivel por estos cierres.", "warn")
             return False
         nxt = game.CODEGEN_LEVELS[game.CODEGEN_LEVELS.index(lvl) + 1]
         o.codegen_opt, o.codegen_opt_level = "auto", nxt

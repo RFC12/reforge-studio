@@ -97,6 +97,8 @@ class GameOptions:
     codegen_opt: str = "auto"
     codegen_opt_level: str = "safe"  # nivel que usa «auto» ahora mismo
     codegen_opt_verified: bool = False   # ya se jugó una partida completa sin cierres con ese nivel
+    # Se cerró también con «Desactivada»: el fallo no venía de la optimización, así que no se vuelve a bajar
+    codegen_opt_exonerated: bool = False
     # Fotogramas (pc_enhance.py): "30" 30 FPS con VSync para Smooth Motion · "60" VSync a 60 ·
     # "monitor" VSync a los Hz del monitor · "unlimited" sin límite
     fps_mode: str = ""             # "" = según la casilla VSync de versiones anteriores

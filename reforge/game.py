@@ -9,6 +9,7 @@ import sys
 import queue
 import threading
 
+from . import crashdump
 from .core import NO_WINDOW, cmake_codegen_cmd, manifest_project_name
 from .runner import MAKE_RE, NINJA_RE, classify
 
@@ -1662,6 +1663,7 @@ def session_result(exe, log, started):
     info = analyze_runtime_log(log, 0xC0000005 if dump else None)
     if dump:
         info["dump"] = dump
+        info["dump_info"] = crashdump.read(dump)   # qué acceso, en qué dirección y desde qué módulo
     return info
 
 
@@ -1672,7 +1674,16 @@ def crash_advice(info):
         what = "lectura" if info.get("access") == "read" else "escritura"
         null = " (un puntero nulo: el juego usó un objeto que no llegó a crearse)" if a < 0x10000 else ""
         return (f"El código del juego hizo una {what} en una dirección no válida 0x{a:08X}{null}.")
-    msg = f"El juego se cerró por un fallo del runtime de rexglue ({info.get('crash', '?')}), sin mensaje en el log."
+    dump = info.get("dump_info") or {}
+    msg = f"El juego se cerró por un fallo del runtime de rexglue ({info.get('crash', '?')})"
+    if dump.get("address"):
+        # El volcado de Windows sí lo dice aunque el log no llegue a escribirlo.
+        what = {"read": "lectura", "write": "escritura", "execute": "ejecución"}.get(
+            dump.get("access"), "acceso")
+        where = f" desde {dump['module']}+0x{dump['offset']:X}" if dump.get("module") else ""
+        msg += f": {what} en la dirección 0x{dump['address']:X}{where}."
+    else:
+        msg += ", sin mensaje en el log."
     if info.get("hotplug"):
         msg += (" Justo antes el mando se desconectó y reconectó: el controlador SDL de rexglue 0.10 daña la "
                 "memoria al reconectar. Con mandos de Xbox usa «XInput» (Opciones → Controles; «Automático» "

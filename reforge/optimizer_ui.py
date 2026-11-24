@@ -254,6 +254,7 @@ class OptimizeDialog(QDialog):
         if self.cgopt.currentData() != o.codegen_opt:
             o.codegen_opt = self.cgopt.currentData()
             o.codegen_opt_verified = False
+            o.codegen_opt_exonerated = False
             if o.codegen_opt == "auto":
                 o.codegen_opt_level = "safe"
             rebuild = True

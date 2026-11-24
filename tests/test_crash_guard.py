@@ -187,4 +187,55 @@ class _Cfg:
 check(game.sdk_mismatch(_Cfg("C:/tools/rexglue-sdk/0.10.0.24-dev.gbd833a2-fsr/win-amd64"), bd).startswith("el SDK"),
       "al cambiar al SDK con FSR, el juego se reconfigura y recompila")
 check(game.sdk_mismatch(_Cfg("C:/tools/rexglue-sdk/0.10.0.24-dev.gbd833a2/win-amd64"), bd) == "", "mismo SDK: nada")
+print("Volcado de Windows: qué acceso, en qué dirección y desde qué módulo")
+import struct  # noqa: E402
+from reforge import crashdump  # noqa: E402
+
+
+def minidump(path, code=0xC0000005, access=1, address=0x20D559000,
+             rip=0x7FFBC9000000 + 0xF88B, module="C:\\juego\\VCRUNTIME140.dll",
+             base=0x7FFBC9000000, size=0x100000):
+    """Mini volcado real (MDMP) con una excepción de acceso y un módulo cargado."""
+    key6, key4 = 0x100, 0x800
+    ctx = 0x400
+    name = 0x900
+    body = bytearray(0xA00)
+    struct.pack_into("<4sIIIIIQ", body, 0, b"MDMP", 0xA793, 2, 0x20, 0, 0, 0)
+    struct.pack_into("<III", body, 0x20, 6, 0xA8, key6)              # stream de excepción
+    struct.pack_into("<III", body, 0x2C, 4, 0, key4)                 # lista de módulos
+    struct.pack_into("<II", body, key6, 1234, 0)                     # ThreadId + relleno
+    struct.pack_into("<IIQQII", body, key6 + 8, code, 0, 0, 0, 2, 0)
+    struct.pack_into("<QQ", body, key6 + 40, access, address)
+    struct.pack_into("<II", body, key6 + 160, 0x300, ctx)            # ThreadContext
+    struct.pack_into("<Q", body, ctx + 0xF8, rip)                    # RIP del hilo que falló
+    struct.pack_into("<I", body, key4, 1)                            # un módulo
+    struct.pack_into("<QI", body, key4 + 4, base, size)              # BaseOfImage, SizeOfImage
+    struct.pack_into("<I", body, key4 + 4 + 20, name)                # ModuleNameRva
+    raw = module.encode("utf-16-le")
+    struct.pack_into("<I", body, name, len(raw))
+    body[name + 4:name + 4 + len(raw)] = raw
+    open(path, "wb").write(bytes(body))
+    return path
+
+
+dmp = minidump(os.path.join(TMP, "juego.exe.1.dmp"))
+d = crashdump.read(dmp)
+check(d.get("code") == 0xC0000005 and d.get("access") == "write",
+      "el volcado dice que fue una ESCRITURA (no solo «sin mensaje en el log»)")
+check(d.get("address") == 0x20D559000 and d.get("module") == "VCRUNTIME140.dll" and d.get("offset") == 0xF88B,
+      "dirección que se tocó y módulo+desplazamiento del código que falló")
+adv2 = game.crash_advice({"kind": "crash", "crash": "acceso a memoria no válido (0xC0000005)", "dump_info": d})
+check("escritura" in adv2 and "0x20D559000" in adv2 and "VCRUNTIME140.dll+0xF88B" in adv2,
+      "el diagnóstico lo explica: escritura en 0x… desde módulo+0x…")
+check("sin mensaje" not in adv2, "y ya no dice «sin mensaje en el log»")
+d2 = crashdump.read(minidump(os.path.join(TMP, "juego.exe.2.dmp"), access=0, address=0x1000))
+check(d2.get("access") == "read" and "lectura" in game.crash_advice({"kind": "crash", "dump_info": d2}),
+      "también distingue una lectura")
+basura = os.path.join(TMP, "basura.dmp")
+open(basura, "wb").write(b"no es un volcado")
+check(crashdump.read(basura) == {} and crashdump.read(os.path.join(TMP, "no-existe.dmp")) == {},
+      "un archivo que no es un volcado (o que no existe) no rompe nada")
+check("sin mensaje" in game.crash_advice({"kind": "crash", "crash": "0xC0000005"}),
+      "sin volcado se mantiene el texto de antes")
+
 print(f"\nTodas las pruebas pasaron ({ok}).")

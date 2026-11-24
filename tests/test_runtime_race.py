@@ -104,4 +104,27 @@ for _ in range(20):
 check(plays == [] and o.codegen_opt_level == "safe",
       "tras 3 arranques seguidos no reabre en bucle ni degrada la optimización")
 
+print("Con «Desactivada» también se cierra: la optimización no era la causa")
+proj = os.path.join(TMP, "proj_off")
+os.makedirs(proj, exist_ok=True)
+o2 = GameOptions()
+o2.codegen_opt, o2.codegen_opt_level, o2.codegen_opt_verified = "auto", "off", False
+o2.auto_repair = True
+avisos = []
+page.current = None
+page.log = SimpleNamespace(write=lambda text, kind="": avisos.append(text))
+CIERRE = {"kind": "crash", "path": logp3, "hotplug": False, "lines": []}
+destino = SimpleNamespace(root=proj)
+check(not WorkshopPage._codegen_step_down(page, destino, o2, CIERRE) and
+      o2.codegen_opt_level == "safe" and o2.codegen_opt_exonerated,
+      "se vuelve a «Segura» y se anota que la optimización queda descartada")
+check(any("Desactivada" in m and "Segura" in m for m in avisos), "el log lo explica")
+o2.codegen_opt_level = "off"
+check(not WorkshopPage._codegen_step_down(page, destino, o2, CIERRE) and o2.codegen_opt_level == "off",
+      "ya no se vuelve a bajar de nivel en los cierres siguientes")
+o3 = GameOptions()
+o3.codegen_opt, o3.codegen_opt_level, o3.auto_repair = "auto", "safe", True
+check(WorkshopPage._codegen_step_down(page, destino, o3, CIERRE) or o3.codegen_opt_level == "off",
+      "desde «Segura» se sigue bajando a «Desactivada» como antes")
+
 print(f"\nTodas las pruebas pasaron ({ok}).")
