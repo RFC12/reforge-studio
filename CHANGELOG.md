@@ -2,6 +2,24 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.11 — Se acabó la recompilación en bucle y el menú Guía de 0.11 ya funciona con mando
+
+- **Bucle de recompilación arreglado.** El Taller comparaba la carpeta del SDK que había en la caché de CMake
+  con la que tiene configurada ReForge. En un proyecto del SDK 0.11 con ReForge apuntando al 0.10, CMake
+  resolvía el 0.11 (por el entorno), la comparación fallaba, se borraba la caché… y la siguiente pasada volvía
+  a fallar: recompilación completa una y otra vez, sin final. Ahora se comparan **versiones**: si el SDK de la
+  caché cumple la que pide el proyecto (`find_package(rexglue 0.11.0)`), no se toca nada; y si de verdad hay
+  que reconfigurar, se hace **una sola vez** (queda anotado en `build/reforge_sdk.txt`), nunca en bucle.
+- **El menú Guía de 0.11 funciona con el mando.** La navegación se lee por ImGui, que es por donde el SDK
+  manda el pad (antes se leía el estado del juego, que queda neutral mientras el menú lo bloquea: el mando «no
+  respondía»). Y se pide el botón Guía del mando, que 0.11 filtra salvo que se active.
+- **Mismo aspecto que el menú de 0.10**: panel lateral deslizante con barra de acento, cabecera con gamertag,
+  puntos y hora, «Jugando / Total / FPS», pestañas Gráficos · Logros · Ajustes, filas con el valor a la derecha
+  y pies con los iconos de los botones (A / B / Guía, estilo Xbox o PlayStation), aviso flotante al cambiar y
+  lista de logros con trofeo, puntos, fecha y descripción.
+- Comprobado con **Resident Evil Zero**: compila y enlaza el menú nuevo y el juego arranca y se mantiene
+  abierto sin errores en el log.
+
 ## 1.48.10 — El idioma (y el resto de opciones) ya llegan de verdad a los juegos del SDK 0.11
 
 - **El idioma elegido no cambiaba nada en los juegos recompilados con el SDK 0.11.** Ese SDK renombró todos los

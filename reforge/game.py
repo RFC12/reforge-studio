@@ -1088,8 +1088,32 @@ def _ninja_version(path):
         return ""
 
 
+def sdk_package_version(cmake_dir):
+    """Versión de un SDK de rexglue a partir de .../lib/cmake/rexglue/rexglueConfigVersion.cmake."""
+    try:
+        txt = open(os.path.join(cmake_dir, "rexglueConfigVersion.cmake"), encoding="utf-8", errors="replace").read()
+    except (OSError, TypeError):
+        return ""
+    m = re.search(r'set\(PACKAGE_VERSION "([0-9][0-9.]*)"\)', txt)
+    return m.group(1) if m else ""
+
+
+def sdk_required_version(root):
+    """Versión mínima que pide el proyecto: find_package(rexglue 0.11.0 ...) en su CMakeLists.txt."""
+    try:
+        txt = open(os.path.join(root, "CMakeLists.txt"), encoding="utf-8", errors="replace").read()
+    except (OSError, TypeError):
+        return ""
+    m = re.search(r"find_package\(\s*rexglue\s+([0-9][0-9.]*)", txt)
+    return m.group(1) if m else ""
+
+
+def _version_tuple(text):
+    return tuple(int(p) for p in re.findall(r"\d+", text or ""))
+
+
 def sdk_mismatch(cfg, build):
-    """El build se configuró con otro SDK de rexglue (p. ej. ahora el que trae FSR/CAS)."""
+    """Motivo para reconfigurar porque el build se configuró con otro SDK de rexglue, o ''."""
     cur = cache_value(build, "rexglue_DIR")
     try:
         prefix = cfg.sdk_prefix()
@@ -1098,9 +1122,30 @@ def sdk_mismatch(cfg, build):
     if not cur or not prefix:
         return ""
     norm = lambda p: os.path.normcase(os.path.normpath(p.replace("/", os.sep)))  # noqa: E731
-    if not norm(cur).startswith(norm(prefix)):
-        return "el SDK de rexglue cambió (" + os.path.basename(os.path.dirname(norm(prefix))) + ")"
-    return ""
+    if norm(cur).startswith(norm(prefix)):
+        return ""
+    # La caché guarda la carpeta .../lib/cmake/rexglue del SDK que encontró CMake. Si esa versión cumple lo que
+    # pide el proyecto, vale aunque sea otra instalación del mismo SDK: no hay nada que reconfigurar.
+    have = sdk_package_version(cur)
+    want = sdk_required_version(os.path.dirname(os.path.abspath(build)))
+    if have and want and _version_tuple(have)[:3] >= _version_tuple(want)[:3]:
+        return ""
+    # Guarda anti-bucle: si ya se borró la caché por esto y CMake vuelve a elegir el mismo SDK (porque el
+    # proyecto o el entorno lo imponen), no se repite. Sin esto el Taller recompilaba el juego entero una y
+    # otra vez, sin llegar nunca a un estado aceptable.
+    stamp = os.path.join(build, "reforge_sdk.txt")
+    try:
+        last = open(stamp, encoding="utf-8", errors="replace").read().strip()
+    except OSError:
+        last = ""
+    if last and norm(last) == norm(cur):
+        return ""
+    try:
+        with open(stamp, "w", encoding="utf-8") as f:
+            f.write(cur + "\n")
+    except OSError:
+        pass
+    return "el SDK de rexglue cambió (" + os.path.basename(os.path.dirname(norm(prefix))) + ")"
 
 
 def reset_cache(build):

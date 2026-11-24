@@ -72,6 +72,11 @@ check("DEMO_HOST_SOURCES src/demo_hooks.cpp src/reforge_menu.cpp" in cm,
 fuente = open(os.path.join(root, "src", "reforge_menu.cpp"), encoding="utf-8").read()
 for pieza, que in (("rex::ui::DialogBase", "usa la ventana ImGui del SDK 0.11"),
                    ("GetState(0)", "lee el mando (botón Guía)"),
+                   ("guide_button.Set(true)", "pide el botón Guía, que 0.11 filtra por defecto"),
+                   ("ImGuiKey_GamepadDpadUp", "navega con la cruceta por ImGui (el mando del juego va neutral)"),
+                   ("ImGuiKey_GamepadFaceDown", "usa A/B del mando"),
+                   ("OutCubic(a)", "el panel entra deslizante, como el menú de 0.10"),
+                   ("kAccentNames", "mismo color de acento y filas que el menú de 0.10"),
                    ("SetAudioPaused", "silencia al momento"),
                    ("GetAchievementManager", "lista los logros"),
                    ("reforge_menu.ini", "guarda lo elegido para el próximo arranque")):
