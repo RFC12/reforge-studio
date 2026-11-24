@@ -390,8 +390,9 @@ class GameOptionsDialog(QDialog):
         self.lang = language_combo(self.project.root, self.o)
         f.addRow("Idioma del juego", self.lang)
         f.addRow("", label("Se ofrecen los idiomas encontrados en los archivos del juego. Algunos juegos piden el "
-                           "idioma de otra forma (XGetLanguage) y rexglue 0.10 responde siempre inglés: en ese "
-                           "caso el juego seguirá en inglés.", "Hint", wrap=True))
+                           "idioma por XGetLanguage: con el SDK 0.10 la extensión de ReForge se lo da en el idioma "
+                           "elegido; con el SDK 0.11 el runtime lo recibe como kernel.user_language. Se aplica al "
+                           "abrir el juego (no en caliente).", "Hint", wrap=True))
         self.mute = QCheckBox("Silenciar el audio")
         self.mute.setChecked(self.o.audio_mute)
         f.addRow(self.mute)

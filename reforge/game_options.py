@@ -604,7 +604,11 @@ def menu_ini_path(exe):
 
 
 def project_root_for_exe(exe):
-    """Carpeta del proyecto (la que tiene reforge_game.json) a partir del .exe del juego."""
+    """Carpeta del proyecto (la que tiene reforge_game.json) a partir del .exe del juego.
+
+    Si el proyecto aún no tiene ese archivo, se usa la carpeta que contiene `build` (donde vive el .exe),
+    que es la misma: así el SDK y los ajustes se detectan igual.
+    """
     folder = os.path.dirname(os.path.abspath(exe))
     for _ in range(3):
         if os.path.isfile(os.path.join(folder, OPTIONS_FILE)):
@@ -613,6 +617,9 @@ def project_root_for_exe(exe):
         if parent == folder:
             break
         folder = parent
+    start = os.path.dirname(os.path.abspath(exe))
+    if os.path.basename(start).lower() == "build" and os.path.isdir(os.path.join(start, "..", "src")):
+        return os.path.abspath(os.path.join(start, ".."))
     return ""
 
 
@@ -646,6 +653,86 @@ def clear_menu_graphics(exe):
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(keep) + "\n")
     os.replace(tmp, path)
+
+
+# Nombres de ajuste del SDK 0.11: allí cada valor vive en un grupo ("owner.miembro", p. ej. "kernel.user_language");
+# con el nombre suelto de 0.10 el runtime lo tira ("unknown setting 'user_language' from Config") y el juego se
+# queda en inglés. Verificado contra los DLL del 0.11 instalado.
+SDK011_KEYS = {
+    "user_language": "kernel.user_language",
+    "user_country": "kernel.user_country",
+    "license_mask": "kernel.license_mask",
+    "audio_mute": "apu.mute",
+    "guide_button": "hid.guide_button",
+    "mnk_mode": "hid.mnk_mode",
+    "mnk_mouse": "hid.mnk_mouse",
+    "mnk_sensitivity": "hid.mnk_sensitivity",
+    "fullscreen": "ui.fullscreen",
+    "video_mode_width": "ui.video_mode_width",
+    "video_mode_height": "ui.video_mode_height",
+    "video_mode_refresh_rate": "ui.video_mode_refresh_rate",
+    "present_letterbox": "gpu.present_letterbox",
+    "gpu_debug_markers": "gpu.debug_markers",
+    "swap_post_effect": "xenos.swap_post_effect",
+    "readback_resolve": "xenos.readback_resolve",
+    "d3d12_readback_resolve": "xenos.d3d12_readback_resolve",
+    "render_target_path_d3d12": "xenos.d3d12_render_target_path",
+    "gpu_allow_invalid_fetch_constants": "xenos.allow_invalid_fetch_constants",
+    "async_shader_compilation": "xenos.async_shader_compilation",
+    "d3d12_pipeline_creation_threads": "xenos.d3d12_pipeline_creation_threads",
+    "texture_cache_memory_limit_hard": "xenos.texture_cache_memory_limit_hard",
+    "texture_cache_memory_limit_soft": "xenos.texture_cache_memory_limit_soft",
+    "texture_cache_memory_limit_render_to_texture": "xenos.texture_cache_memory_limit_render_to_texture",
+    "texture_cache_memory_limit_soft_lifetime": "xenos.texture_cache_memory_limit_soft_lifetime",
+}
+
+# Ajustes de 0.10 que el SDK 0.11 ya no tiene: escribirlos solo llenaría el log de «unknown setting».
+SDK011_DROP = {
+    "draw_resolution_scale_x", "draw_resolution_scale_y", "present_effect", "anisotropic_override",
+    "input_backend", "gpu_plugin", "mnk_sensitivity_x", "mnk_sensitivity_y", "shader_storage_blocking",
+    "d3d12_allow_variable_refresh_rate_and_tearing", "log_level", "frame_cap", "show_fps",
+    "vsync",   # en 0.11 lo lleva el presentador y su ajuste no se acepta desde el .toml
+}
+
+
+def sdk_is_011(root):
+    """¿Este proyecto usa el SDK 0.11 o posterior? (otra API de app y ajustes con grupo).
+
+    Se mira el código del proyecto (`src/main.cpp` con `REX_TITLE_APP`, que 0.10 no tiene) y, si no,
+    la caché de CMake: el SDK del build tiene `include/rex/app/title_app.h` solo en 0.11+.
+    """
+    try:
+        with open(os.path.join(root, "src", "main.cpp"), encoding="utf-8") as f:
+            main = f.read()
+        if "REX_TITLE_APP" in main or "rex::app::TitleApp" in main:
+            return True
+    except (OSError, TypeError):
+        pass
+    try:
+        txt = open(os.path.join(root, "build", "CMakeCache.txt"), encoding="utf-8", errors="replace").read()
+    except (OSError, TypeError):
+        return False
+    m = re.search(r"^rexglue_DIR:[A-Z]+=(.+)$", txt, re.M)
+    if not m:
+        return False
+    # <sdk>/lib/cmake/rexglue  →  <sdk>
+    sdk = os.path.abspath(os.path.join(m.group(1).strip(), "..", "..", ".."))
+    return os.path.isfile(os.path.join(sdk, "include", "rex", "app", "title_app.h"))
+
+
+def sdk011_values(values):
+    """Traduce los ajustes al nombre que entiende el SDK 0.11 (grupo incluido) y quita los que ya no existen."""
+    out = {}
+    for k, v in values.items():
+        if k in SDK011_DROP:
+            continue
+        if k in SDK011_KEYS:
+            out[SDK011_KEYS[k]] = v
+        elif k.startswith("keybind_"):
+            out["hid." + k] = v
+        else:
+            out[k] = v
+    return out
 
 
 def write_runtime_config(exe, options):
@@ -706,6 +793,10 @@ def write_runtime_config(exe, options):
     if effects is not None and values.get("present_effect") not in effects:
         values["present_effect"] = "bilinear"      # FSR/CAS no vienen en este runtime: se ignoraría
     managed = set(values) | set(ADVANCED_CVARS) | {"license_mask"}
+    if sdk_is_011(project_root_for_exe(exe)):
+        valores011 = sdk011_values(values)
+        managed |= set(valores011)          # y que no queden líneas sueltas con el nombre viejo
+        values = valores011
     # quitar del texto del usuario las claves que ahora gestiona ReForge (evita claves duplicadas)
     keep = [ln for ln in old.splitlines()
             if not re.match(r"^\s*([A-Za-z0-9_]+)\s*=", ln) or re.match(r"^\s*([A-Za-z0-9_]+)", ln).group(1) not in managed]

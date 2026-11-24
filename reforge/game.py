@@ -1186,9 +1186,8 @@ def rebuild_reason(root, exe, cfg=None):
 def sdk_no_cli_flags(root):
     """¿El build usa un SDK 0.11 o posterior? Ahí gpu_plugin es una cvar del .toml y la línea de comandos
     rechaza opciones desconocidas («command line failed: unknown option»), así que no se le pasa nada."""
-    d = (cache_value(os.path.join(root, "build"), "rexglue_DIR") or "").replace("\\", "/")
-    m = re.search(r"/rexglue-sdk/(\d+)\.(\d+)\.", d)
-    return bool(m) and (int(m.group(1)), int(m.group(2))) >= (0, 11)
+    from .game_options import sdk_is_011
+    return sdk_is_011(root)
 
 
 def launch_args(exe, root):

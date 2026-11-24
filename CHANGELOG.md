@@ -2,6 +2,19 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.10 — El idioma (y el resto de opciones) ya llegan de verdad a los juegos del SDK 0.11
+
+- **El idioma elegido no cambiaba nada en los juegos recompilados con el SDK 0.11.** Ese SDK renombró todos los
+  ajustes a «grupo.nombre» y el `.toml` recibía `user_language = 5`, que el runtime descartaba con
+  `unknown setting 'user_language' from Config`: el juego seguía en inglés aunque en Opciones estuviera
+  «Español (México / Latinoamérica)». Ahora se escribe `kernel.user_language` / `kernel.user_country` (y
+  `apu.mute`, `hid.*`, `ui.*`, `gpu.*`, `xenos.*` para el resto), y no se escriben los ajustes que 0.11 ya no
+  tiene (escala de resolución, `present_effect`, `gpu_plugin`…), que solo llenaban el log de avisos.
+- Comprobado con **Resident Evil Zero**: el runtime acepta ya `kernel.user_language = 5` y
+  `kernel.user_country = 71` (sin ningún «unknown setting» en el log) y el juego arranca y se mantiene abierto.
+  El idioma lo lee el juego al cargar, así que se aplica al abrirlo desde ReForge (no en caliente).
+- Los proyectos del SDK 0.10 escriben exactamente lo mismo que antes.
+
 ## 1.48.9 — El menú Guía también en los proyectos del SDK 0.11
 
 - **Menú Guía propio para la familia del SDK 0.11** (`rex::app::TitleApp`), que no tiene la clase `ReXApp` de

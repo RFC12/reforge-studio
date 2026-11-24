@@ -38,6 +38,8 @@ check(not any("gpu_plugin" in a for a in args_vk), "sin --gpu_plugin por línea 
 print("SDK 0.11: nada por línea de comandos")
 with tempfile.TemporaryDirectory() as d:
     os.makedirs(os.path.join(d, "build"), exist_ok=True)
+    os.makedirs(os.path.join(d, "src"), exist_ok=True)
+    open(os.path.join(d, "src", "main.cpp"), "w").write("REX_TITLE_APP(XApp)\n")   # proyecto del SDK 0.11
     open(os.path.join(d, "build", "CMakeCache.txt"), "w").write(
         "rexglue_DIR:PATH=C:/x/tools/rexglue-sdk/0.11.0.13-dev.g115171b4-fsr/win-amd64/lib/cmake/rexglue\n")
     o = GameOptions()
