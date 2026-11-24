@@ -2,6 +2,13 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.8 — El Taller dice en qué proyectos el menú Guía aún no se puede montar
+
+- Los proyectos creados con el **SDK 0.11** usan otra API de aplicación (`rex::app::TitleApp`, sin la clase
+  `ReXApp` ni los diálogos de ImGui de 0.10), así que la extensión del menú Guía no se puede generar ahí: el
+  juego se recompila y abre, pero sin menú. El Taller ahora lo dice con esas palabras al preparar el proyecto
+  (antes no se avisaba de nada) y no le mete archivos a medias. Con un proyecto del SDK 0.10 el menú sí sale.
+
 ## 1.48.7 — Menú Guía en todos los proyectos, idioma dentro del menú y base de datos de iconos
 
 - **El menú Guía (botón Xbox/PS o Inicio del teclado) queda en todos los juegos recompilados.** La extensión

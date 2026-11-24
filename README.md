@@ -4,7 +4,7 @@
 
 **Recompila juegos de Xbox 360 a PC desde una interfaz de escritorio — sin pelearte con la terminal.**
 
-[![Versión](https://img.shields.io/badge/versión-1.48.7-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
+[![Versión](https://img.shields.io/badge/versión-1.48.8-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
 [![Plataforma](https://img.shields.io/badge/Windows-10%20%2F%2011-19d3a2?style=flat-square&logo=windows&logoColor=white)](#instalación)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-19d3a2?style=flat-square&logo=python&logoColor=white)](#desarrollo)
 [![SDK](https://img.shields.io/badge/motor-rexglue%20%C2%B7%20XenonRecomp-19d3a2?style=flat-square)](https://github.com/rexglue/rexglue-sdk)
@@ -138,7 +138,7 @@ Atajos: `F11` pantalla completa · `Ctrl+1…9` secciones · flechas + `Enter` e
 
 ## 📜 Historial de versiones
 
-Lo más reciente es **1.48.7** (el menú Guía con el botón Xbox/PS queda en todos los juegos recompilados, con idioma del juego y silencio desde Ajustes, y una base de datos de iconos por Title ID que se aprende sola; además: el cierre por textos no UTF-8 dice qué revisar en Windows —página de códigos ANSI y rutas con tildes—, además de: los juegos creados con el SDK 0.11 vuelven a abrir —el cargador de la GPU ya no se elige por línea de comandos—, la caché de compilación ya no se borra solo porque Ninja esté en otra carpeta y el lanzador reintenta el arranque intermitente de Asura's Wrath hasta 8 veces; incluye el menú Guía que guarda de verdad sus cambios y el botón **Silenciar el juego** de 1.48.4, el diagnóstico por volcado de 1.48.3, la notificación de logros de 1.48.2 y los 30 FPS con VSync de 1.48.0).
+Lo más reciente es **1.48.8** (el Taller avisa cuándo un proyecto del SDK 0.11 no puede llevar el menú Guía; incluye de 1.48.7: el menú Guía con el botón Xbox/PS en todos los juegos del SDK 0.10 recompilados, con idioma del juego y silencio desde Ajustes, y una base de datos de iconos por Title ID que se aprende sola; además: el cierre por textos no UTF-8 dice qué revisar en Windows —página de códigos ANSI y rutas con tildes—, además de: los juegos creados con el SDK 0.11 vuelven a abrir —el cargador de la GPU ya no se elige por línea de comandos—, la caché de compilación ya no se borra solo porque Ninja esté en otra carpeta y el lanzador reintenta el arranque intermitente de Asura's Wrath hasta 8 veces; incluye el menú Guía que guarda de verdad sus cambios y el botón **Silenciar el juego** de 1.48.4, el diagnóstico por volcado de 1.48.3, la notificación de logros de 1.48.2 y los 30 FPS con VSync de 1.48.0).
 El detalle de cada versión está en [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 🙏 Créditos

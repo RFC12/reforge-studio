@@ -2354,6 +2354,28 @@ def _write_if_changed(path, text):
     return True
 
 
+def ext_unavailable_reason(root):
+    """«» si la extensión se puede generar; si no, por qué (para avisarlo en vez de callar).
+
+    Los proyectos del SDK 0.11 no tienen clase de app en un `*_app.h`: usan `rex::app::TitleApp` y su
+    `REX_TITLE_APP` en `src/main.cpp`, que es otra API (sin `ReXApp` ni los diálogos de ImGui de 0.10), así
+    que el menú Guía todavía no se puede montar ahí.
+    """
+    from .game_options import app_header
+    if app_header(root):
+        return ""
+    try:
+        with open(os.path.join(root, "src", "main.cpp"), encoding="utf-8") as f:
+            main = f.read()
+    except OSError:
+        return ""
+    if "REX_TITLE_APP" in main or "rex::app::TitleApp" in main:
+        return ("este proyecto usa la API de app del SDK 0.11 y el menú Guía está hecho para la de 0.10: "
+                "el juego se recompila y abre, pero sin menú. Con un proyecto del SDK 0.10 sí sale (el SDK se "
+                "elige en Herramientas).")
+    return ""
+
+
 def ensure_reforge_ext(root):
     """Añade/actualiza la extensión en el proyecto. Devuelve la lista de cambios (vacía si ya estaba)."""
     from .game_options import app_header
@@ -2362,7 +2384,7 @@ def ensure_reforge_ext(root):
     hdr = app_header(root)
     cml = os.path.join(root, "CMakeLists.txt")
     if not (hdr and os.path.isfile(cml)):
-        return changes
+        return changes      # sin clase de app (p. ej. SDK 0.11): ext_unavailable_reason() lo explica
     if _write_if_changed(os.path.join(src, "reforge_ext.h"), EXT_HEADER):
         changes.append("src/reforge_ext.h")
     if _write_if_changed(os.path.join(src, "reforge_ext.cpp"), EXT_SOURCE):

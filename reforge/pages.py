@@ -48,15 +48,19 @@ def prepare_project(root, ctx):
         apply_engine_profile(root, ctx.log)
     except Exception as e:      # noqa: BLE001
         ctx.log(f"No se pudo detectar el motor del juego: {e}", "warn")
-    from .ext_cpp import ensure_reforge_ext, remove_reforge_ext
+    from .ext_cpp import ensure_reforge_ext, ext_unavailable_reason, remove_reforge_ext
     if not GameOptions.load(root).reforge_ext:
         removed = remove_reforge_ext(root)
         ctx.log("Extensión ReForge desactivada en 🎮 Opciones" + (": quitada (" + ", ".join(removed) + ")."
                                                                  if removed else "."), "warn")
         return
+    sin_menu = ext_unavailable_reason(root)
+    if sin_menu:
+        ctx.log(f"Menú Guía no disponible en este proyecto: {sin_menu}", "warn")
+        return
     changed = ensure_reforge_ext(root)
     if changed:
-        ctx.log("Extensión ReForge (perfil, Live simulado, idioma y notificación de logros): "
+        ctx.log("Extensión ReForge (menú Guía, perfil, Live simulado, idioma y notificación de logros): "
                 + ", ".join(changed), "ok")
     else:
         ctx.log("Proyecto preparado (gancho de carpeta y extensión ReForge al día).", "dim")

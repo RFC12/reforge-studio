@@ -74,4 +74,22 @@ check("guide_menu = 1" in ini and "game_name = Gears Of War 2 Latino" in ini and
       "reforge_ext.ini lleva el menú, el nombre del juego y el avatar")
 profile.write_ext_ini(exe, go.GameOptions(guide_menu=False))
 check("guide_menu = 0" in open(profile.ext_ini_path(exe), encoding="utf-8").read(), "desactivado en el .ini")
+
+print("Detección de proyectos donde la extensión no se puede montar (SDK 0.11)")
+import tempfile  # noqa: E402
+proj11 = tempfile.mkdtemp(prefix="reforge-sdk11-")
+os.makedirs(os.path.join(proj11, "src"), exist_ok=True)
+open(os.path.join(proj11, "CMakeLists.txt"), "w").write("project(x)\n")
+open(os.path.join(proj11, "src", "main.cpp"), "w").write(
+    "#include <rex/app/title_app.h>\nclass XApp : public rex::app::TitleApp {};\nREX_TITLE_APP(XApp)\n")
+razon = ext_cpp.ext_unavailable_reason(proj11)
+check("0.11" in razon and "0.10" in razon, "un proyecto del SDK 0.11 dice por qué no hay menú Guía")
+check(ext_cpp.ensure_reforge_ext(proj11) == [], "y no se le meten archivos a medias")
+proj10 = tempfile.mkdtemp(prefix="reforge-sdk10-")
+os.makedirs(os.path.join(proj10, "src"), exist_ok=True)
+open(os.path.join(proj10, "CMakeLists.txt"), "w").write("project(x)\n  src/main.cpp\n")
+open(os.path.join(proj10, "src", "game_app.h"), "w").write(
+    "class GameApp : public rex::ReXApp {\n  using rex::ReXApp::ReXApp;\n};\n")
+open(os.path.join(proj10, "src", "main.cpp"), "w").write("int main() { return 0; }\n")
+check(ext_cpp.ext_unavailable_reason(proj10) == "", "un proyecto del SDK 0.10 sí puede llevarlo")
 print(f"\nTodas las pruebas pasaron ({ok}).")
