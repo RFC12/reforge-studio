@@ -4,7 +4,7 @@
 
 **Recompila juegos de Xbox 360 a PC desde una interfaz de escritorio — sin pelearte con la terminal.**
 
-[![Versión](https://img.shields.io/badge/versión-1.48.3-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
+[![Versión](https://img.shields.io/badge/versión-1.48.4-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
 [![Plataforma](https://img.shields.io/badge/Windows-10%20%2F%2011-19d3a2?style=flat-square&logo=windows&logoColor=white)](#instalación)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-19d3a2?style=flat-square&logo=python&logoColor=white)](#desarrollo)
 [![SDK](https://img.shields.io/badge/motor-rexglue%20%C2%B7%20XenonRecomp-19d3a2?style=flat-square)](https://github.com/rexglue/rexglue-sdk)
@@ -138,7 +138,7 @@ Atajos: `F11` pantalla completa · `Ctrl+1…9` secciones · flechas + `Enter` e
 
 ## 📜 Historial de versiones
 
-Lo más reciente es **1.48.3** (el diagnóstico de cierres lee el volcado de Windows —escritura/lectura, dirección y módulo— y la optimización del código ya no se queda apagada por un fallo que no era suyo; incluye la notificación de logros de 1.48.2, los 30 FPS con VSync para NVIDIA Smooth Motion y el menú **Gráficos** dentro del juego de 1.48.0).
+Lo más reciente es **1.48.4** (lo que cambias en el menú Guía dentro del juego —fotogramas, escala de resolución y el nuevo **Silenciar el juego**— se guarda de verdad en el proyecto y ya no se revierte al volver a pulsar Jugar; incluye el diagnóstico por volcado y la optimización que no se queda apagada de 1.48.3, la notificación de logros de 1.48.2 y los 30 FPS con VSync para NVIDIA Smooth Motion de 1.48.0).
 El detalle de cada versión está en [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 🙏 Créditos

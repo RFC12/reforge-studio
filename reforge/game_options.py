@@ -596,11 +596,24 @@ def runtime_config_path(exe):
 # Ajustes de gráficos cambiados desde el menú Guía del propio juego (botón Xbox/PS → Gráficos). La
 # extensión los deja en reforge_menu.ini; aquí se pasan al .toml y al .ini del juego en el próximo arranque.
 MENU_INI = "reforge_menu.ini"
-MENU_GRAPHICS_KEYS = ("fps_mode", "resolution_scale")
+MENU_GRAPHICS_KEYS = ("fps_mode", "resolution_scale", "mute")
 
 
 def menu_ini_path(exe):
     return os.path.join(os.path.dirname(os.path.abspath(exe)), MENU_INI)
+
+
+def project_root_for_exe(exe):
+    """Carpeta del proyecto (la que tiene reforge_game.json) a partir del .exe del juego."""
+    folder = os.path.dirname(os.path.abspath(exe))
+    for _ in range(3):
+        if os.path.isfile(os.path.join(folder, OPTIONS_FILE)):
+            return folder
+        parent = os.path.dirname(folder)
+        if parent == folder:
+            break
+        folder = parent
+    return ""
 
 
 def menu_graphics(exe):
@@ -648,18 +661,33 @@ def write_runtime_config(exe, options):
         values = {k: v for k, v in values.items() if k not in ADVANCED_CVARS or k in sup}
     from .pc_enhance import frame_cap, frame_values
     cap = frame_cap(options.frame_mode())
-    over = menu_graphics(exe)          # lo elegido jugando tiene prioridad hasta que cambies Opciones
+    over = menu_graphics(exe)          # lo elegido jugando tiene prioridad y pasa a ser el ajuste del juego
     if over:
         mode = over.get("fps_mode", "")
         if mode in ("30", "60", "unlimited"):
             values.update(frame_values(mode, False))
             cap = frame_cap(mode)
+            options.fps_mode = mode
         try:
             scale = int(over.get("resolution_scale", "0"))
         except ValueError:
             scale = 0
         if 1 <= scale <= 3:
             values["draw_resolution_scale_x"] = values["draw_resolution_scale_y"] = scale
+            options.resolution_scale = scale
+            options.resolution_auto = False      # elegido a mano: la autoconfiguración ya no lo cambia
+        mute = over.get("mute", "").lower()
+        if mute:
+            options.audio_mute = mute in ("1", "true", "si", "sí")
+            values["audio_mute"] = bool(options.audio_mute)
+        # Se guarda también en el proyecto: escribiendo solo el .toml, la próxima vez que ReForge lo
+        # regenerase (al pulsar Jugar) volvería a los ajustes de antes y el cambio se perdería.
+        root = project_root_for_exe(exe)
+        if root:
+            try:
+                options.save(root)
+            except OSError:
+                pass
         clear_menu_graphics(exe)
     lic = license_value(options, title_id_for_exe(exe))
     if lic is not None:

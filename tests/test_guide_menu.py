@@ -28,6 +28,9 @@ check("g_guide_open.load()" in src and "gp.buttons = 0" in src, "con el menú ab
 check("BroadcastNotification(0x00000009" in src, "avisa al juego como la consola (XN_SYS_UI): la mayoría se pausa")
 check("RequestClose()" in src and "¿Salir del juego?" in src, "salir del juego con el mando, con confirmación")
 check("ListAchievements()" in src and "GetUnlockTime" in src, "logros con fecha de desbloqueo")
+check("Silenciar el juego" in src and 'SetFlagByName(\"audio_mute\"' in src,
+      "botón para silenciar el juego desde el menú Guía (se aplica al momento)")
+check("Prefs().mute == 1" in src and 'key == "mute"' in src, "el silencio elegido se recuerda en el menú")
 check("reforge_playtime.txt" in src and "reforge_menu.ini" in src, "tiempo de juego total y ajustes guardados por juego")
 check("ImGuiKey_Home" in src, "también con la tecla Inicio del teclado")
 check("&achievements()" in ext_cpp.APP_BLOCK, "el juego le pasa sus logros")

@@ -69,6 +69,25 @@ check("show_fps = 1" in left and "fps_mode" not in left and "resolution_scale" n
       "el .ini del menú conserva el resto y quita lo ya aplicado")
 check(go.menu_graphics(exe) == {}, "no se vuelve a aplicar en el siguiente arranque")
 
+print("Lo elegido jugando se queda guardado en el proyecto")
+root = os.path.dirname(os.path.dirname(exe))
+open(os.path.join(root, go.OPTIONS_FILE), "w", encoding="utf-8").write("{}")
+with open(menu, "w", encoding="utf-8") as f:
+    f.write("show_fps = 1\nfps_mode = 30\nresolution_scale = 2\nmute = 1\n")
+o = go.GameOptions()
+go.write_runtime_config(exe, o)
+guardado = go.GameOptions.load(root)
+check(guardado.fps_mode == "30" and guardado.resolution_scale == 2 and guardado.resolution_auto is False,
+      "el ritmo y la escala del menú pasan a las opciones del juego (no solo al .toml)")
+check(guardado.audio_mute is True, "y el silencio elegido en el menú")
+check("audio_mute = true" in open(go.runtime_config_path(exe), encoding="utf-8").read(), "el .toml sale silenciado")
+go.write_runtime_config(exe, go.GameOptions.load(root))
+toml2 = open(go.runtime_config_path(exe), encoding="utf-8").read()
+check("draw_resolution_scale_x = 2" in toml2 and "video_mode_refresh_rate = 60.000" in toml2,
+      "al volver a pulsar Jugar NO se pierde lo elegido (antes volvía a 1× y sin tope)")
+check("frame_cap = 30.0" in open(profile.ext_ini_path(exe), encoding="utf-8").read(), "y el tope de 30 sigue")
+check(go.project_root_for_exe(exe) == root, "el proyecto se localiza desde el .exe del juego")
+
 print()
 if fallos:
     print(f"FALLOS: {len(fallos)}")

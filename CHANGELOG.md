@@ -2,6 +2,18 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.4 — Lo que cambias en el menú Guía se guarda, y botón para silenciar el juego
+
+- **Los cambios del menú Guía se perdían.** Lo elegido jugando (fotogramas, escala de resolución) se escribía en
+  el `.toml` del juego y se borraba del `.ini` del menú, pero las opciones del proyecto seguían con lo de antes: al
+  volver a pulsar **Jugar**, ReForge regeneraba el `.toml` desde esas opciones y el cambio se revertía (por eso
+  parecía que el menú «no hacía nada»). Ahora lo elegido jugando pasa también a `reforge_game.json` y se queda:
+  cada arranque posterior mantiene el ritmo de fotogramas, la escala de resolución y el silencio.
+- **Botón «Silenciar el juego» en el menú Guía** (pestaña Ajustes, con el botón Xbox/PS o Inicio). Corta el sonido
+  al momento (el runtime lee el silencio en cada envío de audio, sin reiniciar), se recuerda en
+  `reforge_menu.ini` y pasa al `.toml` y a las opciones del juego en el siguiente arranque, así que también se ve
+  la casilla marcada en ReForge → Opciones del juego.
+
 ## 1.48.3 — El diagnóstico de cierres dice qué pasó, y la optimización no se queda apagada sin motivo
 
 - **El diagnóstico lee el volcado de Windows.** Antes, un 0xC0000005 sin línea en el log se resumía en «sin mensaje

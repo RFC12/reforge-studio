@@ -1061,6 +1061,7 @@ struct MenuPrefs {
   int button_style = -1;      // -1 = el de ReForge · 0 = Xbox · 1 = PlayStation (elegido en el menú Guía)
   int fps_mode = -1;          // -1 = el de ReForge · 0 = 30 FPS · 1 = 60 · 2 = sin límite (menú Guía → Gráficos)
   int resolution_scale = 0;   // 0 = la de ReForge · 1..3 (menú Guía → Gráficos)
+  int mute = -1;              // -1 = la de ReForge · 0 = con sonido · 1 = silenciado (menú Guía → Ajustes)
   bool loaded = false;
 };
 
@@ -1097,6 +1098,7 @@ static MenuPrefs& Prefs() {
       else if (key == "button_style") prefs.button_style = (val == "playstation") ? 1 : (val == "xbox" ? 0 : -1);
       else if (key == "fps_mode") prefs.fps_mode = (val == "30") ? 0 : (val == "60" ? 1 : (val == "unlimited" ? 2 : -1));
       else if (key == "resolution_scale") prefs.resolution_scale = std::clamp(std::atoi(val.c_str()), 0, 3);
+      else if (key == "mute") prefs.mute = (val == "1") ? 1 : 0;
     }
   }
   return prefs;
@@ -1113,6 +1115,7 @@ static void SavePrefs() {
     << "button_style = " << (p.button_style == 1 ? "playstation" : (p.button_style == 0 ? "xbox" : "")) << "\n";
   if (p.fps_mode >= 0) f << "fps_mode = " << kFpsKeys[std::clamp(p.fps_mode, 0, 2)] << "\n";
   if (p.resolution_scale > 0) f << "resolution_scale = " << std::clamp(p.resolution_scale, 1, 3) << "\n";
+  if (p.mute >= 0) f << "mute = " << (p.mute == 1 ? 1 : 0) << "\n";
 }
 
 // Iconos de botones: los de PlayStation se ven en el menú Guía y, con el SDK de ReForge, en las texturas del
@@ -1150,6 +1153,19 @@ static const char* ToastPosition() {
   for (const char* k : kPositions)
     if (p == k) return k;
   return Config().toast_position.c_str();
+}
+
+// Sonido: lo que elige el menú Guía manda sobre reforge_ext.ini; el runtime lo lee en cada envío de audio,
+// así que se corta al momento (sin reiniciar).
+static bool Muted() {
+  const int m = Prefs().mute;
+  if (m >= 0) return m == 1;
+  const std::string v = rex::cvar::GetFlagByName("audio_mute");
+  return v == "1" || v == "true";
+}
+
+static void ApplyMute(bool mute) {
+  rex::cvar::SetFlagByName("audio_mute", mute ? "true" : "false");
 }
 
 // Tiempo de juego: el de esta partida y el total (reforge_playtime.txt junto al .exe, se guarda cada minuto).
@@ -1284,7 +1300,7 @@ class GuideMenu {
   int ItemCount(int tab) const {
     if (tab == kHome) return 2;
     if (tab == kGraphics) return 3;
-    if (tab == kSettings) return 5;
+    if (tab == kSettings) return 6;
     if (tab == kSaves) return kSlotCount;
     return static_cast<int>(list_.size());
   }
@@ -1461,6 +1477,14 @@ class GuideMenu {
           p.button_style = ps ? 1 : 0;
           SetPadPS(ps);
           status_ = ps ? "Iconos de PlayStation" : "Iconos de Xbox";
+          status_until_ = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+          break;
+        }
+        case 5: {
+          const bool mute = !Muted();
+          p.mute = mute ? 1 : 0;
+          ApplyMute(mute);
+          status_ = mute ? "Juego silenciado" : "Sonido activado";
           status_until_ = std::chrono::steady_clock::now() + std::chrono::seconds(2);
           break;
         }
@@ -1774,13 +1798,14 @@ class GuideMenu {
     } else if (tab_ == kSettings) {
       const MenuPrefs& p = Prefs();
       const int ai = p.accent;
-      std::string vals[5] = {p.show_fps ? "Sí" : "No", ai >= 0 ? kAccentNames[ai] : "El del perfil", "",
-                             p.hide_cursor ? "Sí" : "No", PadPS() ? "PlayStation" : "Xbox"};
+      std::string vals[6] = {p.show_fps ? "Sí" : "No", ai >= 0 ? kAccentNames[ai] : "El del perfil", "",
+                             p.hide_cursor ? "Sí" : "No", PadPS() ? "PlayStation" : "Xbox",
+                             Muted() ? "Sí" : "No"};
       for (int k = 0; k < 6; ++k)
         if (std::strcmp(ToastPosition(), kPositions[k]) == 0) vals[2] = kPositionNames[k];
       const char* names[] = {"Contador de FPS en pantalla", "Color de acento", "Notificación de logros",
-                             "Esconder el puntero con el mando", "Iconos de botones"};
-      for (int i = 0; i < 5; ++i) {
+                             "Esconder el puntero con el mando", "Iconos de botones", "Silenciar el juego"};
+      for (int i = 0; i < 6; ++i) {
         const ImVec2 q(x, y + i * fs * 2.6f);
         DrawButton(dl, io, q, w - 2 * pad, fs, sel_[kSettings] == i, names[i], u, a, accent, vals[i].c_str());
         if (open_ && Clicked(io, q, ImVec2(q.x + w - 2 * pad, q.y + fs * 2.2f))) {
@@ -1788,7 +1813,7 @@ class GuideMenu {
           Activate(0x1000);
         }
       }
-      Text(dl, fs * 0.8f, ImVec2(x, y + 5 * fs * 2.6f + 4 * u), dim,
+      Text(dl, fs * 0.8f, ImVec2(x, y + 6 * fs * 2.6f + 4 * u), dim,
            "A o la cruceta (izquierda / derecha) para cambiar. Se guarda para este juego.", w - 2 * pad);
     } else {
       if (list_.empty()) {
@@ -2057,7 +2082,9 @@ class Toast final : public rex::ui::AchievementNotificationDialog {
         immediate_(immediate_drawer),
         runtime_(runtime),
         window_(window),
-        guide_(immediate_drawer, runtime, window, achievements, &icons_) {}
+        guide_(immediate_drawer, runtime, window, achievements, &icons_) {
+    if (Prefs().mute == 1) ApplyMute(true);   // silenciado desde el menú Guía en una partida anterior
+  }
 
   ~Toast() override { ToastSlot().store(nullptr); }
 
