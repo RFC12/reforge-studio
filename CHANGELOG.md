@@ -2,6 +2,26 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.14 — ReForge ya no declara funciones que caen a mitad de otra (Crash of the Titans)
+
+- **Causa encontrada en Crash of the Titans.** Cuando rexglue avisaba de un salto que no podía resolver
+  («Unresolved b target 0x…»), el arreglo automático declaraba el destino como función. Si ese destino es una
+  **cola compartida** de otra función —en este juego, 0x823E8D70 salta a 0x823E9C10, que está dentro de
+  0x823E9C04—, el código generado empieza a mitad de la función, sin su prólogo, y el juego moría en el
+  primer fotograma con «unhandled title read of 0x701A0000» (leía con la pila sin montar). Ahora esas
+  direcciones se reconocen por un dato exacto: su valor aparece en el código generado como regreso de una
+  llamada (`ctx.lr = 0x…`). No se declaran, quedan anotadas en `reforge_not_functions.txt` y, si ya estaban,
+  se quitan antes de recompilar.
+- **Base de datos de problemas:** entrada nueva «El juego salta a la cola de otra función» (reconoce el aviso
+  `Unresolved call from … to …` y el `SEH exception caught in …` + `unhandled title read`), con su remedio
+  automático y la explicación de por qué declararla empeora el fallo.
+- Prueba nueva `tests/test_midfunc.py`.
+- **Estado de Crash of the Titans:** al declararlo bien, el juego ya no se cae en la función mal partida, pero
+  sigue parándose en el primer milisegundo dentro de su propio código: usa la pila con `r1 = 0x701A0010` y la
+  página `0x701A0000` no está mapeada («unhandled title read of 0x701A0008»). Es la colocación de la pila del
+  hilo principal del runtime, no el código recompilado (se comprobó también sin manejadores SEH: mismo fallo).
+  ReForge lo reconoce en el log y lo explica; necesita arreglo en rexglue.
+
 ## 1.48.13 — LB/RB dejan de ir acelerados y el menú Guía de 0.11 usa la imagen de jugador del perfil
 
 - **LB/RB ya no saltan varias pestañas de golpe.** El estado del pad es un nivel (lo que está pulsado), no un

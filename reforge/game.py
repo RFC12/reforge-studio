@@ -250,12 +250,44 @@ def declared_functions(root):
     return {int(a, 16) for a in re.findall(r"^\s*(0x[0-9A-Fa-f]+)\s*=", txt, re.M)}
 
 
+LR_RE = re.compile(r"ctx\.lr = 0x([0-9A-Fa-f]+);")
+
+
+def return_addresses(gen):
+    """Direcciones que en el código generado son el regreso de una llamada (`ctx.lr = 0x…`): están DENTRO de
+    otra función. Declararlas como función hace que rexglue emita código que empieza a mitad de una función,
+    sin su prólogo ni sus registros guardados, y el juego se cierra al llegar ahí (acceso a memoria
+    no válida nada más arrancar). Pasa cuando el juego salta a una cola compartida de otra función."""
+    out = set()
+    try:
+        names = [f for f in os.listdir(gen) if re.search(r"_recomp\.\d+\.cpp$", f)]
+    except OSError:
+        return out
+    for n in names:
+        try:
+            txt = Path(os.path.join(gen, n)).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        out.update(int(a, 16) for a in LR_RE.findall(txt))
+    return out
+
+
 def add_functions(root, items):
     """Declara funciones (sin tamaño: rexglue descubre su final). Devuelve las nuevas."""
     have = declared_functions(root) | rejected_functions(root)
     new = [(t, s) for t, s in items if t not in have]
     if not new:
         return []
+    mid = return_addresses(generated_dir(root))
+    if mid:
+        inside = [(t, s) for t, s in new if t in mid]
+        if inside:
+            new = [(t, s) for t, s in new if t not in mid]
+            reject_functions(root, [(t, f"salto desde 0x{s:08X}: cae a mitad de una función (declararla genera "
+                                       "código sin su prólogo y el juego se cierra al llegar)")
+                                    for t, s in inside])
+            if not new:
+                return []
     path = os.path.join(root, FUNCTIONS_FILE)
     if not os.path.isfile(path):
         with open(path, "w", encoding="utf-8") as f:
@@ -475,6 +507,45 @@ def fix_split_functions(root, ctx=None):
     if ctx:
         ctx.log(f"  quitadas {len(remove)} entrada(s) que partían funciones reales: "
                 + ", ".join(f"0x{a:08X}" for a in sorted(remove)[:6]) + ("…" if len(remove) > 6 else ""), "warn")
+    return sorted(remove)
+
+
+def prune_mid_function_entries(root):
+    """Quita de la tabla las entradas que caen a mitad de una función del código ya generado (su dirección es
+    el regreso de una llamada). Devuelve las quitadas; quedan anotadas como «no es función».
+
+    Es el caso de los juegos que saltan a la cola compartida de otra función: rexglue avisa «Unresolved branch»
+    y, si la entrada se declara para callarlo, el código generado empieza a mitad de la función (sin su prólogo)
+    y el juego muere con un acceso a memoria no válida en el primer fotograma. Mejor no declararla.
+    """
+    path = os.path.join(root, FUNCTIONS_FILE)
+    if not os.path.isfile(path):
+        return []
+    mid = return_addresses(generated_dir(root))
+    if not mid:
+        return []
+    txt = Path(path).read_text(encoding="utf-8", errors="replace")
+    remove, keep = {}, []
+    for ln in txt.splitlines(keepends=True):
+        m = ENTRY_RE.match(ln.rstrip("\r\n"))
+        if m:
+            try:
+                addr = int(m.group(2), 16)
+            except ValueError:
+                addr = None
+            # Solo las que ReForge declaró por un salto («salto desde 0x…»): las del análisis profundo pueden
+            # ser entradas secundarias legítimas que hoy funcionan.
+            if addr is not None and addr in mid and re.search(r"salto desde", m.group(4), re.I):
+                remove[addr] = "cae a mitad de una función (su dirección es el regreso de una llamada)"
+                continue
+        keep.append(ln)
+    if not remove:
+        return []
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write("".join(keep))
+    os.replace(tmp, path)
+    reject_functions(root, sorted(remove.items()))
     return sorted(remove)
 
 
@@ -1000,6 +1071,12 @@ def codegen_with_autofix(cfg, root, build, name, env, ctx):
         if normalize_function_overlaps(root):
             ctx.log("Ajustadas entradas que caían dentro de funciones con final declarado (como fragmento).", "dim")
             invalidate_codegen(root)      # el manifiesto cambió: hay que regenerar, no reutilizar lo anterior
+        mid = prune_mid_function_entries(root)
+        if mid:
+            quitar = ", ".join(f"0x{x:08X}" for x in mid[:4]) + ("…" if len(mid) > 4 else "")
+            ctx.log(f"↻ Quitadas {len(mid)} entrada(s) de función que caían a mitad de otra función ({quitar}); "
+                    "con ellas el juego se cerraba al arrancar. Anotadas para no volver a declararlas.", "warn")
+            invalidate_codegen(root)
         code, lines = run_streaming(cmake_codegen_cmd(cfg, build, name), root, env, ctx)
         if code == 0:
             split = fix_split_functions(root, ctx)

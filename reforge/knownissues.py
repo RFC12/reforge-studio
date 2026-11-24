@@ -92,6 +92,18 @@ def _fix_sdk_incompat(root, exe, log_text, info):
     return False, ""
 
 
+def _fix_salto_a_mitad(root, exe, log_text, info):
+    from . import game
+    quitadas = game.prune_mid_function_entries(root)
+    if not quitadas:
+        return False, ""
+    lista = ", ".join(f"0x{a:08X}" for a in quitadas[:4]) + (" …" if len(quitadas) > 4 else "")
+    return True, (f"Quitadas {len(quitadas)} entrada(s) de función que caían a mitad de otra función ({lista}). "
+                  "El juego salta a la cola compartida de otra función; declararla como función hacía que el "
+                  "código generado empezara sin prólogo y el juego se cerrara con un acceso a memoria no válida "
+                  "nada más arrancar.")
+
+
 def _fix_shaders(root, exe, log_text, info):
     from . import shadercache
     from .game_options import GameOptions
@@ -187,6 +199,48 @@ ISSUES = [
         match=_tiene("func_mappings entries rejected", "outside all registered module ranges"),
         remedio=_fix_funcs_fuera,
         recompila=True,
+    ),
+    Issue(
+        id="salto_a_mitad_de_funcion",
+        titulo="El juego salta a la cola de otra función y esa dirección se declaró como función",
+        sintomas="El juego se cierra en el primer segundo con «acceso a memoria no válida» sin mensaje propio; "
+                 "en el log, «SEH exception caught in sub_…» seguido de «unhandled title read of 0x70…» (o, si "
+                 "esa entrada ya no está, «Unresolved call from 0x… to 0x…» / «Unresolved branch»).",
+        causa="El juego SALTA («b»), no llama, a la cola compartida de otra función: rexglue no puede resolver "
+              "ese salto y avisa. Si ReForge declaraba el destino como función para callarlo, el código generado "
+              "empieza a mitad de la función —sin su prólogo ni la pila armada— y en cuanto se ejecuta lee una "
+              "dirección que no está mapeada y el juego muere al instante. Visto en Crash of the Titans: "
+              "0x823E8D70 salta a 0x823E9C10, que está DENTRO de la función 0x823E9C04.",
+        match=lambda log, info: ("Unresolved call from" in (log or "")
+                                 or "Unresolved branch" in (log or "")
+                                 or ("SEH exception caught in" in (log or "")
+                                     and ("unhandled title read" in (log or "")
+                                          or "unhandled title write" in (log or "")))),
+        remedio=_fix_salto_a_mitad,
+        consejo="ReForge ya no declara esas direcciones (declararlas cierra el juego antes): quedan anotadas en "
+                "reforge_not_functions.txt y el análisis profundo no las vuelve a añadir. Si el juego aún se "
+                "cierra en este punto, el salto a mitad de función necesita soporte del recompilador (rexglue); "
+                "recompilar otra vez no lo cambia.",
+        recompila=True,
+    ),
+    Issue(
+        id="pila_principal_sin_mapear",
+        titulo="El hilo principal usa la pila sobre memoria sin mapear",
+        sintomas="El juego se cierra en el primer instante con «acceso a memoria no válida» y, en el log, «unhandled "
+                 "title read of 0x70…» sobre una dirección muy baja (por ejemplo 0x701A0008) en el hilo «Main "
+                 "XThread». No llega a dibujar ni una imagen.",
+        causa="El código del juego ya está bien recompilado (también falla igual sin manejadores SEH): el hilo "
+              "principal del runtime trabaja con la pila pegada al borde de la memoria del título, en una página "
+              "que no está mapeada, así que el primer acceso a la pila falla. Es la colocación de la pila del "
+              "runtime PRECOMPILADO del SDK: recompilar el juego, cambiar la optimización del código o el tamaño "
+              "del montón no lo cambia.",
+        match=lambda log, info: ("unhandled title read of" in (log or "")
+                                 and "Main XThread" in (log or "")),
+        consejo="No es de tu juego ni de tu equipo: es el runtime del SDK 0.11 colocando la pila del hilo "
+                "principal en memoria sin mapear (visto en Crash of the Titans, Title ID 565507E4). Recompilar no "
+                "ayuda; hay que reportarlo a rexglue con el Title ID y el log (la dirección «unhandled title read "
+                "of 0x70…» es la prueba). Mientras tanto, ese juego no arranca con esta versión del SDK.",
+        recompila=False,
     ),
     Issue(
         id="heap_agotado",
