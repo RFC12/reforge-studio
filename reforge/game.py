@@ -1695,7 +1695,33 @@ def session_result(exe, log, started):
     return info
 
 
-def crash_advice(info):
+def utf8_hint(root=""):
+    """Qué revisar cuando el runtime cierra por textos del juego que no son UTF-8 válido.
+
+    El runtime de rexglue valida con UTF-8 ESTRICTO las cadenas del huésped. Dos cosas de Windows lo rompen sin
+    que el juego tenga nada malo: la página de códigos ANSI del sistema (con 1252/850 los textos en español
+    llegan en ANSI) y las rutas con tildes/ñ/símbolos. Devuelve "" si no hay nada que avisar.
+    """
+    tips = []
+    if sys.platform == "win32":
+        acp = 0
+        try:
+            import ctypes
+            acp = int(ctypes.windll.kernel32.GetACP())
+        except Exception:      # noqa: BLE001
+            acp = 0
+        if acp and acp != 65001:
+            tips.append(f"Tu Windows usa la página de códigos {acp} (no UTF-8), así que algunos textos del juego "
+                        "llegan en ANSI y el runtime los rechaza: activa «Panel de control → Reloj y región → "
+                        "Región → pestaña Administrativo → Cambiar configuración regional del sistema → Beta: "
+                        "Usar Unicode UTF-8 para la compatibilidad con el idioma mundial» y reinicia.")
+    if root and not str(root).isascii():
+        tips.append(f"La ruta del proyecto tiene tildes, ñ o símbolos ({root}): muévelo a una ruta sin acentos "
+                    "(por ejemplo C:\\recomp\\juego), el SDK espera UTF-8 estricto en las rutas.")
+    return " ".join(tips)
+
+
+def crash_advice(info, root=""):
     """Explicación para el jugador de un cierre 'crash' o 'guest_av'."""
     if info.get("kind") == "guest_av":
         a = info.get("guest_address", 0)
@@ -1716,6 +1742,11 @@ def crash_advice(info):
         msg += (" Justo antes el mando se desconectó y reconectó: el controlador SDL de rexglue 0.10 daña la "
                 "memoria al reconectar. Con mandos de Xbox usa «XInput» (Opciones → Controles; «Automático» "
                 "ya lo elige) y revisa el cable/receptor del mando.")
+    textos = [ln for ln in (info.get("lines") or []) if "deferred completion threw" in ln or "Invalid UTF-8" in ln]
+    if textos:
+        pista = utf8_hint(root)
+        if pista:
+            msg += " " + pista
     return msg
 
 

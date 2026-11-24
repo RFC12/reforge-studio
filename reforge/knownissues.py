@@ -133,7 +133,10 @@ ISSUES = [
         or ("Invalid UTF-8" in (log or "") and "Dispatch thread" in (log or "")),
         consejo="No es de tu juego ni de tu equipo: es un bug del SDK y es intermitente. El lanzador de ReForge "
                 "lo detecta y REINTENTA el arranque solo (hasta 8 veces), así que el juego abre casi siempre; si "
-                "lo abres a mano, basta con volver a lanzarlo. Recompilar no ayuda. Conviene reportarlo al autor "
+                "lo abres a mano, basta con volver a lanzarlo. Si tu Windows no está en UTF-8 (Panel de control → "
+                "Región → Administrativo → «Beta: Usar Unicode UTF-8…»), los textos en español del juego llegan "
+                "en ANSI y este fallo aparece bastante más; las rutas con tildes o ñ también lo empeoran. "
+                "Recompilar no ayuda. Conviene reportarlo al autor "
                 "de rexglue (es dispatcher.cpp, excepción utf8::invalid_utf8 en una completion diferida).",
         recompila=False,
     ),

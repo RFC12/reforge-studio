@@ -238,4 +238,18 @@ check(crashdump.read(basura) == {} and crashdump.read(os.path.join(TMP, "no-exis
 check("sin mensaje" in game.crash_advice({"kind": "crash", "crash": "0xC0000005"}),
       "sin volcado se mantiene el texto de antes")
 
+print("Pista de textos no UTF-8 (página de códigos y rutas con tildes)")
+check("tildes" in game.utf8_hint(r"C:\Users\José\Escritorio\juego"),
+      "una ruta con tildes avisa de moverla a una sin acentos")
+check(game.utf8_hint(r"C:\recomp\juego").count("tildes") == 0, "una ruta limpia no se queja de la ruta")
+check(isinstance(game.utf8_hint(r"C:\recomp\juego"), str), "devuelve texto (vacío si el Windows ya es UTF-8)")
+_orig_hint = game.utf8_hint
+game.utf8_hint = lambda root="": "PISTA-UTF8"
+adv_utf8 = game.crash_advice({"kind": "fatal",
+                              "lines": ["[FATAL] Dispatch thread: deferred completion threw 'Invalid UTF-8'"]})
+check("PISTA-UTF8" in adv_utf8, "el cierre por textos no UTF-8 muestra qué revisar en Windows")
+check("PISTA-UTF8" not in game.crash_advice({"kind": "fatal", "lines": ["otro error cualquiera"]}),
+      "los demás cierres no llevan esa pista")
+game.utf8_hint = _orig_hint
+
 print(f"\nTodas las pruebas pasaron ({ok}).")

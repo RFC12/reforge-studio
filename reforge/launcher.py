@@ -275,7 +275,7 @@ class GameLauncher(QWidget):
                 self.repair(addr)
         elif out["kind"] in ("crash", "guest_av"):
             from . import game as _game
-            self.status.setText(_game.crash_advice(out))
+            self.status.setText(_game.crash_advice(out, self.root))
         elif out["kind"] == "fatal":
             self.status.setText("El juego se cerró con un error: " + (out.get("lines") or ["?"])[-1][-160:])
         else:

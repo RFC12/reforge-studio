@@ -2,6 +2,14 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.6 — El cierre por textos no UTF-8 dice qué revisar en Windows
+
+- Cuando el juego se cierra con `Dispatch thread: deferred completion threw 'Invalid UTF-8'` y el sistema **no**
+  está en UTF-8, ReForge lo explica en el aviso: su Windows está en una página de códigos ANSI (1252/850), así
+  que los textos del juego llegan en ANSI y el runtime, que valida UTF-8 estricto, los rechaza. Incluye la ruta
+  exacta del ajuste de Windows (Región → Administrativo → «Beta: Usar Unicode UTF-8…») y avisa si la carpeta
+  del proyecto tiene tildes, ñ o símbolos, que también lo empeoran. Sin esos casos el aviso no cambia.
+
 ## 1.48.5 — Los juegos con SDK 0.11 abren, y la caché de compilación ya no se borra sola
 
 - **«command line failed: unknown option '--gpu_plugin=xenos'»** al pulsar Jugar: en el SDK 0.11 el cargador de la
