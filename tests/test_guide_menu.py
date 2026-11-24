@@ -31,6 +31,11 @@ check("ListAchievements()" in src and "GetUnlockTime" in src, "logros con fecha 
 check("reforge_playtime.txt" in src and "reforge_menu.ini" in src, "tiempo de juego total y ajustes guardados por juego")
 check("ImGuiKey_Home" in src, "también con la tecla Inicio del teclado")
 check("&achievements()" in ext_cpp.APP_BLOCK, "el juego le pasa sus logros")
+check("RegisterUnlockCallback" in src and "ToastSlot" in src,
+      "el aviso sale al desbloquear (no solo si el runtime pide la notificación)")
+check("pending.event.achievement.id == event.achievement.id" in src,
+      "el mismo logro no se avisa dos veces (desbloqueo + notificación)")
+check("[ReForge] Logro desbloqueado:" in src, "queda en el log del juego cada aviso mostrado")
 
 print("Partidas (ranuras)")
 check("class SaveSlots" in src and "kSlotCount = 4" in src, "4 ranuras de partidas en el menú Guía")

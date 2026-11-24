@@ -2040,6 +2040,14 @@ class ImageGuard {
   std::chrono::steady_clock::time_point begin_{}, next_{};
 };
 
+class Toast;
+
+// El aviso en pantalla, para poder empujarlo desde la suscripción al desbloqueo.
+static std::atomic<Toast*>& ToastSlot() {
+  static std::atomic<Toast*> slot{nullptr};
+  return slot;
+}
+
 class Toast final : public rex::ui::AchievementNotificationDialog {
  public:
   Toast(rex::ui::ImGuiDrawer* drawer, rex::ui::ImmediateDrawer* immediate_drawer, rex::Runtime* runtime,
@@ -2051,8 +2059,21 @@ class Toast final : public rex::ui::AchievementNotificationDialog {
         window_(window),
         guide_(immediate_drawer, runtime, window, achievements, &icons_) {}
 
+  ~Toast() override { ToastSlot().store(nullptr); }
+
   void Push(const rex::system::AchievementEvent& event) override {
     std::lock_guard<std::mutex> lock(mutex_);
+    const auto now = std::chrono::steady_clock::now();
+    for (const auto& pending : queue_) {                     // ya está en la cola: no repetir
+      if (pending.event.achievement.id == event.achievement.id) return;
+    }
+    if (last_id_ == event.achievement.id && now - last_push_ < std::chrono::seconds(15)) {
+      return;  // el mismo logro llega por el desbloqueo y por la notificación del runtime
+    }
+    last_id_ = event.achievement.id;
+    last_push_ = now;
+    REXLOG_INFO("[ReForge] Logro desbloqueado: {} ({}G)", event.achievement.label.c_str(),
+                static_cast<unsigned>(event.achievement.gamerscore));
     queue_.push_back({event, std::nullopt});
   }
 
@@ -2105,6 +2126,8 @@ class Toast final : public rex::ui::AchievementNotificationDialog {
   };
   std::mutex mutex_;
   std::deque<Pending> queue_;
+  uint32_t last_id_ = 0;      // último logro empujado (para no repetir el mismo aviso)
+  std::chrono::steady_clock::time_point last_push_{};
   rex::ui::AchievementIconCache icons_;
   rex::ui::ImmediateDrawer* immediate_ = nullptr;
   rex::Runtime* runtime_ = nullptr;
@@ -2182,7 +2205,17 @@ std::unique_ptr<rex::ui::AchievementNotificationDialog> MakeAchievementToast(
     rex::ui::ImGuiDrawer* drawer, rex::ui::ImmediateDrawer* immediate_drawer, rex::Runtime* runtime,
     rex::ui::Window* window, rex::system::AchievementManager* achievements) {
   if (!drawer || !immediate_drawer || !runtime) return nullptr;
-  return std::make_unique<Toast>(drawer, immediate_drawer, runtime, window, achievements);
+  auto toast = std::make_unique<Toast>(drawer, immediate_drawer, runtime, window, achievements);
+  // El juego desbloquea los logros por XGI y el runtime los guarda, pero su notificación solo sale si
+  // el desbloqueo se pidió «con aviso» (y no siempre es así). Nos suscribimos al desbloqueo en sí:
+  // el aviso sale siempre. Push() descarta el duplicado si también llega el del runtime.
+  ToastSlot().store(toast.get());
+  if (achievements) {
+    achievements->RegisterUnlockCallback([](const rex::system::AchievementEvent& event) {
+      if (Toast* slot = ToastSlot().load()) slot->Push(event);
+    });
+  }
+  return toast;
 }
 
 }  // namespace reforge

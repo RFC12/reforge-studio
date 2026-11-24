@@ -2,6 +2,18 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.2 — La notificación de logros sale siempre que el juego desbloquea uno
+
+- **El aviso flotante no aparecía aunque el logro sí se desbloqueaba.** El runtime guarda el desbloqueo y avisa por
+  dos vías distintas: la del desbloqueo en sí (siempre se dispara) y la de «muéstralo en pantalla» (solo si el
+  desbloqueo se pidió con aviso). La extensión solo escuchaba la segunda, así que los logros del juego (que llegan
+  por la primera, la de XGI) contaban en el menú Guía y en `Documents\<juego>\achievements\<titleid>.toml`, pero no
+  salía la notificación con el logo, el sonido y los puntos.
+- **Ahora** la extensión se suscribe también al desbloqueo: el aviso sale siempre. Si el runtime además manda su
+  notificación, se descarta el duplicado (mismo logro, misma cola).
+- **Queda en el log** del juego una línea `[ReForge] Logro desbloqueado: <nombre> (<puntos>G)` cada vez que se pone
+  el aviso, para poder comprobarlo sin esperar a verlo en pantalla.
+
 ## 1.48.1 — El cierre intermitente del SDK ya no apaga la optimización del código ni recompila
 
 - **Se reconoce el mismo cierre con cualquier mensaje.** El despachador del runtime aborta cuando una completion
