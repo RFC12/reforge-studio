@@ -2,6 +2,19 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.13 — LB/RB dejan de ir acelerados y el menú Guía de 0.11 usa la imagen de jugador del perfil
+
+- **LB/RB ya no saltan varias pestañas de golpe.** El estado del pad es un nivel (lo que está pulsado), no un
+evento, y se estaba sumando en cada fotograma mientras el botón seguía pulsado: las pestañas cambiaban sin
+control. Ahora solo cuenta el flanco (lo que acaba de pulsarse) y además hay 250 ms de espera entre cambio y
+cambio, aunque el botón repita o llegue por las dos vías (ImGui y el pad).
+- **La imagen de jugador del perfil llega al menú.** ReForge escribe en `reforge_ext.ini` la figura y los
+colores de «Perfil → Imagen de jugador» (`avatar_style`, `avatar_fg`, `avatar_bg`) y el menú de 0.11 dibuja la
+misma imagen (hexágono, rayo, estrella, diana, rombo, onda, mando o corona) con sus colores; con una foto
+propia, como el 0.11 no da texturas al proyecto, se queda el trofeo sobre el color de acento, igual que hacía
+0.10 cuando no había avatar.
+- **Texto de ayuda sin solaparse** en las pestañas del menú (se dibujaba en dos líneas encima de sí mismo).
+
 ## 1.48.12 — El .exe de los juegos del SDK 0.11 arranca sin el .bat, y los manejadores de excepciones compilan
 
 - **El ejecutable del juego arranca con doble clic.** En los proyectos del SDK 0.11 solo funcionaba el `.bat`:

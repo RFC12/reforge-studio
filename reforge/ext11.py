@@ -133,6 +133,9 @@ struct Profile {
   std::string game_name;
   uint32_t accent = 0x19D3A2;
   bool playstation = false;
+  std::string avatar_style = "hex";      // la «imagen de jugador» del perfil de ReForge
+  uint32_t avatar_fg = 0x19D3A2;
+  uint32_t avatar_bg = 0x0B3D30;
 };
 
 const Profile& GetProfile() {
@@ -150,6 +153,9 @@ const Profile& GetProfile() {
       else if (key == "game_name") profile.game_name = val;
       else if (key == "pad_style") profile.playstation = (val == "playstation");
       else if (key == "accent") profile.accent = static_cast<uint32_t>(std::strtoul(val.c_str(), nullptr, 16));
+      else if (key == "avatar_style" && !val.empty()) profile.avatar_style = val;
+      else if (key == "avatar_fg") profile.avatar_fg = static_cast<uint32_t>(std::strtoul(val.c_str(), nullptr, 16));
+      else if (key == "avatar_bg") profile.avatar_bg = static_cast<uint32_t>(std::strtoul(val.c_str(), nullptr, 16));
     }
     if (profile.accent == 0) profile.accent = 0x19D3A2;
   }
@@ -195,6 +201,71 @@ void DrawTrophy(ImDrawList* dl, ImVec2 c, float ir, float sq, ImU32 col) {
   dl->AddRectFilled(P(-0.07f, 0.08f), P(0.07f, 0.30f), col);
   dl->AddRectFilled(P(-0.18f, 0.26f), P(0.18f, 0.32f), col, 0.02f * ir);
   dl->AddRectFilled(P(-0.27f, 0.32f), P(0.27f, 0.43f), col, 0.04f * ir);
+}
+
+// La imagen de jugador del perfil de ReForge (Perfil → Imagen de jugador), dibujada con primitivas: en 0.11
+// no hay texturas a mano y la figura es la misma que enseña ReForge, con sus colores.
+void DrawAvatar(ImDrawList* dl, ImVec2 p, float size, float a, uint32_t accent, const Profile& prof) {
+  const float round = size * 0.18f;
+  const ImU32 white = IM_COL32(255, 255, 255, static_cast<int>(255 * a));
+  if (prof.avatar_style.empty() || prof.avatar_style == "none") {
+    dl->AddRectFilled(p, ImVec2(p.x + size, p.y + size), Rgba(accent, 0.85f * a), round);
+    DrawTrophy(dl, ImVec2(p.x + size / 2, p.y + size / 2), size * 0.42f, 1.0f, white);
+    return;
+  }
+  dl->AddRectFilled(p, ImVec2(p.x + size, p.y + size), Rgba(prof.avatar_bg, a), round);
+  const ImU32 fg = Rgba(prof.avatar_fg, a);
+  const ImVec2 o(p.x + size / 2, p.y + size / 2);
+  const float r = size * 0.30f, th = std::max(2.0f, size * 0.075f);
+  auto P = [&](float x, float y) { return ImVec2(o.x + x, o.y + y); };
+  const std::string& s = prof.avatar_style;
+  if (s == "hex") {
+    ImVec2 pts[6];
+    for (int i = 0; i < 6; ++i) {
+      const float t = 3.14159265f / 3.0f * static_cast<float>(i) + 3.14159265f / 6.0f;
+      pts[i] = P(r * std::cos(t), r * std::sin(t));
+    }
+    dl->AddConvexPolyFilled(pts, 6, fg);
+  } else if (s == "diamond") {
+    const ImVec2 pts[4] = {P(0.0f, -r * 1.1f), P(r * 0.8f, 0.0f), P(0.0f, r * 1.1f), P(-r * 0.8f, 0.0f)};
+    dl->AddConvexPolyFilled(pts, 4, fg);
+  } else if (s == "star") {
+    for (int i = 0; i < 10; ++i) {
+      const float t = -3.14159265f / 2.0f + static_cast<float>(i) * 3.14159265f / 5.0f;
+      const float k = (i % 2 == 0) ? r : r * 0.45f;
+      dl->PathLineTo(P(k * std::cos(t), k * std::sin(t)));
+    }
+    dl->PathStroke(fg, ImDrawFlags_Closed, th);
+  } else if (s == "bolt") {
+    static const float k[7][2] = {{0.55f, 0.12f}, {0.28f, 0.55f}, {0.48f, 0.55f}, {0.40f, 0.88f},
+                                  {0.72f, 0.42f}, {0.52f, 0.42f}, {0.62f, 0.12f}};
+    for (int i = 0; i < 7; ++i) dl->PathLineTo(ImVec2(p.x + k[i][0] * size, p.y + k[i][1] * size));
+    dl->PathStroke(fg, ImDrawFlags_Closed, th);
+  } else if (s == "crown") {
+    static const float k[7][2] = {{0.20f, 0.70f}, {0.20f, 0.35f}, {0.35f, 0.50f}, {0.50f, 0.28f},
+                                  {0.65f, 0.50f}, {0.80f, 0.35f}, {0.80f, 0.70f}};
+    for (int i = 0; i < 7; ++i) dl->PathLineTo(ImVec2(p.x + k[i][0] * size, p.y + k[i][1] * size));
+    dl->PathStroke(fg, ImDrawFlags_Closed, th);
+  } else if (s == "ring") {
+    dl->AddCircle(o, r, fg, 0, th);
+    dl->AddCircleFilled(o, r * 0.35f, fg);
+  } else if (s == "wave") {
+    float x = p.x + size * 0.15f;
+    dl->PathLineTo(ImVec2(x, o.y));
+    for (int i = 0; i < 4; ++i) {
+      const float up = (i % 2 == 0) ? -r * 0.8f : r * 0.8f;
+      dl->PathBezierQuadraticCurveTo(ImVec2(x + size * 0.0875f, o.y + up), ImVec2(x + size * 0.175f, o.y));
+      x += size * 0.175f;
+    }
+    dl->PathStroke(fg, 0, th);
+  } else {   // «pad»
+    dl->AddRectFilled(ImVec2(o.x - r * 1.2f, o.y - r * 0.55f), ImVec2(o.x + r * 1.2f, o.y + r * 0.55f), fg,
+                      r * 0.5f);
+    const ImU32 back = Rgba(prof.avatar_bg, a);
+    dl->AddCircleFilled(ImVec2(o.x + r * 0.6f, o.y), r * 0.16f, back);
+    dl->AddRectFilled(ImVec2(o.x - r * 0.67f, o.y - r * 0.25f), ImVec2(o.x - r * 0.53f, o.y + r * 0.25f), back);
+    dl->AddRectFilled(ImVec2(o.x - r * 0.85f, o.y - r * 0.07f), ImVec2(o.x - r * 0.35f, o.y + r * 0.07f), back);
+  }
 }
 
 std::string Hms(uint64_t s) {
@@ -331,16 +402,20 @@ class GuideMenu final : public rex::ui::DialogBase {
     // Botón Guía del mando (Xbox/PS) y tecla Inicio: abrir y cerrar. Se mira también el estado del pad por
     // si el SDK no manda ese botón a ImGui.
     if (auto pad = app_.GetInput().GetState(0); pad.has_value()) {
+      // El estado del pad es un nivel (lo que está pulsado), no un evento: hay que quedarse solo con lo que
+      // ACABA de pulsarse. Sin esto, LB/RB (y la cruceta) disparaban en cada fotograma mientras se mantenían
+      // y las pestañas saltaban sin control.
       const uint16_t buttons = pad.value().state.buttons;
-      if ((buttons & kGuideButton) && !(last_buttons_ & kGuideButton)) nav |= kGuideButton;
-      if (buttons & 0x0001) nav |= kUp;
-      if (buttons & 0x0002) nav |= kDown;
-      if (buttons & 0x0004) nav |= kLeft;
-      if (buttons & 0x0008) nav |= kRight;
-      if (buttons & 0x1000) nav |= kA;
-      if (buttons & 0x2000) nav |= kB;
-      if (buttons & 0x0100) nav |= kLB;
-      if (buttons & 0x0200) nav |= kRB;
+      const uint16_t pressed = static_cast<uint16_t>(buttons & ~last_buttons_);
+      if (pressed & kGuideButton) nav |= kGuideButton;
+      if (pressed & 0x0001) nav |= kUp;
+      if (pressed & 0x0002) nav |= kDown;
+      if (pressed & 0x0004) nav |= kLeft;
+      if (pressed & 0x0008) nav |= kRight;
+      if (pressed & 0x1000) nav |= kA;
+      if (pressed & 0x2000) nav |= kB;
+      if (pressed & 0x0100) nav |= kLB;
+      if (pressed & 0x0200) nav |= kRB;
       last_buttons_ = buttons;
     }
     if (down(ImGuiKey_Home) || down(ImGuiKey_F9)) nav |= kGuideButton;
@@ -369,8 +444,12 @@ class GuideMenu final : public rex::ui::DialogBase {
       SetOpen(false);
       return;
     }
-    if (nav & kLB) ChangeTab(-1);
-    if (nav & kRB) ChangeTab(+1);
+    // Las pestañas, de una en una: aunque el botón se repita (o llegue por las dos vías, ImGui y el pad),
+    // no puede saltar varias pestañas en el mismo instante.
+    if ((nav & (kLB | kRB)) && now >= tab_at_) {
+      ChangeTab((nav & kLB) ? -1 : +1);
+      tab_at_ = now + 0.25;
+    }
     const int n = ItemCount();
     if (n > 0) {
       if (nav & kUp) sel_[tab_] = (sel_[tab_] + n - 1) % n;
@@ -526,8 +605,7 @@ class GuideMenu final : public rex::ui::DialogBase {
 
     // cabecera: perfil, puntos, hora y fecha
     const float av = 72.0f * u;
-    dl->AddRectFilled(ImVec2(x, y), ImVec2(x + av, y + av), Rgba(accent, 0.85f * a), 12 * u);
-    DrawTrophy(dl, ImVec2(x + av / 2, y + av / 2), av * 0.42f, 1.0f, white);
+    DrawAvatar(dl, ImVec2(x, y), av, a, accent, GetProfile());
     const auto& list = Achievements();
     const size_t n_ach = list.size();
     Text(dl, fs * 1.35f, ImVec2(x + av + 16 * u, y + 2 * u), white, GetProfile().gamertag.c_str());
@@ -585,12 +663,9 @@ class GuideMenu final : public rex::ui::DialogBase {
           Change(i, 1);
         }
       }
-      ImVec2 ty(x, y + 2 * fs * 2.6f + 4 * u);
-      for (const char* t : {"La cruceta o A cambian el valor. Lo que el runtime no cambia en caliente se queda",
-                            "guardado para la próxima vez que abras el juego."}) {
-        Text(dl, fs * 0.8f, ty, dim, t, w - 2 * pad);
-        ty.y += fs * 1.1f;
-      }
+      Text(dl, fs * 0.8f, ImVec2(x, y + 2 * fs * 2.6f + 4 * u), dim,
+           "La cruceta o A cambian el valor. Lo que el runtime no cambia en caliente se aplica la próxima "
+           "vez que abras el juego.", w - 2 * pad);
     } else if (tab_ == kSettings) {
       const Prefs& p = GetPrefs();
       std::string vals[4] = {p.accent >= 0 ? kAccentNames[p.accent] : "El del perfil",
@@ -736,6 +811,7 @@ class GuideMenu final : public rex::ui::DialogBase {
   bool nav_enabled_ = false;
   uint32_t held_ = 0;
   double repeat_at_ = 0.0;
+  double tab_at_ = 0.0;
   int scroll_ = 0;
   bool imgs_dirty_ = true;
   mutable bool achievements_loaded_ = false;

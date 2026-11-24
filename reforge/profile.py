@@ -18,6 +18,28 @@ TOAST_POSITIONS = [
 ]
 GAMERTAG_RE = re.compile(r"^[A-Za-z0-9 ]{1,15}$")
 
+# Las imágenes de jugador que trae ReForge (Perfil → Imagen de jugador). Se repiten aquí para no cargar Qt
+# solo por escribir el .ini, y el menú Guía del SDK 0.11 dibuja la misma figura (allí no hay texturas a mano).
+AVATAR_STYLES = [
+    ("19d3a2", "0b3d30", "hex"), ("ff9f1c", "4a2a00", "bolt"), ("5b8cff", "14224d", "star"),
+    ("e5484d", "47121a", "ring"), ("b072ff", "2b1450", "diamond"), ("f5d90a", "3d3500", "wave"),
+    ("3dd6f5", "0b3440", "pad"), ("ff6ac1", "4a1236", "crown"),
+]
+
+
+def avatar_style(profile):
+    """Figura y colores de la imagen de jugador del perfil: (estilo, color de la figura, fondo)."""
+    if profile.avatar and not profile.avatar.startswith("gen:"):
+        return "none", "19d3a2", "0b3d30"     # una imagen propia necesita textura: no se puede dibujar aquí
+    idx = 0
+    if profile.avatar.startswith("gen:"):
+        try:
+            idx = int(profile.avatar[4:])
+        except ValueError:
+            idx = 0
+    fg, bg, shape = AVATAR_STYLES[idx % len(AVATAR_STYLES)]
+    return shape, fg, bg
+
 
 @dataclass
 class Profile:
@@ -169,6 +191,10 @@ def write_ext_ini(exe, options=None, profile=None, frame_cap=None):
     except Exception:      # noqa: BLE001 — sin logo antes que sin juego
         lines.append("badge = ")
     lines.append(f"avatar = {export_avatar(p, os.path.dirname(exe))}")
+    shape, fg, bg = avatar_style(p)     # la misma imagen de jugador del perfil, para el menú Guía de 0.11
+    lines.append(f"avatar_style = {shape}")
+    lines.append(f"avatar_fg = {fg}")
+    lines.append(f"avatar_bg = {bg}")
     root = os.path.dirname(os.path.dirname(os.path.abspath(exe)))
     lines.append(f"game_name = {os.path.basename(root).replace('_', ' ').strip().title()[:60]}")
     lines.append(f"guide_menu = {0 if options is not None and not getattr(options, 'guide_menu', True) else 1}")
