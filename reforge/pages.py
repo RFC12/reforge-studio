@@ -1550,17 +1550,20 @@ class WorkshopPage(QWidget):
         p = self.current
         kind = res["kind"]
         if kind in ("crash", "guest_av", "fatal") and res.get("path") \
-                and game.known_runtime_race(game._read_log_text(res["path"])):
+                and (game.known_runtime_race(game._read_log_text(res["path"])) or game.runtime_abort(res)):
             # Bug CONOCIDO del runtime precompilado del SDK (~1 de cada 2 arranques), no del juego ni de la
             # optimización: no se recompila ni se baja de nivel, solo se vuelve a abrir. Antes el diagnóstico
-            # lo confundía con una optimización agresiva y la apagaba, perdiendo rendimiento sin motivo.
+            # lo confundía con una optimización agresiva y la apagaba, perdiendo rendimiento sin motivo. El
+            # mensaje de la excepción cambia («Invalid UTF-8», «Not enough space») y a veces el log no llega a
+            # escribirlo: también cuenta el 0xC0000409 sin nada que señale al juego.
             tries = getattr(self, "_utf8_retries", 0)
             if tries < 2:
                 self._utf8_retries = tries + 1
                 self.status_lbl.setText("Reabriendo el juego (fallo intermitente del SDK)…")
                 self.log.write("⚠ El juego se cerró por el fallo INTERMITENTE del runtime de rexglue "
-                               "(«Invalid UTF-8» en una completion diferida): es un bug conocido del SDK, no de "
-                               "tu juego ni de la optimización, y recompilar no lo arregla.", "warn")
+                               "(una completion diferida del despachador: «Invalid UTF-8», «Not enough space»…): "
+                               "es un bug conocido del SDK, no de tu juego ni de la optimización, y recompilar no "
+                               "lo arregla.", "warn")
                 self.log.write(f"↻ Se vuelve a abrir solo (intento {tries + 2} de 3)…", "warn")
                 QTimer.singleShot(800, lambda: self.play(auto=True))
             else:

@@ -2,6 +2,20 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.1 — El cierre intermitente del SDK ya no apaga la optimización del código ni recompila
+
+- **Se reconoce el mismo cierre con cualquier mensaje.** El despachador del runtime aborta cuando una completion
+  diferida lanza una excepción, y el texto cambia: «Invalid UTF-8», «Not enough space»… y a veces Windows ni
+  siquiera llega a escribir la línea `[FATAL]` (solo queda el 0xC0000409). Antes solo se reconocía «Invalid UTF-8»,
+  así que el cierre con «Not enough space» se tomaba por un fallo de la optimización, se bajaba de «Segura» a
+  «Desactivada» (perdiendo rendimiento) y se lanzaba un mantenimiento completo con recompilación.
+- **Ahora** se reconocen `deferred completion threw` con cualquier texto y el `0xC0000409` sin nada en el log que
+  señale al juego recompilado (sin acceso inválido del guest, sin función no registrada, sin excepción SEH): se
+  reintenta el arranque hasta 3 veces y no se toca la optimización ni se recompila.
+- Mismo criterio en el lanzador del juego (`.bat` / acceso directo) y en el aviso de problemas conocidos.
+- Cubierto por `tests/test_runtime_race.py`: otro mensaje del SDK y el aborto sin línea en el log dejan la
+  optimización en «Segura» y solo reabren el juego.
+
 ## 1.48.0 — 30 FPS con VSync para NVIDIA Smooth Motion y menú Gráficos dentro del juego
 
 - **Nuevo ritmo «30 FPS con VSync»** (Opciones del juego → Fotogramas): el juego se queda a 30 FPS reales, que es la

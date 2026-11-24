@@ -45,6 +45,8 @@ OTRO = ("[2026-11-23 17:10:21.116] [critical] [core] [t1] [FATAL] Call to invali
 
 print("Reconocer el cierre intermitente del SDK")
 check(game.known_runtime_race(LOG), "reconoce «Invalid UTF-8» en una completion diferida")
+check(game.known_runtime_race(LOG.replace("'Invalid UTF-8'", "'Not enough space'")),
+      "reconoce el mismo cierre con otro mensaje del SDK («Not enough space»)")
 check(not game.known_runtime_race(OTRO), "una función no registrada NO es el cierre intermitente")
 check(not game.known_runtime_race(""), "sin log no se concluye nada")
 
@@ -71,6 +73,26 @@ for _ in range(60):
 check(o.codegen_opt_level == "safe", "el cierre intermitente deja la optimización en «Segura» (no la apaga)")
 check(plays == [True], "vuelve a abrir el juego solo, sin recompilar")
 check(any("bug conocido del SDK" in m for m in mensajes), "el log explica que es un bug del SDK")
+
+print("El aborto del runtime sin línea en el log tampoco baja la optimización")
+logp2 = os.path.join(TMP, "build", "logs", "juego_002.log")
+open(logp2, "w", encoding="utf-8").write("[2026-11-23 18:19:56.626] [info] [core] [t1] [ReForge] FPS 30 · peor 35 ms\n"
+                                          "[2026-11-23 18:20:01.324] [warning] [krnl] [t2] __imp__XNetLogonGetTitleID STUB\n")
+ABORTO = {"kind": "crash", "path": logp2, "crash": "comprobación de seguridad (0xC0000409)",
+          "hotplug": False, "lines": []}
+check(game.runtime_abort(ABORTO), "0xC0000409 sin nada en el log que señale al juego recompilado")
+logp3 = os.path.join(TMP, "build", "logs", "juego_003.log")
+open(logp3, "w", encoding="utf-8").write("Unhandled guest access violation: read of guest 0x00000000\n")
+check(not game.runtime_abort({**ABORTO, "path": logp3}), "un acceso inválido del juego no es el aborto del runtime")
+check(not game.runtime_abort({**ABORTO, "kind": "fatal", "crash": ""}), "sin 0xC0000409 no se da por bueno")
+plays.clear()
+page._utf8_retries = 0
+WorkshopPage._handle_crash(page, ABORTO, o)
+for _ in range(60):
+    app.processEvents()
+    time.sleep(0.02)
+check(o.codegen_opt_level == "safe" and plays == [True],
+      "se reabre el juego, sin bajar de nivel ni mantenimiento completo")
 
 print("Tres seguidos: se detiene sin tocar nada")
 plays.clear()

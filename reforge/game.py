@@ -1622,6 +1622,23 @@ def known_runtime_race(log_text):
     return False
 
 
+def runtime_abort(res):
+    """¿Es el aborto DELIBERADO del runtime (0xC0000409) sin nada en el log que señale al juego recompilado?
+
+    El despachador del runtime cierra con abort() cuando una completion diferida lanza una excepción; a veces
+    Windows no llega a escribir la línea [FATAL] (el log termina sin mensaje) y solo queda el 0xC0000409. Es el
+    mismo fallo intermitente del SDK: no se arregla recompilando ni bajando la optimización del código.
+    """
+    if "0xC0000409" not in (res.get("crash") or ""):
+        return False
+    txt = _read_log_text(res.get("path"))
+    if "deferred completion threw" in txt:
+        return True
+    return not any(s in txt for s in ("Unhandled guest access violation",
+                                     "Call to invalid or unregistered function",
+                                     "SEH exception caught"))
+
+
 def recent_crash_dump(exe, since):
     """Volcado de Windows del juego creado después de `since` (el juego cayó aunque el log no lo diga)."""
     base = os.environ.get("LOCALAPPDATA") or ""

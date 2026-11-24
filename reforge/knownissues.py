@@ -116,18 +116,21 @@ def _tiene(*trozos):
 ISSUES = [
     Issue(
         id="cierre_intermitente_utf8",
-        titulo="Cierre intermitente al arrancar («Invalid UTF-8» en una completion del runtime)",
+        titulo="Cierre intermitente al arrancar («Invalid UTF-8» / «Not enough space» en una completion del runtime)",
         sintomas="A VECES (no siempre, ~1 de cada 2 arranques) el juego se cierra en los primeros ~30 s con "
-                 "«[FATAL] Dispatch thread: deferred completion threw 'Invalid UTF-8'». Si lo vuelves a abrir, "
-                 "normalmente arranca bien.",
+                 "«[FATAL] Dispatch thread: deferred completion threw 'Invalid UTF-8'» (o 'Not enough space': "
+                 "el texto de la excepción cambia). A veces Windows ni llega a escribir la línea [FATAL] y solo "
+                 "queda el cierre por 0xC0000409. Si lo vuelves a abrir, normalmente arranca bien.",
         causa="Es una CARRERA dentro del runtime de rexglue: una tarea asíncrona (completion de XOVERLAPPED del "
               "sistema —UI o enumeración de contenido—) decodifica una cadena con un conversor UTF-8 que lanza "
               "excepción, y el despachador (dispatcher.cpp) convierte cualquier excepción ahí en un cierre "
               "fatal. Pasa solo en parte de los arranques, por eso es intermitente. El arreglo de fondo (que el "
               "despachador tolere esa excepción o use conversión UTF-8 sin fallo) está en el runtime "
               "PRECOMPILADO del SDK, así que ReForge no puede parchearlo por proyecto; recompilar no lo cambia.",
-        match=lambda log, info: ("Invalid UTF-8" in (log or "")
-                                 and ("deferred completion" in (log or "") or "Dispatch thread" in (log or ""))),
+        # Cualquier excepción del despachador en una completion diferida es este mismo bug: el texto cambia
+        # («Invalid UTF-8», «Not enough space»…) pero el sitio del runtime es el mismo.
+        match=lambda log, info: ("deferred completion threw" in (log or ""))
+        or ("Invalid UTF-8" in (log or "") and "Dispatch thread" in (log or "")),
         consejo="No es de tu juego ni de tu equipo: es un bug del SDK y es intermitente. El lanzador de ReForge "
                 "lo detecta y REINTENTA el arranque solo (hasta 3 veces), así que el juego abre casi siempre; si "
                 "lo abres a mano, basta con volver a lanzarlo. Recompilar no ayuda. Conviene reportarlo al autor "

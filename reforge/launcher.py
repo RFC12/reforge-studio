@@ -248,10 +248,11 @@ class GameLauncher(QWidget):
         self.raise_()
         self.activateWindow()
         # Cierre INTERMITENTE conocido (carrera en una completion asíncrona del runtime de rexglue que a veces
-        # lanza 'Invalid UTF-8' y el despachador vuelve fatal): como solo pasa en parte de los arranques,
-        # se reintenta un par de veces y el juego abre casi siempre. Solo para este caso concreto.
+        # lanza 'Invalid UTF-8', 'Not enough space' o aborta sin escribir nada, y el despachador vuelve fatal):
+        # como solo pasa en parte de los arranques, se reintenta un par de veces y el juego abre casi siempre.
+        # Solo para este caso concreto.
         if out["kind"] in ("crash", "guest_av", "fatal") \
-                and "Invalid UTF-8" in " ".join(out.get("lines") or []) \
+                and (game.known_runtime_race(game._read_log_text(out.get("path"))) or game.runtime_abort(out)) \
                 and getattr(self, "_intermit_retries", 0) < 3:
             self._intermit_retries = getattr(self, "_intermit_retries", 0) + 1
             self.status.setText(f"Cierre intermitente al arrancar; reintentando ({self._intermit_retries}/3)…")
