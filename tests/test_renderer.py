@@ -33,7 +33,20 @@ check(not any("gpu.driver" in a for a in args_auto), "auto: no añade --gpu.driv
 
 args_vk = game.launch_args(exe, _proj("vulkan"))
 check("--gpu.driver=vulkan" in args_vk, "vulkan: añade --gpu.driver=vulkan")
-check("--gpu_plugin=xenos" in args_vk, "vulkan: mantiene --gpu_plugin=xenos")
+check(not any("gpu_plugin" in a for a in args_vk), "sin --gpu_plugin por línea de comandos (va en el .toml)")
+
+print("SDK 0.11: nada por línea de comandos")
+with tempfile.TemporaryDirectory() as d:
+    os.makedirs(os.path.join(d, "build"), exist_ok=True)
+    open(os.path.join(d, "build", "CMakeCache.txt"), "w").write(
+        "rexglue_DIR:PATH=C:/x/tools/rexglue-sdk/0.11.0.13-dev.g115171b4-fsr/win-amd64/lib/cmake/rexglue\n")
+    o = GameOptions()
+    o.renderer = "vulkan"
+    o.save(d)
+    check(game.sdk_no_cli_flags(d), "se reconoce el SDK 0.11 en la caché de CMake")
+    check(game.launch_args(exe, d) == [exe, f"--game_data_root={os.path.join(d, 'assets')}"],
+          "0.11: ni --gpu_plugin ni --gpu.driver (los rechaza el cargador)")
+    check(game._driver_flag(d) == "", "0.11: los lanzadores tampoco los llevan")
 
 args_dx = game.launch_args(exe, _proj("d3d12"))
 check("--gpu.driver=d3d12" in args_dx, "d3d12: añade --gpu.driver=d3d12")

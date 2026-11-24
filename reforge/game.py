@@ -1066,8 +1066,26 @@ def cache_mismatch(cfg, build):
     ninja = (getattr(cfg, "ninja", "") or "").strip()
     cur_ninja = cache_value(build, "CMAKE_MAKE_PROGRAM")
     if ninja and cur_ninja and norm(cur_ninja) != norm(ninja):
-        return "hay una versión más nueva de Ninja"
+        # Solo se borra la base de compilación si el Ninja es de OTRA VERSIÓN. Antes bastaba con que cambiara
+        # la ruta (BuildTools → Community, las dos 1.13): se tiraba toda la caché y había que recompilar el
+        # juego entero sin motivo. CMake reconfigura con -DCMAKE_MAKE_PROGRAM y la caché sigue valiendo.
+        antes, ahora = _ninja_version(cur_ninja), _ninja_version(ninja)
+        if antes and ahora and antes != ahora:
+            return f"hay una versión más nueva de Ninja ({ahora} en vez de {antes})"
     return sdk_mismatch(cfg, build)
+
+
+def _ninja_version(path):
+    """Versión de Ninja («1.13.2») o «» si no se puede leer (ruta inventada, sin permisos…)."""
+    if not path:
+        return ""
+    try:
+        r = subprocess.run([path, "--version"], capture_output=True, text=True, errors="replace",
+                           stdin=subprocess.DEVNULL, timeout=10,
+                           creationflags=0x08000000 if sys.platform == "win32" else 0)
+        return (r.stdout or "").strip()
+    except Exception:      # noqa: BLE001
+        return ""
 
 
 def sdk_mismatch(cfg, build):
@@ -1165,12 +1183,22 @@ def rebuild_reason(root, exe, cfg=None):
     return ""
 
 
+def sdk_no_cli_flags(root):
+    """¿El build usa un SDK 0.11 o posterior? Ahí gpu_plugin es una cvar del .toml y la línea de comandos
+    rechaza opciones desconocidas («command line failed: unknown option»), así que no se le pasa nada."""
+    d = (cache_value(os.path.join(root, "build"), "rexglue_DIR") or "").replace("\\", "/")
+    m = re.search(r"/rexglue-sdk/(\d+)\.(\d+)\.", d)
+    return bool(m) and (int(m.group(1)), int(m.group(2))) >= (0, 11)
+
+
 def launch_args(exe, root):
-    args = [exe, f"--game_data_root={os.path.join(root, 'assets')}", "--gpu_plugin=xenos"]
+    # gpu_plugin va en el .toml (gpu_plugin = "xenos"): lo leen tanto 0.10 como 0.11, y en 0.11 pasarlo por la
+    # línea de comandos es un error que impide abrir el juego (el cargador de la GPU ya no se elige ahí).
+    args = [exe, f"--game_data_root={os.path.join(root, 'assets')}"]
     try:
         from .game_options import GameOptions
         r = getattr(GameOptions.load(root), "renderer", "auto")
-        if r in ("d3d12", "vulkan"):
+        if r in ("d3d12", "vulkan") and not sdk_no_cli_flags(root):
             args.append(f"--gpu.driver={r}")
     except Exception:      # noqa: BLE001
         pass
@@ -1182,7 +1210,7 @@ def _driver_flag(root):
     try:
         from .game_options import GameOptions
         r = getattr(GameOptions.load(root), "renderer", "auto")
-        if r in ("d3d12", "vulkan"):
+        if r in ("d3d12", "vulkan") and not sdk_no_cli_flags(root):
             return f" --gpu.driver={r}"
     except Exception:      # noqa: BLE001
         pass
@@ -1409,7 +1437,7 @@ def write_launcher(exe, root, title):
         path = os.path.join(os.path.dirname(exe), f"jugar_{os.path.basename(exe)}.sh")
         with open(path, "w", encoding="utf-8") as f:
             f.write(f'#!/bin/sh\ncd "$(dirname "$0")"\nexec "./{os.path.basename(exe)}" '
-                    f'"--game_data_root={os.path.join(root, "assets")}" --gpu_plugin=xenos{_driver_flag(root)} "$@"\n')
+                    f'"--game_data_root={os.path.join(root, "assets")}"{_driver_flag(root)} "$@"\n')
         os.chmod(path, 0o755)
         return path
     folder = os.path.dirname(exe)
@@ -1434,7 +1462,7 @@ def write_launcher(exe, root, title):
                 "echo.\r\n")
 
     direct = os.path.join(folder, f"Jugar {pretty} (directo).bat")
-    args = (f"\"--game_data_root={os.path.join(root, 'assets')}\" --gpu_plugin=xenos{_driver_flag(root)} %*")
+    args = (f"\"--game_data_root={os.path.join(root, 'assets')}\"{_driver_flag(root)} %*")
     launch = f"\"%~dp0{os.path.basename(exe)}\""
     with open(direct, "w", encoding="utf-8") as f:
         # Reintento automático: algunos juegos tienen un cierre INTERMITENTE al arrancar (una carrera en una
@@ -1487,7 +1515,7 @@ def desktop_shortcut(exe, root, title):
     if rf:
         target, args, workdir = rf, f'--launcher "{os.path.abspath(root)}"', os.path.dirname(rf)
     else:
-        target, args, workdir = exe, f'--game_data_root="{os.path.join(root, "assets")}" --gpu_plugin=xenos{_driver_flag(root)}', os.path.dirname(exe)
+        target, args, workdir = exe, f'--game_data_root="{os.path.join(root, "assets")}"{_driver_flag(root)}', os.path.dirname(exe)
     subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
                     f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{esc(lnk)}');"
                     f"$s.TargetPath='{esc(target)}';$s.Arguments='{esc(args)}';"

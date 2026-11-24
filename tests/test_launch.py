@@ -8,8 +8,11 @@ from reforge import game
 class LaunchTests(unittest.TestCase):
     def test_gpu_and_assets_arguments(self):
         args=game.launch_args('game.exe','project with spaces')
-        self.assertIn('--gpu_plugin=xenos',args)
-        self.assertEqual(len(args),3)
+        # gpu_plugin va en el .toml: en la línea de comandos el SDK 0.11 lo rechaza
+        # («unknown option '--gpu_plugin=xenos'») y el juego no abre.
+        self.assertTrue(args[1].startswith('--game_data_root=project with spaces'), args)
+        self.assertNotIn('--gpu_plugin=xenos',args)
+        self.assertEqual(len(args),2)
     def test_stage_matching_plugin_and_launcher(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/'assets').mkdir();(root/'assets/default.xex').touch()
@@ -23,7 +26,7 @@ class LaunchTests(unittest.TestCase):
                     game.prepare_game_runtime(cfg,str(exe),str(root))
                     launcher=game.write_launcher(str(exe),str(root),'game')
                 self.assertEqual((root/'build'/plugin).read_bytes(),b'plugin')
-                self.assertIn('--gpu_plugin=xenos',Path(launcher).read_text())
+                self.assertNotIn('--gpu_plugin',Path(launcher).read_text())
                 self.assertIn('--game_data_root=',Path(launcher).read_text())
     def test_missing_assets_reports_error(self):
         with tempfile.TemporaryDirectory() as tmp:

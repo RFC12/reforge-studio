@@ -132,7 +132,7 @@ ISSUES = [
         match=lambda log, info: ("deferred completion threw" in (log or ""))
         or ("Invalid UTF-8" in (log or "") and "Dispatch thread" in (log or "")),
         consejo="No es de tu juego ni de tu equipo: es un bug del SDK y es intermitente. El lanzador de ReForge "
-                "lo detecta y REINTENTA el arranque solo (hasta 3 veces), así que el juego abre casi siempre; si "
+                "lo detecta y REINTENTA el arranque solo (hasta 8 veces), así que el juego abre casi siempre; si "
                 "lo abres a mano, basta con volver a lanzarlo. Recompilar no ayuda. Conviene reportarlo al autor "
                 "de rexglue (es dispatcher.cpp, excepción utf8::invalid_utf8 en una completion diferida).",
         recompila=False,

@@ -253,10 +253,12 @@ class GameLauncher(QWidget):
         # Solo para este caso concreto.
         if out["kind"] in ("crash", "guest_av", "fatal") \
                 and (game.known_runtime_race(game._read_log_text(out.get("path"))) or game.runtime_abort(out)) \
-                and getattr(self, "_intermit_retries", 0) < 3:
+                and getattr(self, "_intermit_retries", 0) < 8:
+            # A veces el cierre se repite varias veces seguidas antes de que el arranque «cuele» (Asura's Wrath
+            # llegó a necesitar 8). Se reintenta solo, sin que el jugador tenga que cerrar y abrir a mano.
             self._intermit_retries = getattr(self, "_intermit_retries", 0) + 1
-            self.status.setText(f"Cierre intermitente al arrancar; reintentando ({self._intermit_retries}/3)…")
-            QTimer.singleShot(1000, self.play)
+            self.status.setText(f"Cierre intermitente al arrancar; reintentando ({self._intermit_retries}/8)…")
+            QTimer.singleShot(400, self.play)
             return
         self._intermit_retries = 0
         if out["kind"] == "unregistered":

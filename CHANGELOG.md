@@ -2,6 +2,21 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.5 — Los juegos con SDK 0.11 abren, y la caché de compilación ya no se borra sola
+
+- **«command line failed: unknown option '--gpu_plugin=xenos'»** al pulsar Jugar: en el SDK 0.11 el cargador de la
+  GPU ya no se elige por línea de comandos (solo por la cvar del `.toml`, que ReForge ya escribía). Se deja de
+  pasar; funciona igual en 0.10 y en 0.11. Con 0.11 tampoco se pasan `--gpu.driver`/`--gpu_plugin` a los
+  lanzadores (los rechaza el cargador). Comprobado con Resident Evil Zero: el juego arranca y presenta.
+- **La base de compilación ya no se tira por cambiar la ruta de Ninja.** Bastaba con que Ninja estuviera en otra
+  carpeta (BuildTools → Community, ambas 1.13) para borrar la caché de CMake y recompilar el juego entero (194
+  archivos, minutos). Ahora solo se reconfigura desde cero si cambia la VERSIÓN de Ninja (o el compilador/
+  generador/SDK), que es cuando de verdad hace falta.
+- **Arranque de Asura's Wrath sin cerrar y abrir a mano.** El cierre intermitente del runtime del SDK (track
+  distinto cada vez, `'Invalid UTF-8'` en una completion diferida) necesitó hasta 8 intentos seguidos en una
+  sesión: el lanzador reintenta solo hasta 8 veces (antes 3) y en 0,4 s en vez de 1 s. Sigue siendo un fallo del
+  runtime precompilado del SDK: no se arregla recompilando.
+
 ## 1.48.4 — Lo que cambias en el menú Guía se guarda, y botón para silenciar el juego
 
 - **Los cambios del menú Guía se perdían.** Lo elegido jugando (fotogramas, escala de resolución) se escribía en

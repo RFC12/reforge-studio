@@ -122,8 +122,8 @@ os.makedirs(build, exist_ok=True)
 with open(os.path.join(build, "CMakeCache.txt"), "w", encoding="utf-8") as f:
     f.write("CMAKE_GENERATOR:INTERNAL=Ninja\n")
     f.write(f"CMAKE_MAKE_PROGRAM:FILEPATH={ninja_old}\n")
-check("Ninja" in game.cache_mismatch(AppConfig(generator="Ninja", ninja=ninja_new), build),
-      "un Ninja más nuevo fuerza reconfigurar la caché")
+check(game.cache_mismatch(AppConfig(generator="Ninja", ninja=ninja_new), build) == "",
+      "solo cambia la RUTA de Ninja: no se borra la caché (no se recompila todo el juego sin motivo)")
 
 print("Detección real (sin depender de lo instalado)")
 real = toolchain.latest()
