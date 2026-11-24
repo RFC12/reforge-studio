@@ -2,6 +2,18 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.9 — El menú Guía también en los proyectos del SDK 0.11
+
+- **Menú Guía propio para la familia del SDK 0.11** (`rex::app::TitleApp`), que no tiene la clase `ReXApp` de
+  0.10: se genera `src/reforge_menu.cpp` y se monta en `OnTitleLaunch` del proyecto. Se abre con el **botón
+  Guía (PS/Xbox)** del mando o la tecla **Inicio**, y trae pestañas **Gráficos** (fotogramas 30/60/sin límite,
+  escala de resolución, contador de FPS), **Ajustes** (silenciar el juego —se aplica al momento con
+  `SetAudioPaused`— e idioma del juego) y **Logros** (catálogo con los desbloqueados y su puntuación).
+- Guarda lo elegido en `reforge_menu.ini`, el mismo formato que la extensión de 0.10, así que ReForge lo aplica
+  al siguiente arranque (`reforge_ext.ini`/`.toml`) sin código especial: fotogramas, escala, silencio e idioma
+  funcionan en los dos SDK. Lo que el runtime no cambia en caliente se avisa como «se aplica al reiniciar».
+- Comprobado compilando y lanzando **Resident Evil Zero** (SDK 0.11): enlaza y arranca sin errores.
+
 ## 1.48.8 — El Taller dice en qué proyectos el menú Guía aún no se puede montar
 
 - Los proyectos creados con el **SDK 0.11** usan otra API de aplicación (`rex::app::TitleApp`, sin la clase

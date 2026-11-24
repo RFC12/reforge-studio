@@ -2370,9 +2370,11 @@ def ext_unavailable_reason(root):
     except OSError:
         return ""
     if "REX_TITLE_APP" in main or "rex::app::TitleApp" in main:
-        return ("este proyecto usa la API de app del SDK 0.11 y el menú Guía está hecho para la de 0.10: "
-                "el juego se recompila y abre, pero sin menú. Con un proyecto del SDK 0.10 sí sale (el SDK se "
-                "elige en Herramientas).")
+        from . import ext11
+        if ext11.applies(root):
+            return ""     # el SDK 0.11 tiene su propia versión del menú (ext11)
+        return ("este proyecto usa la API de app del SDK 0.11: el menú Guía necesita `src/main.cpp` con "
+                "`REX_TITLE_APP` para montarse.")
     return ""
 
 

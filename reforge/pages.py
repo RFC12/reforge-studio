@@ -48,11 +48,17 @@ def prepare_project(root, ctx):
         apply_engine_profile(root, ctx.log)
     except Exception as e:      # noqa: BLE001
         ctx.log(f"No se pudo detectar el motor del juego: {e}", "warn")
+    from . import ext11
     from .ext_cpp import ensure_reforge_ext, ext_unavailable_reason, remove_reforge_ext
     if not GameOptions.load(root).reforge_ext:
-        removed = remove_reforge_ext(root)
+        removed = remove_reforge_ext(root) + ext11.remove(root)
         ctx.log("Extensión ReForge desactivada en 🎮 Opciones" + (": quitada (" + ", ".join(removed) + ")."
                                                                  if removed else "."), "warn")
+        return
+    if ext11.applies(root):      # SDK 0.11: menú Guía propio (API rex::app::TitleApp)
+        changed11 = ext11.ensure(root)
+        ctx.log("Menú Guía de ReForge (SDK 0.11): " + ", ".join(changed11) if changed11
+                else "Proyecto preparado (menú Guía al día).", "ok" if changed11 else "dim")
         return
     sin_menu = ext_unavailable_reason(root)
     if sin_menu:

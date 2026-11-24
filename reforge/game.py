@@ -1299,8 +1299,12 @@ def prepare_game_runtime(cfg, exe, root):
         pass
     apply_visual_layers(root, exe)
     try:      # menú Guía (botón Xbox/PS) al día en TODOS los proyectos, también los creados antes de existir
-        from .ext_cpp import ensure_reforge_ext
-        ensure_reforge_ext(root)      # los cambios se aplican al recompilar el juego
+        from . import ext11
+        if ext11.applies(root):       # SDK 0.11: tiene su propia versión del menú
+            ext11.ensure(root)
+        else:
+            from .ext_cpp import ensure_reforge_ext
+            ensure_reforge_ext(root)
     except Exception:      # noqa: BLE001
         pass
     try:      # opciones al día también en los arranques vigilados (reparación automática, Live sin conexión…)
