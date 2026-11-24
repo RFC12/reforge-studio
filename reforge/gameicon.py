@@ -18,6 +18,7 @@ import os
 import struct
 import sys
 
+from . import icondb
 from .xexpatch import _INV, _SBOX, _expand, _mul, _opt_headers, base_info, session_key  # noqa: F401
 
 KEY_RESOURCE_INFO = 0x000002FF
@@ -354,6 +355,15 @@ def _read_mark(exe):
         return {}
 
 
+def title_id(xex_path):
+    """«43430842» del XEX, o «» si no se puede leer."""
+    try:
+        with open(xex_path, "rb") as f:
+            return "%08X" % base_info(f.read())["title_id"]
+    except Exception:      # noqa: BLE001
+        return ""
+
+
 def ensure(exe, root, title="", force=False):
     """Pone al .exe el icono del juego si no lo tiene ya (o si ahora hay uno mejor). Devuelve un texto
     corto con lo hecho, o "" si no hizo falta. No lanza excepciones: el icono nunca impide jugar."""
@@ -369,10 +379,18 @@ def _ensure(exe, root, title, force):
     xex = os.path.join(root, "assets", "default.xex")
     mark = _read_mark(exe)
     mtime = int(os.path.getmtime(exe))
-    if not force and mark.get("exe_mtime") == mtime and mark.get("source") in ("xex", "imagen"):
+    if not force and mark.get("exe_mtime") == mtime and mark.get("source") in ("xex", "imagen", "basedatos"):
         return ""
     image_bin = os.path.join(os.path.dirname(exe), "reforge_image.bin")
-    png, source = title_png(xex, image_bin) if os.path.isfile(xex) else (b"", "")
+    tid = title_id(xex) if os.path.isfile(xex) else ""
+    png, source = b"", ""
+    if tid:                                   # 1) base de datos de iconos (ya extraído antes con este Title ID)
+        png = icondb.lookup(tid)
+        source = "basedatos" if png else ""
+    if not png and os.path.isfile(xex):       # 2) el propio XEX
+        png, source = title_png(xex, image_bin)
+    if png and tid and source in ("xex", "imagen"):
+        icondb.remember(tid, png)             # aprende para el resto de proyectos del mismo juego
     if not png:
         if not force and mark.get("exe_mtime") == mtime and mark.get("source") == "iniciales":
             return ""
@@ -394,7 +412,8 @@ def _ensure(exe, root, title, force):
         json.dump({"exe_mtime": int(os.path.getmtime(exe)), "source": source}, f)
     return {"xex": "icono oficial del juego aplicado al .exe",
             "imagen": "icono oficial del juego aplicado al .exe (sacado de la partida)",
-            "iniciales": "el juego no trae imagen: icono con sus iniciales aplicado al .exe"}[source]
+            "basedatos": "icono oficial del juego aplicado al .exe (estaba en la base de iconos)",
+            "iniciales": "el juego no trae imagen: icono con sus iniciales aplicado al .exe"}.get(source, "icono aplicado")
 
 
 def dominant_color(root):

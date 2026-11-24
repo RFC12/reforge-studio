@@ -31,6 +31,9 @@ check("ListAchievements()" in src and "GetUnlockTime" in src, "logros con fecha 
 check("Silenciar el juego" in src and 'SetFlagByName(\"audio_mute\"' in src,
       "botón para silenciar el juego desde el menú Guía (se aplica al momento)")
 check("Prefs().mute == 1" in src and 'key == "mute"' in src, "el silencio elegido se recuerda en el menú")
+check("Idioma del juego" in src and "kLanguageNames" in src and "g_language.store" in src,
+      "idioma del juego en Ajustes, aplicado al momento por XGetLanguage")
+check("XGetLanguage_hook" in src and "GameLanguage()" in src, "el juego ve el idioma elegido")
 check("reforge_playtime.txt" in src and "reforge_menu.ini" in src, "tiempo de juego total y ajustes guardados por juego")
 check("ImGuiKey_Home" in src, "también con la tecla Inicio del teclado")
 check("&achievements()" in ext_cpp.APP_BLOCK, "el juego le pasa sus logros")

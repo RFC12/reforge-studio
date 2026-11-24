@@ -88,6 +88,17 @@ check("draw_resolution_scale_x = 2" in toml2 and "video_mode_refresh_rate = 60.0
 check("frame_cap = 30.0" in open(profile.ext_ini_path(exe), encoding="utf-8").read(), "y el tope de 30 sigue")
 check(go.project_root_for_exe(exe) == root, "el proyecto se localiza desde el .exe del juego")
 
+print("Idioma elegido en el menú Guía")
+with open(menu, "w", encoding="utf-8") as f:
+    f.write("language = 5\n")
+go.write_runtime_config(exe, go.GameOptions.load(root))
+guardado2 = go.GameOptions.load(root)
+check(guardado2.language == 5, "el idioma del menú pasa a las opciones del juego")
+check("user_language = 5" in open(go.runtime_config_path(exe), encoding="utf-8").read(),
+      "y al .toml que lee el runtime")
+check("language = 5" in open(profile.ext_ini_path(exe), encoding="utf-8").read(),
+      "y a reforge_ext.ini, que es lo que devuelve XGetLanguage")
+
 print()
 if fallos:
     print(f"FALLOS: {len(fallos)}")

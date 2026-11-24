@@ -2,6 +2,21 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.7 — Menú Guía en todos los proyectos, idioma dentro del menú y base de datos de iconos
+
+- **El menú Guía (botón Xbox/PS o Inicio del teclado) queda en todos los juegos recompilados.** La extensión
+  ReForge se regenera también al preparar cualquier proyecto y antes de cada partida, no solo al compilar en el
+  Taller: los proyectos hechos antes de que existiera el menú lo reciben en cuanto se recompilan (y se avisa).
+- **Idioma del juego desde la pestaña Ajustes del menú Guía.** Nueva fila «Idioma del juego» que recorre
+  English, 日本語, Deutsch, Français, Español, Italiano… y cambia `XGetLanguage` **al momento** (sin reiniciar):
+  las pantallas que lean textos ya salen en el idioma elegido. Se recuerda en `reforge_menu.ini` y pasa a
+  `reforge_ext.ini` y al `.toml` (`user_language`) en el siguiente arranque.
+- **Base de datos de iconos por Title ID.** Cada vez que se aplica el icono oficial de un juego se guarda en la
+  carpeta de ajustes de ReForge (`icons/<TITLEID>.png`) y se reutiliza en cualquier otro proyecto del mismo
+  juego o tras borrar el build, sin volver a extraerlo. El orden es: base de datos → XEX → imagen capturada de
+  la partida (`reforge_image.bin`) → iniciales. También sirve para poner un icono propio: basta con dejar el PNG
+  con el nombre del Title ID en esa carpeta.
+
 ## 1.48.6 — El cierre por textos no UTF-8 dice qué revisar en Windows
 
 - Cuando el juego se cierra con `Dispatch thread: deferred completion threw 'Invalid UTF-8'` y el sistema **no**

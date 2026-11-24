@@ -108,7 +108,7 @@ namespace reforge {
 using namespace rex;  // tipos y códigos de error del Xbox (X_RESULT, X_E_*, be<>…)
 
 struct Settings {
-  std::string gamertag = "Player";
+  std::string gamertag = "Player";  // perfil del jugador
   bool live = false;
   uint32_t language = 0;  // 0 = el que diga el juego (inglés)
   std::string toast_position = "bottom_right";
@@ -188,9 +188,18 @@ static constexpr uint64_t kXuid = 0xB13EBABEBABEBABEull;
 
 static u32 SigninState() { return Config().live ? 2u : 1u; }  // 1 = local, 2 = Xbox Live
 
-static u32 XGetLanguage_hook() {
-  const uint32_t lang = Config().language;
+// Idioma elegido en el menú Guía: 0 = el de reforge_ext.ini. El juego pregunta por XGetLanguage al cargar
+// sus textos, así que cambiarlo desde el menú se aplica en la siguiente pantalla que los lea (sin reiniciar).
+static std::atomic<uint32_t> g_language{0};
+
+static u32 GameLanguage() {
+  const uint32_t want = g_language.load(std::memory_order_relaxed);
+  const uint32_t lang = want ? want : Config().language;
   return (lang >= 1 && lang <= 12) ? lang : 1u;
+}
+
+static u32 XGetLanguage_hook() {
+  return GameLanguage();
 }
 
 static u32 XamUserGetSigninState_hook(u32 user_index) {
@@ -1062,6 +1071,7 @@ struct MenuPrefs {
   int fps_mode = -1;          // -1 = el de ReForge · 0 = 30 FPS · 1 = 60 · 2 = sin límite (menú Guía → Gráficos)
   int resolution_scale = 0;   // 0 = la de ReForge · 1..3 (menú Guía → Gráficos)
   int mute = -1;              // -1 = la de ReForge · 0 = con sonido · 1 = silenciado (menú Guía → Ajustes)
+  int language = 0;           // 0 = el de ReForge · 1..12 código de idioma del Xbox (menú Guía → Ajustes)
   bool loaded = false;
 };
 
@@ -1070,6 +1080,9 @@ static const char* const kFpsKeys[] = {"30", "60", "unlimited"};
 
 static constexpr uint32_t kAccents[] = {0x19D3A2, 0x107C10, 0x2D7FF9, 0xE8A317, 0xE3306B, 0x9B59F6};
 static const char* const kAccentNames[] = {"Turquesa", "Verde Xbox", "Azul", "Dorado", "Rosa", "Violeta"};
+// Códigos de idioma del Xbox (XGetLanguage): 1 inglés, 2 japonés, 3 alemán, 4 francés, 5 español, 6 italiano…
+static const char* const kLanguageNames[] = {"English", "日本語", "Deutsch", "Français", "Español", "Italiano",
+                                            "한국어", "中文", "Português", "Polski", "Русский", "Türkçe"};
 static const char* const kPositions[] = {"top_left", "top_center", "top_right",
                                          "bottom_left", "bottom_center", "bottom_right"};
 static const char* const kPositionNames[] = {"Arriba a la izquierda", "Arriba al centro", "Arriba a la derecha",
@@ -1099,6 +1112,7 @@ static MenuPrefs& Prefs() {
       else if (key == "fps_mode") prefs.fps_mode = (val == "30") ? 0 : (val == "60" ? 1 : (val == "unlimited" ? 2 : -1));
       else if (key == "resolution_scale") prefs.resolution_scale = std::clamp(std::atoi(val.c_str()), 0, 3);
       else if (key == "mute") prefs.mute = (val == "1") ? 1 : 0;
+      else if (key == "language") prefs.language = std::clamp(std::atoi(val.c_str()), 0, 12);
     }
   }
   return prefs;
@@ -1116,6 +1130,7 @@ static void SavePrefs() {
   if (p.fps_mode >= 0) f << "fps_mode = " << kFpsKeys[std::clamp(p.fps_mode, 0, 2)] << "\n";
   if (p.resolution_scale > 0) f << "resolution_scale = " << std::clamp(p.resolution_scale, 1, 3) << "\n";
   if (p.mute >= 0) f << "mute = " << (p.mute == 1 ? 1 : 0) << "\n";
+  if (p.language > 0) f << "language = " << std::clamp(p.language, 1, 12) << "\n";
 }
 
 // Iconos de botones: los de PlayStation se ven en el menú Guía y, con el SDK de ReForge, en las texturas del
@@ -1300,7 +1315,7 @@ class GuideMenu {
   int ItemCount(int tab) const {
     if (tab == kHome) return 2;
     if (tab == kGraphics) return 3;
-    if (tab == kSettings) return 6;
+    if (tab == kSettings) return 7;
     if (tab == kSaves) return kSlotCount;
     return static_cast<int>(list_.size());
   }
@@ -1478,6 +1493,15 @@ class GuideMenu {
           SetPadPS(ps);
           status_ = ps ? "Iconos de PlayStation" : "Iconos de Xbox";
           status_until_ = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+          break;
+        }
+        case 6: {
+          const uint32_t cur = GameLanguage();
+          uint32_t next = (cur + dir + 12 - 1) % 12 + 1;      // 1..12 en bucle, en el sentido de la cruceta
+          p.language = static_cast<int>(next);
+          g_language.store(next);
+          status_ = std::string("Idioma del juego: ") + kLanguageNames[next - 1];
+          status_until_ = std::chrono::steady_clock::now() + std::chrono::seconds(3);
           break;
         }
         case 5: {
@@ -1798,14 +1822,15 @@ class GuideMenu {
     } else if (tab_ == kSettings) {
       const MenuPrefs& p = Prefs();
       const int ai = p.accent;
-      std::string vals[6] = {p.show_fps ? "Sí" : "No", ai >= 0 ? kAccentNames[ai] : "El del perfil", "",
+      std::string vals[7] = {p.show_fps ? "Sí" : "No", ai >= 0 ? kAccentNames[ai] : "El del perfil", "",
                              p.hide_cursor ? "Sí" : "No", PadPS() ? "PlayStation" : "Xbox",
-                             Muted() ? "Sí" : "No"};
+                             Muted() ? "Sí" : "No", kLanguageNames[std::min<uint32_t>(GameLanguage(), 12) - 1]};
       for (int k = 0; k < 6; ++k)
         if (std::strcmp(ToastPosition(), kPositions[k]) == 0) vals[2] = kPositionNames[k];
       const char* names[] = {"Contador de FPS en pantalla", "Color de acento", "Notificación de logros",
-                             "Esconder el puntero con el mando", "Iconos de botones", "Silenciar el juego"};
-      for (int i = 0; i < 6; ++i) {
+                             "Esconder el puntero con el mando", "Iconos de botones", "Silenciar el juego",
+                             "Idioma del juego"};
+      for (int i = 0; i < 7; ++i) {
         const ImVec2 q(x, y + i * fs * 2.6f);
         DrawButton(dl, io, q, w - 2 * pad, fs, sel_[kSettings] == i, names[i], u, a, accent, vals[i].c_str());
         if (open_ && Clicked(io, q, ImVec2(q.x + w - 2 * pad, q.y + fs * 2.2f))) {
@@ -1813,7 +1838,7 @@ class GuideMenu {
           Activate(0x1000);
         }
       }
-      Text(dl, fs * 0.8f, ImVec2(x, y + 6 * fs * 2.6f + 4 * u), dim,
+      Text(dl, fs * 0.8f, ImVec2(x, y + 7 * fs * 2.6f + 4 * u), dim,
            "A o la cruceta (izquierda / derecha) para cambiar. Se guarda para este juego.", w - 2 * pad);
     } else {
       if (list_.empty()) {
@@ -2083,7 +2108,8 @@ class Toast final : public rex::ui::AchievementNotificationDialog {
         runtime_(runtime),
         window_(window),
         guide_(immediate_drawer, runtime, window, achievements, &icons_) {
-    if (Prefs().mute == 1) ApplyMute(true);   // silenciado desde el menú Guía en una partida anterior
+    if (Prefs().mute == 1) ApplyMute(true);        // silenciado desde el menú Guía en una partida anterior
+    if (Prefs().language > 0) g_language.store(static_cast<uint32_t>(Prefs().language));
   }
 
   ~Toast() override { ToastSlot().store(nullptr); }

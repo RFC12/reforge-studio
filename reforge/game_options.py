@@ -596,7 +596,7 @@ def runtime_config_path(exe):
 # Ajustes de gráficos cambiados desde el menú Guía del propio juego (botón Xbox/PS → Gráficos). La
 # extensión los deja en reforge_menu.ini; aquí se pasan al .toml y al .ini del juego en el próximo arranque.
 MENU_INI = "reforge_menu.ini"
-MENU_GRAPHICS_KEYS = ("fps_mode", "resolution_scale", "mute")
+MENU_GRAPHICS_KEYS = ("fps_mode", "resolution_scale", "mute", "language")
 
 
 def menu_ini_path(exe):
@@ -680,6 +680,16 @@ def write_runtime_config(exe, options):
         if mute:
             options.audio_mute = mute in ("1", "true", "si", "sí")
             values["audio_mute"] = bool(options.audio_mute)
+        lang = over.get("language", "")
+        if lang:
+            try:
+                lv = int(lang)
+            except ValueError:
+                lv = 0
+            if 1 <= lv <= 12:      # código de idioma del Xbox elegido en el menú Guía → lo ve el juego
+                options.language, options.country = lv, 0
+                values["user_language"] = lv
+                values["user_country"] = 0
         # Se guarda también en el proyecto: escribiendo solo el .toml, la próxima vez que ReForge lo
         # regenerase (al pulsar Jugar) volvería a los ajustes de antes y el cambio se perdería.
         root = project_root_for_exe(exe)
