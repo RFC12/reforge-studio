@@ -228,15 +228,28 @@ def cmake_configure_cmd(cfg, root, build):
         cmd.append(f"-DCMAKE_MAKE_PROGRAM={ninja}")
     extra = split_args(cfg.extra_cmake_args)
     if not any(a.startswith("-DCMAKE_CXX_FLAGS") for a in extra):
-        # compilación para el procesador de este PC (opción del juego en ⚡ Optimizar). Se pasa siempre para
-        # que al desactivarla CMake quite la bandera de su caché.
-        native = False
+        # Banderas de compilación del código recompilado. Se pasan siempre (aunque sea solo -ffp-contract=off)
+        # para que al cambiar una opción CMake actualice su caché y recompile.
+        #
+        # -ffp-contract=off (extraído de Pinyon Shift / ShiftGlue): por defecto clang fusiona a*b+c en una
+        # instrucción FMA, que da un resultado distinto al del Xbox 360. Desactivarlo hace que el punto flotante
+        # del juego recompilado coincida con el original → física, animaciones y render más fieles. Vale para
+        # TODOS los juegos y prácticamente no cuesta rendimiento.
+        flags = ["-ffp-contract=off"]
+        baseline = ""
         try:
             from .game_options import GameOptions
-            native = bool(GameOptions.load(root).cpu_native)
+            o = GameOptions.load(root)
+            baseline = (getattr(o, "cpu_baseline", "") or "").strip()
+            if not baseline and getattr(o, "cpu_native", False):   # compat con la opción antigua
+                baseline = "nativo"
         except Exception:      # noqa: BLE001
             pass
-        cmd.append("-DCMAKE_CXX_FLAGS=-march=native" if native else "-DCMAKE_CXX_FLAGS=")
+        if baseline == "nativo":
+            flags.append("-march=native")               # instrucciones de ESTE PC (el .exe no es portable)
+        elif baseline == "moderno":
+            flags += ["-march=x86-64-v3", "-mfma"]       # AVX2/FMA: rápido y portable a CPUs de ~2015 en adelante
+        cmd.append("-DCMAKE_CXX_FLAGS=" + " ".join(flags))
     return cmd + extra
 
 

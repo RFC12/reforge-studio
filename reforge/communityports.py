@@ -129,7 +129,7 @@ def clone(port, git="git", log=None):
         cmd += ["--branch", port.branch]
     cmd += [port.repo, dest]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        r = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=600)
     except (OSError, subprocess.TimeoutExpired) as e:
         return False, f"No se pudo clonar el puerto: {e}"
     if r.returncode != 0:

@@ -90,11 +90,13 @@ check(n.effective_language() == (5, 71), "elegir Español (México) a mano")
 print("Compilar para tu CPU")
 cfg = AppConfig()
 cmd = cmake_configure_cmd(cfg, gow, os.path.join(gow, "build"))
-check("-DCMAKE_CXX_FLAGS=" in cmd, "por defecto se pasa vacía (quita una bandera anterior)")
+check(any(a == "-DCMAKE_CXX_FLAGS=-ffp-contract=off" for a in cmd),
+      "por defecto pasa -ffp-contract=off (precisión FP como el Xbox 360) y nada más")
 o.cpu_native = True
 o.save(gow)
-check("-DCMAKE_CXX_FLAGS=-march=native" in cmake_configure_cmd(cfg, gow, os.path.join(gow, "build")),
-      "activada: -march=native")
+check(any(a.startswith("-DCMAKE_CXX_FLAGS=") and "-march=native" in a and "-ffp-contract=off" in a
+          for a in cmake_configure_cmd(cfg, gow, os.path.join(gow, "build"))),
+      "activada: -march=native junto con la precisión FP")
 cfg.extra_cmake_args = '-DCMAKE_CXX_FLAGS="-O2"'
 check(sum(a.startswith("-DCMAKE_CXX_FLAGS") for a in cmake_configure_cmd(cfg, gow, os.path.join(gow, "build"))) == 1,
       "respeta las banderas que pongas tú en Ajustes")

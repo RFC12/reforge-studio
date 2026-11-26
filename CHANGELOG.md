@@ -2,6 +2,22 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.49.0 — Precisión de punto flotante de ShiftGlue y base de puertos de la comunidad
+
+- **Mejora extraída de Pinyon Shift / ShiftGlue (beneficia a TODOS los juegos):** el código recompilado ahora
+  se compila con **`-ffp-contract=off`**, que evita que clang fusione `a*b+c` en una instrucción FMA. Esa fusión
+  cambia el resultado respecto al Xbox 360; desactivarla hace que el **punto flotante coincida con el original**,
+  así física, animaciones y render salen más fieles. Va activado siempre y prácticamente no cuesta rendimiento.
+- **Niveles de CPU al compilar** (⚡ Optimizar): además de «solo para este PC» (`-march=native`), ahora hay
+  **«CPU moderna» (x86-64-v3 + AVX2/FMA)** — más rápido que el modo compatible y portable a cualquier PC de ~2015
+  en adelante. La opción antigua sigue funcionando.
+- **Base del gestor de puertos de la comunidad** (`communityports.py`): registro de puertos nativos de otros
+  autores (con su propio runtime), buscables por Title ID. Registrados: **Crash of the Titans** (VitoMiguelF,
+  motor XenonRecomp) y **Forza Horizon — Pinyon Shift** (arcanite24, motor ShiftGlue). Primer paso del gestor
+  completo; ningún archivo de juego se incluye.
+- Motores internos nuevos (probados): actualización reversible al SDK más nuevo y conversor de datos de
+  recompilación de puertos de la familia XenonRecomp al formato de rexglue.
+
 ## 1.48.15 — Estabilidad: recompilar vuelve a funcionar (SEH) y el mando ya no falla (Numpad)
 
 - **Arreglo crítico de recompilación (SEH):** desde hace unas versiones, recompilar cualquier juego con

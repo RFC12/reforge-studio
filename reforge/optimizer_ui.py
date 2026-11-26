@@ -59,12 +59,20 @@ class OptimizeDialog(QDialog):
         v.addWidget(label("Cada consulta real obliga a esperar a la GPU: en juegos de acción con muchas (Unreal "
                           "Engine 3) provoca tirones. Simuladas: el juego cree que todo es visible; casi nunca se "
                           "nota (algún destello de luz podría verse a través de paredes).", "Hint", wrap=True))
-        self.native = QCheckBox("Compilar para tu procesador (instrucciones AVX2 de tu CPU: -march=native)")
-        self.native.setChecked(bool(self.o.cpu_native))
+        v.addWidget(label("Precisión de punto flotante (de Pinyon Shift/ShiftGlue): el código recompilado calcula "
+                          "el punto flotante igual que el Xbox 360 (sin fusión FMA), así física, animaciones y "
+                          "render salen fieles al original. Va siempre activado; no hay que hacer nada.", "Hint",
+                          wrap=True))
+        _base = (getattr(self.o, "cpu_baseline", "") or ("nativo" if self.o.cpu_native else "")).strip()
+        self.modern = QCheckBox("CPU moderna: compilar con AVX2/FMA (x86-64-v3) — más rápido y portable (CPUs de ~2015+)")
+        self.modern.setChecked(_base == "moderno")
+        v.addWidget(self.modern)
+        self.native = QCheckBox("Solo para este PC: instrucciones exactas de tu procesador (-march=native)")
+        self.native.setChecked(_base == "nativo")
         v.addWidget(self.native)
-        v.addWidget(label("El código recompilado usa todas las instrucciones de tu CPU. Se aplica al recompilar "
-                          "(todo el juego, varios minutos) y ese .exe solo funcionará en procesadores como el tuyo.",
-                          "Hint", wrap=True))
+        v.addWidget(label("«CPU moderna» acelera el juego y funciona en casi cualquier PC actual. «Solo para este "
+                          "PC» es lo más rápido pero ese .exe solo correrá en procesadores como el tuyo. Se aplican "
+                          "al recompilar (todo el juego, varios minutos).", "Hint", wrap=True))
 
         from . import game as _game
         self.cgopt = QComboBox()
@@ -250,7 +258,9 @@ class OptimizeDialog(QDialog):
         o.resolution_scale = self._scale()
         o.engine = self.engine_key
         o.occlusion = self.occl.currentData()
-        rebuild = bool(self.native.isChecked()) != bool(o.cpu_native)
+        nueva_base = "nativo" if self.native.isChecked() else ("moderno" if self.modern.isChecked() else "")
+        base_actual = (getattr(o, "cpu_baseline", "") or ("nativo" if o.cpu_native else "")).strip()
+        rebuild = nueva_base != base_actual
         if self.cgopt.currentData() != o.codegen_opt:
             o.codegen_opt = self.cgopt.currentData()
             o.codegen_opt_verified = False
@@ -258,7 +268,8 @@ class OptimizeDialog(QDialog):
             if o.codegen_opt == "auto":
                 o.codegen_opt_level = "safe"
             rebuild = True
-        o.cpu_native = self.native.isChecked()
+        o.cpu_baseline = nueva_base
+        o.cpu_native = (nueva_base == "nativo")   # compat
         o.diagnostics = self.diag.isChecked()
         o.auto_tune = self.autotune.isChecked()
         if self.aniso16.isChecked():

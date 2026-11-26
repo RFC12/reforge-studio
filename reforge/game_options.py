@@ -91,7 +91,9 @@ class GameOptions:
     # Perfil del motor (engine.py): motor detectado, consultas de oclusión y compilación para tu CPU
     engine: str = ""
     occlusion: str = "auto"        # auto (según el motor) / real / fake (simuladas: sin esperas CPU↔GPU)
-    cpu_native: bool = False       # compilar el juego con -march=native (instrucciones de tu procesador)
+    cpu_native: bool = False       # (compat) equivale a cpu_baseline="nativo"
+    cpu_baseline: str = ""         # instrucciones de CPU al compilar: ""=compatible, "moderno"=x86-64-v3/AVX2,
+    #                                "nativo"=-march=native (este PC). -ffp-contract=off va siempre (precisión FP).
     # Optimización del código recompilado (registros como variables locales, como XenonRecomp/Unleashed Recompiled):
     # "auto" = Segura y baja sola si el juego falla · "max" (experimental) · "safe" · "off"
     codegen_opt: str = "auto"
