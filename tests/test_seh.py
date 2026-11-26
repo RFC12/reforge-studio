@@ -38,7 +38,8 @@ hdr = open(os.path.join(root, "src", game.SEH_HEADER)).read()
 check("#include <windows.h>" in hdr, "la cabecera trae windows.h")
 check("#define GetExceptionCode _exception_code" in hdr and "#define GetExceptionInformation _exception_info" in hdr,
       "define GetExceptionCode/GetExceptionInformation (clang-cl no los trae)")
-check("<rex/platform/exceptions.h>" not in hdr, "no incluye cabeceras que el SDK 0.11 no tiene")
+check("#include <rex/platform/exceptions.h>" in hdr and "__has_include(<rex/platform/exceptions.h>)" in hdr,
+      "incluye exceptions.h del SDK (ahí está SEH_TRY), guardado con __has_include por si una versión lo mueve")
 check(not os.path.exists(os.path.join(pch_dir, "cmake_pch.hxx.pch")), "precompilados viejos borrados")
 check(not game.ensure_seh_header(root) and open(cml).read() == txt, "segunda vez no cambia nada")
 check(txt.isascii(), "CMakeLists sigue en ASCII")

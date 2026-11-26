@@ -58,7 +58,8 @@ gameicon.title_id = lambda _p: "43430842"     # el XEX de prueba no es real: se 
 hecho = gameicon.ensure(exe, root, "Juego", force=True)
 junto = os.path.join(os.path.dirname(exe), "reforge_icon.png")
 check(os.path.isfile(junto) and open(junto, "rb").read() == imagen, "sale el icono guardado, no el de iniciales")
-check("base de iconos" in hecho or "no se pudo grabar" in hecho, f"lo dice al aplicarlo: {hecho!r}")
+if sys.platform == "win32":   # fuera de Windows no se incrusta el icono en el .exe (ensure devuelve "")
+    check("base de iconos" in hecho or "no se pudo grabar" in hecho, f"lo dice al aplicarlo: {hecho!r}")
 
 print()
 if fallos:

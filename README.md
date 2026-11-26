@@ -4,7 +4,7 @@
 
 **Recompila juegos de Xbox 360 a PC desde una interfaz de escritorio — sin pelearte con la terminal.**
 
-[![Versión](https://img.shields.io/badge/versión-1.48.14-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
+[![Versión](https://img.shields.io/badge/versión-1.48.15-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
 [![Plataforma](https://img.shields.io/badge/Windows-10%20%2F%2011-19d3a2?style=flat-square&logo=windows&logoColor=white)](#instalación)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-19d3a2?style=flat-square&logo=python&logoColor=white)](#desarrollo)
 [![SDK](https://img.shields.io/badge/motor-rexglue%20%C2%B7%20XenonRecomp-19d3a2?style=flat-square)](https://github.com/rexglue/rexglue-sdk)
@@ -138,7 +138,7 @@ Atajos: `F11` pantalla completa · `Ctrl+1…9` secciones · flechas + `Enter` e
 
 ## 📜 Historial de versiones
 
-Lo más reciente es **1.48.14** (ReForge ya no declara como función una dirección que cae a mitad de otra —lo que hacía morir a Crash of the Titans en el primer fotograma— y la base de problemas reconoce ese caso; incluye de 1.48.13 (LB/RB ya no van acelerados en el menú Guía de 0.11 —solo cuenta la pulsación, con 250 ms entre pestaña y pestaña— y ese menú dibuja la imagen de jugador del perfil de ReForge con sus colores; incluye de 1.48.12: el `.exe` de los juegos del SDK 0.11 ya arranca con doble clic, sin el `.bat`, y la reparación con manejadores de excepciones vuelve a compilar; además de 1.48.11: se acabó la recompilación en bucle —se comparan versiones de SDK, no carpetas— y el menú Guía de 0.11 ya funciona con el mando y tiene el mismo diseño que el de 0.10; incluye de 1.48.10: el idioma y el resto de opciones ya llegan de verdad a los juegos del SDK 0.11: el runtime lee `kernel.user_language` en vez de `user_language`, que descartaba; además de 1.48.9: el menú Guía también en los proyectos del SDK 0.11, con gráficos, silencio, idioma y logros; además de 1.48.8, el Taller avisa cuándo un proyecto no puede llevar el menú; incluye de 1.48.7: el menú Guía con el botón Xbox/PS en todos los juegos del SDK 0.10 recompilados, con idioma del juego y silencio desde Ajustes, y una base de datos de iconos por Title ID que se aprende sola; además: el cierre por textos no UTF-8 dice qué revisar en Windows —página de códigos ANSI y rutas con tildes—, además de: los juegos creados con el SDK 0.11 vuelven a abrir —el cargador de la GPU ya no se elige por línea de comandos—, la caché de compilación ya no se borra solo porque Ninja esté en otra carpeta y el lanzador reintenta el arranque intermitente de Asura's Wrath hasta 8 veces; incluye el menú Guía que guarda de verdad sus cambios y el botón **Silenciar el juego** de 1.48.4, el diagnóstico por volcado de 1.48.3, la notificación de logros de 1.48.2 y los 30 FPS con VSync de 1.48.0).
+Lo más reciente es **1.48.15** (estabilidad: recompilar vuelve a funcionar —SEH— y el mando ya no falla —Numpad).
 El detalle de cada versión está en [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 🙏 Créditos

@@ -78,6 +78,7 @@ o = GameOptions()
 o.repair_watch_seconds = 3
 o.ask_engine_on_play = False
 o.codegen_opt = "off"          # este proyecto falso no se puede recompilar de verdad
+o.auto_relaunch = True         # esta prueba cubre los caminos de reapertura (cuenta atrás / recompilar y jugar)
 o.save(proj)
 
 w = appmod.MainWindow()

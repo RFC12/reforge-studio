@@ -2,6 +2,19 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.48.15 — Estabilidad: recompilar vuelve a funcionar (SEH) y el mando ya no falla (Numpad)
+
+- **Arreglo crítico de recompilación (SEH):** desde hace unas versiones, recompilar cualquier juego con
+  manejadores de excepciones (p. ej. Asura's Wrath) fallaba con «use of undeclared identifier 'SEH_TRY'». Causa:
+  el encabezado `reforge_seh.h` había dejado de incluir `<rex/platform/exceptions.h>` del SDK (ahí se definen
+  `SEH_TRY`/`SEH_CATCH`/`SEH_END`). Ahora se incluye de nuevo, protegido con `__has_include` para que siga
+  funcionando aunque una versión del SDK mueva ese encabezado. Verificado: Asura's Wrath recompila entero
+  (210/210) sin errores.
+- **Mando / controles (Numpad):** las plantillas de teclado-y-ratón usaban nombres de tecla `Keypad4/6/8/2` que
+  el runtime no reconoce («no key named 'Keypad4'»), así que el stick derecho mapeado al teclado numérico no
+  respondía. El nombre correcto del SDK es `Numpad4…`; corregido en todas las plantillas.
+- Pruebas internas al día (iconos y relanzamiento) y suite completa en verde (57/57).
+
 ## 1.48.14 — ReForge ya no declara funciones que caen a mitad de otra (Crash of the Titans)
 
 - **Causa encontrada en Crash of the Titans.** Cuando rexglue avisaba de un salto que no podía resolver

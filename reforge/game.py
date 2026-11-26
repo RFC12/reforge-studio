@@ -881,9 +881,11 @@ SEH_UNDECLARED_RE = re.compile(r"undeclared identifier '(SEH_TRY|SEH_CATCH|SEH_E
 
 SEH_SHIMMED = (
     "// ReForge Studio: SEH del código recompilado (generada; no editar).\n"
-    "// El codegen escribe REX_SEH_TRY/REX_SEH_CATCH del SDK, que en Windows usan __try/__except,\n"
-    "// pero con clang-cl no trae GetExceptionCode/GetExceptionInformation: se definen aquí (lo que\n"
-    "// hace <excpt.h> de MSVC) y así compilan todos los archivos generados.\n"
+    "// Con generate_exception_handlers, el codegen escribe SEH_TRY/SEH_CATCH/SEH_END. Las define\n"
+    "// <rex/platform/exceptions.h> del SDK (en Windows son __try/__except), pero el código generado NO\n"
+    "// incluye ese header, así que se trae aquí y va en el precompilado de los destinos _recomp. Sin esto\n"
+    "// el build falla con «use of undeclared identifier 'SEH_TRY'». Esas macros usan, además,\n"
+    "// GetExceptionCode/GetExceptionInformation, que clang-cl no trae sin <excpt.h>: también se definen.\n"
     "#pragma once\n"
     "#if defined(_WIN32)\n"
     "#include <windows.h>\n"
@@ -893,6 +895,10 @@ SEH_SHIMMED = (
     "#ifndef GetExceptionInformation\n"
     "#define GetExceptionInformation _exception_info\n"
     "#endif\n"
+    "#endif\n"
+    "// Se incluye solo si el SDK lo trae (0.10 sí; si una versión lo mueve, no rompe el build).\n"
+    "#if !defined(__has_include) || __has_include(<rex/platform/exceptions.h>)\n"
+    "#include <rex/platform/exceptions.h>\n"
     "#endif\n"
 )
 
