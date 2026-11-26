@@ -22,7 +22,7 @@ class CommunityPort:
 
     def __init__(self, pid, name, title_id, author, repo, engine, game_files, build="installer",
                  notes="", license="", branch="", releases_url="", play_name="", exe_base="",
-                 known_dirs=None):
+                 known_dirs=None, menu_hint=""):
         self.id = pid
         self.name = name
         self.title_id = (title_id or "").upper()
@@ -42,6 +42,8 @@ class CommunityPort:
         self.exe_base = exe_base or "".join(c for c in self.play_name if c.isalnum() or c in " -_").strip()
         # Carpetas conocidas donde el toolchain del puerto deja el .exe construido (se amplía con el tiempo).
         self.known_dirs = list(known_dirs or [])
+        # Cómo se abre el menú del juego (cada puerto trae el suyo; no es el Guía de ReForge).
+        self.menu_hint = menu_hint
 
     def dir(self):
         return os.path.join(ports_dir(), self.id)
@@ -87,6 +89,10 @@ PORTS = [
         exe_base="Horizon",
         known_dirs=[r"C:\ReForgeBuild\pinyon-shift\out\build\win-amd64-release",
                     r"C:\ReForgeBuild\pinyon-shift\out\build\win-amd64-relwithdebinfo"],
+        menu_hint="En el juego, abre el menú del puerto con el mando manteniendo BACK + START a la vez "
+                  "(Select+Start; en PlayStation, Share/Create + Options). Ahí tienes Perfil, LOGROS "
+                  "(del propio juego, mismo Title ID), Trucos, Gráficos y copias de guardado. No es el botón "
+                  "Guía de Xbox: este puerto trae su propio menú.",
     ),
 ]
 
@@ -435,13 +441,68 @@ def connect(port, exe, game_root=None, options=None, profile=None, lib=None):
     return portachievements.connect(port, exe, game_root=root, options=options, profile=profile, lib=lib)
 
 
+def launcher_bat(exe):
+    """El lanzador de ReForge junto al .exe («Jugar <Nombre>.bat», que abre el puente con ReForge), o el directo
+    si no está el principal, o '' si no hay ninguno. Es lo que lleva `--game_data_root` y el reintento."""
+    folder = os.path.dirname(exe)
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return ""
+    main = [n for n in names if n.lower().startswith("jugar ") and n.lower().endswith(".bat")
+            and "(directo)" not in n.lower()]
+    direct = [n for n in names if n.lower().endswith("(directo).bat")]
+    pick = main or direct
+    return os.path.join(folder, pick[0]) if pick else ""
+
+
+def game_data_root(port):
+    """La carpeta de datos del juego para `--game_data_root`: los assets del proyecto de ReForge con el mismo
+    Title ID (p. ej. forza_horizon_latino/assets). '' si ese proyecto no existe todavía."""
+    try:
+        from .core import Library
+        for p in Library.load().projects:
+            if (getattr(p, "title_id", "") or "").upper() == port.title_id:
+                a = os.path.join(p.root, "assets")
+                if os.path.isdir(a):
+                    return a
+    except Exception:      # noqa: BLE001
+        pass
+    return ""
+
+
+def launch_plan(port, exe):
+    """Decide CÓMO lanzar el puerto. Devuelve (modo, objetivo, args):
+      ('launcher', ruta_bat, [])  → ejecutar el lanzador de ReForge (trae --game_data_root y el puente), o
+      ('exe', ruta_exe, [args])   → ejecutar el .exe con --game_data_root si se conoce.
+    El runtime del puerto (ReXGlue/ShiftGlue) EXIGE --game_data_root; lanzar el .exe pelado da el error
+    «--game_data_root was not provided» y el juego se cierra. Por eso se prefiere el lanzador generado."""
+    bat = launcher_bat(exe)
+    if bat:
+        return ("launcher", bat, [])
+    gdr = game_data_root(port)
+    args = [f"--game_data_root={gdr}"] if gdr else []
+    return ("exe", exe, args)
+
+
 def launch(port, exe=None):
-    """Lanza el .exe del puerto (el construido, o el que se pase). Devuelve (ok, mensaje)."""
+    """Lanza el puerto usando su lanzador de ReForge (con --game_data_root y el puente). Devuelve (ok, mensaje)."""
     exe = exe or locate_built_exe(port)
     if not exe or not os.path.isfile(exe):
         return False, "El puerto todavía no está construido (no encuentro su .exe)."
+    mode, target, args = launch_plan(port, exe)
     try:
-        subprocess.Popen([exe], cwd=os.path.dirname(exe))
+        if mode == "launcher":
+            if hasattr(os, "startfile"):
+                os.startfile(target)    # como hacer doble clic: abre su ventana temática y pasa --game_data_root
+            else:
+                subprocess.Popen(["cmd", "/c", target], cwd=os.path.dirname(exe))
+            return True, f"Lanzando «{port.play_name}» con el lanzador de ReForge."
+        subprocess.Popen([target] + args, cwd=os.path.dirname(exe))
+        if not args:
+            return True, (f"Lanzando «{port.play_name}», pero sin --game_data_root: no encuentro el proyecto del "
+                          "juego en ReForge. Crea/recompila el juego base (su Title ID) y vuelve a conectarlo para "
+                          "que el lanzador sepa dónde están los datos.")
         return True, f"Lanzando «{port.play_name}»."
     except OSError as e:
         return False, f"No se pudo lanzar el puerto: {e}"

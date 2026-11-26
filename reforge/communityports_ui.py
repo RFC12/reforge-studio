@@ -47,6 +47,8 @@ class CommunityPortsDialog(QDialog):
         v.addWidget(label(port.name, "H3"))
         v.addWidget(label(f"Autor: {port.author} · Motor: {port.engine} · Title ID: {port.title_id}", "Hint"))
         v.addWidget(label(port.notes, "Hint", wrap=True))
+        if getattr(port, "menu_hint", ""):
+            v.addWidget(label("🎮  " + port.menu_hint, "Hint", wrap=True))
         v.addWidget(self._status_label(port))
         # Fila 1: obtener e instalar dentro de ReForge.
         row1 = QHBoxLayout()
@@ -120,6 +122,8 @@ class CommunityPortsDialog(QDialog):
         if not ok:
             QMessageBox.warning(self, "Ports de la comunidad", msg)
             return False
+        hint = "\n\n" + port.menu_hint if getattr(port, "menu_hint", "") else ""
+        QMessageBox.information(self, "Ports de la comunidad", msg + hint)
         return True
 
     def _pick(self, port):

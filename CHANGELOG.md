@@ -2,6 +2,22 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.51.1 — Arreglo: «Jugar» un puerto lanzaba el .exe sin `--game_data_root` (Forza se cerraba)
+
+- **Causa del cierre de Forza Horizon.** El botón «Jugar» ejecutaba `Horizon.exe` **pelado**, y su runtime
+  (ReXGlue/ShiftGlue) **exige** `--game_data_root`; por eso salía *«--game_data_root was not provided»* y el
+  juego se cerraba sobre una pantalla negra. Ahora «Jugar» usa el **lanzador que ReForge ya genera**
+  (`Jugar <Nombre>.bat`), que lleva `--game_data_root=…\<proyecto>\assets`, el reintento automático y el puente
+  con ReForge. Si aún no existe el lanzador, ReForge arma el `--game_data_root` desde el proyecto del juego con
+  el mismo Title ID; si no encuentra ese proyecto, lo avisa en vez de lanzar algo que se cerrará.
+- **El menú del juego en estos puertos no es el Guía de ReForge.** Cada puerto trae su PROPIO menú. En Forza
+  (Pinyon Shift) se abre con el mando manteniendo **BACK + START** a la vez (Select+Start; en PlayStation,
+  Share/Create + Options) y ya incluye **Perfil, Logros (del propio juego, mismo Title ID), Trucos, Gráficos y
+  copias de guardado**. ReForge ahora lo dice en la tarjeta del puerto y al lanzarlo, para que sepas dónde ver
+  tus logros. (ReForge no puede inyectar su overlay en un .exe de terceros ya compilado; el puente real es:
+  lanzarlo bien, mostrarlo en la Biblioteca con su carátula y aplicar tu TU de idioma.)
+- Suite 64/64.
+
 ## 1.51.0 — Puertos: instalación/detección interna, logros y español; autoreinicio; logros 0.11 como 0.10
 
 - **Instalar el puerto desde ReForge.** «⬇ Instalar en ReForge» clona el puerto, copia tu `default.xex` desde

@@ -97,14 +97,11 @@ def connect(port, exe, game_root=None, options=None, profile=None, lib=None):
     resumen legible del estado. No arranca nada."""
     ini = link_profile(exe, options=options, profile=profile)
     prog = progress(port, exe)
-    parts = []
-    if ini:
-        parts.append("Perfil de ReForge enlazado (Gamertag, idioma, acento, notificación de logros).")
-    else:
-        parts.append("No se pudo escribir la identidad del perfil junto al puerto (se puede jugar igual).")
+    parts = ["Añadido a tu Biblioteca con la carátula real del juego (mismo Title ID)."]
     if prog and prog.get("unlocked") is not None:
         tot = f"/{prog['total']}" if prog.get("total") else ""
         parts.append(f"Progreso detectado: {prog['unlocked']}{tot} logros.")
-    parts.append(f"Logros del juego (Title ID {port.title_id}): los muestra el runtime del puerto al jugar, "
-                 "con tu perfil.")
+    menu = getattr(port, "menu_hint", "") or (
+        f"Los logros del juego (Title ID {port.title_id}) los muestra el propio menú del puerto al jugar.")
+    parts.append(menu)
     return {"ini": ini, "progress": prog, "summary": "  ".join(parts)}

@@ -44,8 +44,10 @@ check(pa._count_from([{"unlocked": True}, {"unlocked": False}]) == (1, 2), "list
 
 print("connect devuelve un resumen honesto")
 res = pa.connect(port, exe, game_root=d)
-check(isinstance(res["summary"], str) and port.title_id in res["summary"],
-      "el resumen menciona el Title ID y que los logros los enseña el runtime del puerto")
+check(isinstance(res["summary"], str) and "Biblioteca" in res["summary"],
+      "el resumen dice que lo añade a la Biblioteca con la carátula")
+check("BACK + START" in res["summary"] and "LOGROS" in res["summary"],
+      "e indica el menú del propio puerto (Back+Start) con los logros del juego")
 
 print()
 if fallos:

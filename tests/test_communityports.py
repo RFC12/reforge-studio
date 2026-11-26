@@ -127,6 +127,21 @@ print("install_build sin instalador ejecutable devuelve el plan, no un falso éx
 ok2, msg2 = cp.install_build(forza, game_dir="", launch=False)
 check(ok2 is False and "releases" in msg2.lower(), "es honesto cuando no hay instalador que lanzar")
 
+print("launch usa el lanzador generado (con --game_data_root), no el .exe pelado")
+ltmp = tempfile.mkdtemp()
+lexe = os.path.join(ltmp, "Horizon.exe")
+open(lexe, "wb").write(b"\0" * 100)
+# sin lanzador aún: cae al .exe; sin proyecto del juego, sin args (y lo avisa)
+mode, target, largs = cp.launch_plan(forza, lexe)
+check(mode == "exe" and target == lexe, "sin lanzador, apunta al .exe")
+# con el lanzador .bat de ReForge al lado: lo prefiere
+open(os.path.join(ltmp, "Jugar Forza Horizon.bat"), "w").write("@echo off")
+open(os.path.join(ltmp, "Jugar Forza Horizon (directo).bat"), "w").write("@echo off")
+mode2, target2, _ = cp.launch_plan(forza, lexe)
+check(mode2 == "launcher" and target2.endswith("Jugar Forza Horizon.bat"),
+      "con el lanzador al lado, lo usa (lleva --game_data_root y el puente con ReForge)")
+check(cp.launcher_bat(lexe).endswith("Jugar Forza Horizon.bat"), "prefiere el lanzador principal, no el (directo)")
+
 print("apply_title_update delega en title_update.install_update")
 import reforge.title_update as tu  # noqa: E402
 llamado = {}
