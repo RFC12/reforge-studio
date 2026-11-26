@@ -50,6 +50,49 @@ cp.gameicon = __import__("reforge.gameicon", fromlist=["gameicon"])
 cp._title_id_of = lambda r: "565507E4"
 check(cp.for_project(root) is port, "relaciona el proyecto con su puerto de la comunidad")
 
+print("Plan de construcción: pasos claros y en orden")
+pasos = cp.build_plan(port)
+check(len(pasos) >= 3 and any("release" in p.lower() for p in pasos), "el plan menciona descargar el release")
+check(any("lanzador" in p.lower() or "biblioteca" in p.lower() for p in pasos), "y envolverlo con comodidades")
+
+print("Detecta el .exe construido ignorando herramientas del toolchain")
+pd = port.dir()
+os.makedirs(pd, exist_ok=True)
+open(os.path.join(pd, "XenonRecomp.exe"), "wb").write(b"\0" * 5000)      # herramienta: se ignora
+open(os.path.join(pd, "CrashOTT.exe"), "wb").write(b"\0" * 20000)        # el juego: el mayor que no es tool
+check(cp.locate_built_exe(port).endswith("CrashOTT.exe"), "elige el .exe del juego, no XenonRecomp.exe")
+check(cp.is_built(port) is True, "is_built detecta que ya hay .exe")
+
+print("Envuelve el .exe con las comodidades de ReForge (lanzador, icono, Biblioteca)")
+hechos = {"launcher": None, "icon": None, "lib": []}
+
+
+def fake_launcher(exe, root, title):
+    hechos["launcher"] = (exe, title)
+    return os.path.join(os.path.dirname(exe), "Jugar.bat")
+
+
+def fake_icon(exe, root, title, force=False):
+    hechos["icon"] = title
+    return "icono aplicado"
+
+
+class FakeLib:
+    def upsert(self, p):
+        hechos["lib"].append(p)
+
+    def save(self):
+        pass
+
+
+gr = tempfile.mkdtemp()
+proj = cp.wrap_in_reforge(port, cp.locate_built_exe(port), gr, lib=FakeLib(),
+                          write_launcher=fake_launcher, ensure_icon=fake_icon)
+check(proj is not None and proj.title_id == "565507E4", "crea el Project del puerto")
+check(hechos["launcher"] is not None and port.name in hechos["launcher"][1], "le pone el lanzador temático de ReForge")
+check(hechos["icon"] == port.name, "le pone el icono")
+check(len(hechos["lib"]) == 1, "lo añade a la Biblioteca")
+
 print()
 if fallos:
     print(f"FALLOS: {len(fallos)}")

@@ -151,3 +151,102 @@ def game_files_status(port, game_dir):
 def ready_to_build(port, game_dir):
     """¿Están el puerto clonado y todos los archivos de juego presentes?"""
     return port.is_cloned() and all(game_files_status(port, game_dir).values())
+
+
+# --------------------------------------------------------------------------- construir (vía el toolchain del puerto)
+def build_plan(port):
+    """Pasos, en orden, para construir el puerto en el PC del usuario. Cada puerto trae su propio toolchain e
+    instalador; ReForge los orquesta y envuelve el resultado, no los recompila por dentro."""
+    return [
+        f"Descargar el release del puerto desde {port.releases_url} (trae su código y su toolchain).",
+        f"Apuntarlo a tu copia LEGAL del juego: {', '.join(port.game_files)} (ReForge los copia desde tu "
+        "proyecto si ya los tienes).",
+        "Ejecutar el instalador/compilación del puerto: recompila el juego desde tu copia y construye el .exe "
+        "(varios minutos; usa el toolchain del propio puerto).",
+        "ReForge detecta el .exe resultante y le pone su lanzador temático, su icono y lo añade a la Biblioteca.",
+    ]
+
+
+def locate_built_exe(port):
+    """Busca el .exe ya construido del puerto dentro de su carpeta, ignorando herramientas del toolchain
+    (XenonRecomp.exe, cmake.exe, clang, ninja, python…). Devuelve la ruta o ''."""
+    base = port.dir()
+    if not os.path.isdir(base):
+        return ""
+    skip = ("xenonrecomp", "cmake", "clang", "ninja", "python", "git", "ffmpeg", "dxc", "7z", "unzip",
+            "vcredist", "setup", "installer", "uninstall")
+    best = ""
+    best_size = 0
+    for root_dir, _dirs, files in os.walk(base):
+        for f in files:
+            if not f.lower().endswith(".exe"):
+                continue
+            if any(s in f.lower() for s in skip):
+                continue
+            p = os.path.join(root_dir, f)
+            try:
+                sz = os.path.getsize(p)
+            except OSError:
+                continue
+            if sz > best_size:          # el ejecutable del juego es el más grande que no es una herramienta
+                best, best_size = p, sz
+    return best
+
+
+def is_built(port):
+    return bool(locate_built_exe(port))
+
+
+def wrap_in_reforge(port, exe, game_root, lib=None, write_launcher=None, ensure_icon=None):
+    """Envuelve el .exe construido del puerto con las comodidades de ReForge: lanzador temático, icono y
+    entrada en la Biblioteca. Devuelve el Project creado (o None si no se pudo).
+
+    `game_root` es la carpeta del proyecto del juego (de donde salen el icono del XEX y las rutas). Se pueden
+    inyectar las funciones (para pruebas); por defecto usa las de ReForge.
+    """
+    if not exe or not os.path.isfile(exe):
+        return None
+    if write_launcher is None:
+        from .game import write_launcher as _wl
+        write_launcher = _wl
+    if ensure_icon is None:
+        from .gameicon import ensure as _ei
+        ensure_icon = _ei
+    title = port.name
+    try:
+        write_launcher(exe, game_root, title)
+    except Exception:      # noqa: BLE001
+        pass
+    try:
+        ensure_icon(exe, game_root, title, force=True)
+    except Exception:      # noqa: BLE001
+        pass
+    from .core import Project
+    proj = Project(name=title, root=game_root, source=f"Puerto de {port.author} ({port.engine})",
+                   title_id=port.title_id, status="Puerto de la comunidad", output=exe)
+    if lib is None:
+        try:
+            from .core import Library
+            lib = Library.load()
+        except Exception:      # noqa: BLE001
+            lib = None
+    if lib is not None:
+        try:
+            lib.upsert(proj)
+            lib.save()
+        except Exception:      # noqa: BLE001
+            pass
+    return proj
+
+
+def launch(port, exe=None):
+    """Lanza el .exe del puerto (el construido, o el que se pase). Devuelve (ok, mensaje)."""
+    import subprocess
+    exe = exe or locate_built_exe(port)
+    if not exe or not os.path.isfile(exe):
+        return False, "El puerto todavía no está construido (no encuentro su .exe)."
+    try:
+        subprocess.Popen([exe], cwd=os.path.dirname(exe))
+        return True, f"Lanzando «{port.name}»."
+    except OSError as e:
+        return False, f"No se pudo lanzar el puerto: {e}"

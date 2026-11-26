@@ -2,6 +2,19 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.50.0 — Gestor de puertos de la comunidad con las comodidades de ReForge
+
+- **Nuevo: «Ports de la comunidad»** (tile en Inicio). Lista los puertos nativos hechos por otros autores (con
+  su propio runtime), con su estado, y permite **obtenerlos, elegir el .exe ya construido y jugarlos envueltos
+  con las comodidades de ReForge**: lanzador temático, icono del juego y entrada en la Biblioteca. Registrados:
+  **Crash of the Titans** (VitoMiguelF) y **Forza Horizon — Pinyon Shift** (arcanite24).
+- **Honesto sobre el build:** cada puerto trae su PROPIO toolchain e instalador (descargas grandes, compilación
+  de minutos), que recompila el juego desde TU copia legal. ReForge **orquesta y envuelve** el resultado; no
+  recompila el puerto por dentro ni incluye ningún archivo de juego. «Obtener» abre su página de releases;
+  «Elegir .exe construido» apunta al ejecutable que deja su instalador, y ReForge le pone sus comodidades.
+- Núcleo probado (detección del .exe del juego ignorando herramientas del toolchain, envoltura con
+  lanzador/icono/Biblioteca, lanzamiento). Suite 62/62.
+
 ## 1.49.0 — Precisión de punto flotante de ShiftGlue y base de puertos de la comunidad
 
 - **Mejora extraída de Pinyon Shift / ShiftGlue (beneficia a TODOS los juegos):** el código recompilado ahora

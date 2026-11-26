@@ -200,6 +200,8 @@ class HomePage(QWidget):
             ("⚒", "Taller", "Pipeline paso a paso", lambda: win.go("workshop")),
             ("⟁", "XenonRecomp", "Análisis XEX y TOML", lambda: win.go("xenon")),
             ("⚙", "Ajustes", "Herramientas y compilador", lambda: win.go("settings")),
+            ("🌐", "Ports de la comunidad", "Puertos de otros autores (Crash, Forza)",
+             self._open_community_ports),
         ]
         for i, (g, t, s, cb) in enumerate(tiles):
             tile = Tile(g, t, s)
@@ -227,6 +229,14 @@ class HomePage(QWidget):
         self.env_label = label("", "Hint", wrap=True)
         v.addWidget(self.env_label)
         self.hero = hero
+
+    def _open_community_ports(self):
+        try:
+            from .communityports_ui import open_dialog
+            open_dialog(self, getattr(self.win, "lib", None))
+        except Exception as e:      # noqa: BLE001
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Ports de la comunidad", f"No se pudo abrir: {e}")
 
     def set_env_status(self, missing):
         names = {"rexglue": "rexglue", "vs": "Visual Studio C++", "clang": "Clang 20+", "cmake": "CMake",
