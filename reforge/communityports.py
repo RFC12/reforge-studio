@@ -102,11 +102,12 @@ def ports_dir():
 
 
 def all_ports():
-    return list(PORTS)
+    """Los puertos preconfigurados (Crash, Forza) más los que el usuario agregue desde su GitHub."""
+    return list(PORTS) + user_ports()
 
 
 def by_id(pid):
-    for p in PORTS:
+    for p in all_ports():
         if p.id == pid:
             return p
     return None
@@ -115,10 +116,88 @@ def by_id(pid):
 def for_title(title_id):
     """El puerto de la comunidad registrado para ese Title ID, o None."""
     tid = (title_id or "").upper()
-    for p in PORTS:
+    for p in all_ports():
         if p.title_id == tid:
             return p
     return None
+
+
+# --------------------------------------------------------------------------- puertos que agrega el usuario
+def _slug(text):
+    s = "".join(c if c.isalnum() else "-" for c in (text or "").lower()).strip("-")
+    while "--" in s:
+        s = s.replace("--", "-")
+    return s or "puerto"
+
+
+def user_ports():
+    """Puertos que el usuario ha agregado desde su GitHub (persistidos en community_ports.json)."""
+    out = []
+    for d in _load_settings().get("user_ports", []) or []:
+        if not isinstance(d, dict) or not d.get("id"):
+            continue
+        out.append(CommunityPort(
+            pid=d["id"], name=d.get("name", d["id"]), title_id=d.get("title_id", ""),
+            author=d.get("author", "Comunidad"), repo=d.get("repo", ""),
+            engine=d.get("engine", "runtime propio"), game_files=d.get("game_files", []),
+            play_name=d.get("play_name", d.get("name", "")), menu_hint=d.get("menu_hint", "")))
+    return out
+
+
+def add_user_port(name, repo="", title_id="", author="Comunidad", engine="runtime propio", play_name=""):
+    """Agrega un puerto de la comunidad desde su GitHub. Devuelve el CommunityPort creado."""
+    data = _load_settings()
+    ups = data.get("user_ports", []) or []
+    pid = _slug(name or repo)
+    taken = {d.get("id") for d in ups} | {p.id for p in PORTS}
+    base, n = pid, 2
+    while pid in taken:
+        pid = f"{base}-{n}"
+        n += 1
+    entry = {"id": pid, "name": name or pid, "repo": repo.strip(), "title_id": (title_id or "").upper(),
+             "author": author or "Comunidad", "engine": engine or "runtime propio",
+             "play_name": play_name or name or pid}
+    ups.append(entry)
+    data["user_ports"] = ups
+    _save_settings(data)
+    return CommunityPort(pid=pid, name=entry["name"], title_id=entry["title_id"], author=entry["author"],
+                         repo=entry["repo"], engine=entry["engine"], game_files=[],
+                         play_name=entry["play_name"])
+
+
+def remove_user_port(pid):
+    """Quita un puerto agregado por el usuario (y su ruta recordada). True si existía."""
+    data = _load_settings()
+    ups = data.get("user_ports", []) or []
+    new = [d for d in ups if d.get("id") != pid]
+    if len(new) == len(ups):
+        return False
+    data["user_ports"] = new
+    data.pop(pid, None)
+    _save_settings(data)
+    return True
+
+
+def is_user_port(port):
+    return any(d.get("id") == port.id for d in _load_settings().get("user_ports", []) or [])
+
+
+def open_original(port, path=""):
+    """Abre el RUNTIME ORIGINAL del puerto tal cual lo dejó su autor (su .exe o su lanzador), sin que ReForge le
+    añada nada. Usa la ruta pasada, la recordada o la detectada. Devuelve (ok, mensaje)."""
+    exe = path or saved_exe(port) or locate_built_exe(port)
+    if not exe or not os.path.isfile(exe):
+        return False, ("Aún no sé qué ejecutable abrir de este puerto. Pulsa «Elegir runtime…» y apunta al .exe o "
+                       "lanzador que indique su autor (p. ej. el que deja su instalador).")
+    remember_exe(port, exe)
+    try:
+        if hasattr(os, "startfile"):
+            os.startfile(exe)      # lo abre como el autor espera (doble clic): su propia ventana y sus ajustes
+        else:
+            subprocess.Popen([exe], cwd=os.path.dirname(exe))
+        return True, f"Abriendo el runtime original de «{port.play_name}»."
+    except OSError as e:
+        return False, f"No se pudo abrir el runtime: {e}"
 
 
 def for_project(root):

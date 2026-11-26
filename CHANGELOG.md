@@ -2,6 +2,24 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.51.2 — Botón «Cancelar compilación» a mano, y «Ports de la comunidad» como puente simple
+
+- **Cancelar compilación siempre visible.** El botón de cancelar vivía en el formulario de la izquierda, que en
+  ventana estrecha —o cuando la recompilación la pide el lanzador del juego («Reparación pedida desde el
+  lanzador»)— queda fuera de vista. Ahora hay un **«■ Cancelar compilación» junto al log**, visible y activo solo
+  mientras se compila (oculta «▶ Jugar» para no estorbar). Detiene de verdad: mata el árbol de procesos del
+  codegen/compilación en curso.
+- **«Ports de la comunidad» es ahora un puente, sin complicaciones.** Pediste que ReForge solo haga de puente:
+  - **➕ Agregar puerto desde GitHub…** — pega la URL del repo (y, opcional, su Title ID) y queda en la lista.
+  - **📂 Elegir runtime…** — apunta a su .exe o lanzador **original** (el que deja su autor/instalador).
+  - **▶ Abrir runtime original** — lo abre **tal cual**, sin que ReForge le añada nada; cada puerto usa su propio
+    runtime, su propio menú (en Forza/Pinyon Shift, **Back + Start**) y sus propios logros (del mismo juego,
+    mismo Title ID).
+  - **🗑** quita de la lista los puertos que agregaste. Crash y Forza siguen preconfigurados.
+  Se retiran del apartado las acciones que intentaban recompilar/renombrar/envolver: no eran necesarias para un
+  puente y complicaban el flujo.
+- Suite 64/64.
+
 ## 1.51.1 — Arreglo: «Jugar» un puerto lanzaba el .exe sin `--game_data_root` (Forza se cerraba)
 
 - **Causa del cierre de Forza Horizon.** El botón «Jugar» ejecutaba `Horizon.exe` **pelado**, y su runtime

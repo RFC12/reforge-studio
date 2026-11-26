@@ -1,18 +1,21 @@
-"""Diálogo «Ports de la comunidad»: puertos nativos de otros autores (con su propio runtime). ReForge los
-obtiene, los orquesta y envuelve el resultado con sus comodidades (lanzador, icono, Biblioteca)."""
+"""Diálogo «Ports de la comunidad»: un PUENTE a puertos nativos de otros autores.
+
+ReForge no recompila estos puertos ni incluye archivos de juego: solo te deja agregarlos desde su GitHub y abrir
+su RUNTIME ORIGINAL (su .exe o el lanzador que indique el autor), tal cual. Cada puerto trae su propio runtime,
+su propio menú en el juego y su propio sistema de logros (del mismo juego de Xbox 360, mismo Title ID)."""
 import os
 
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFrame, QHBoxLayout, QLabel, QPushButton,
-                               QScrollArea, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFrame, QHBoxLayout, QPushButton, QScrollArea,
+                               QVBoxLayout, QWidget)
 
 from . import communityports as cp
 from .widgets import fit_to_screen, label
 
 
 class CommunityPortsDialog(QDialog):
-    """Lista los puertos conocidos, su estado y las acciones para obtenerlos, construirlos y jugarlos."""
+    """Puente a los puertos de la comunidad: agrega su GitHub y abre su runtime original."""
 
     def __init__(self, parent=None, lib=None):
         super().__init__(parent)
@@ -20,18 +23,25 @@ class CommunityPortsDialog(QDialog):
         self.setWindowTitle("Ports de la comunidad")
         self.setMinimumWidth(640)
         outer = QVBoxLayout(self)
-        outer.addWidget(label("Puertos nativos de otros autores, con su PROPIO runtime (resuelven cosas que la "
-                              "recompilación interna no puede). ReForge los obtiene y envuelve el resultado con su "
-                              "lanzador, su icono y la Biblioteca. Se construyen en tu PC desde tu copia legal del "
-                              "juego; ReForge no incluye ningún archivo de juego.", "Hint", wrap=True))
+        outer.addWidget(label("Puente a puertos nativos de otros autores. Agrega el puerto desde su GitHub y abre "
+                              "su runtime ORIGINAL (su .exe o lanzador, tal cual lo dejó el autor). Cada puerto "
+                              "trae su propio runtime, su menú en el juego y sus logros (del mismo juego, mismo "
+                              "Title ID). ReForge no los recompila ni incluye archivos de juego.", "Hint",
+                              wrap=True))
+        add = QHBoxLayout()
+        add_btn = QPushButton("➕  Agregar puerto desde GitHub…")
+        add_btn.setObjectName("Primary")
+        add_btn.clicked.connect(self._add)
+        add.addWidget(add_btn)
+        add.addStretch(1)
+        outer.addLayout(add)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         inner = QWidget()
         self.rows = QVBoxLayout(inner)
         self.rows.setContentsMargins(0, 0, 0, 0)
-        for port in cp.all_ports():
-            self.rows.addWidget(self._card(port))
-        self.rows.addStretch(1)
+        self._fill()
         scroll.setWidget(inner)
         outer.addWidget(scroll, 1)
         bb = QDialogButtonBox(QDialogButtonBox.Close)
@@ -40,182 +50,116 @@ class CommunityPortsDialog(QDialog):
         outer.addWidget(bb)
         fit_to_screen(self, 680, 620, limitar=True)
 
+    def _fill(self):
+        for port in cp.all_ports():
+            self.rows.addWidget(self._card(port))
+        self.rows.addStretch(1)
+
     def _card(self, port):
         card = QFrame()
         card.setObjectName("Card")
         v = QVBoxLayout(card)
         v.addWidget(label(port.name, "H3"))
-        v.addWidget(label(f"Autor: {port.author} · Motor: {port.engine} · Title ID: {port.title_id}", "Hint"))
-        v.addWidget(label(port.notes, "Hint", wrap=True))
+        meta = f"Autor: {port.author} · Motor: {port.engine}"
+        if port.title_id:
+            meta += f" · Title ID: {port.title_id}"
+        v.addWidget(label(meta, "Hint"))
+        if getattr(port, "notes", ""):
+            v.addWidget(label(port.notes, "Hint", wrap=True))
         if getattr(port, "menu_hint", ""):
             v.addWidget(label("🎮  " + port.menu_hint, "Hint", wrap=True))
         v.addWidget(self._status_label(port))
-        # Fila 1: obtener e instalar dentro de ReForge.
-        row1 = QHBoxLayout()
-        get = QPushButton("🌐  Obtener (releases)")
-        get.clicked.connect(lambda _=False, p=port: self._open(p.releases_url))
-        row1.addWidget(get)
-        install = QPushButton("⬇  Instalar en ReForge")
-        install.clicked.connect(lambda _=False, p=port: self._install(p))
-        row1.addWidget(install)
-        find = QPushButton("🔍  Buscar juego ya instalado")
-        find.clicked.connect(lambda _=False, p=port: self._find(p))
-        row1.addWidget(find)
-        repo = QPushButton("Código")
-        repo.clicked.connect(lambda _=False, p=port: self._open(p.repo))
-        row1.addWidget(repo)
-        row1.addStretch(1)
-        v.addLayout(row1)
-        # Fila 2: elegir, renombrar, idioma y jugar.
-        row2 = QHBoxLayout()
-        pick = QPushButton("Elegir .exe construido…")
+        row = QHBoxLayout()
+        if port.repo:
+            gh = QPushButton("🌐  GitHub")
+            gh.clicked.connect(lambda _=False, p=port: self._open(p.repo))
+            row.addWidget(gh)
+        pick = QPushButton("📂  Elegir runtime…")
+        pick.setToolTip("Apunta al .exe o lanzador original del puerto (el que deja su instalador)")
         pick.clicked.connect(lambda _=False, p=port: self._pick(p))
-        row2.addWidget(pick)
-        rename = QPushButton(f"✏  Renombrar a «{port.exe_base}»")
-        rename.setEnabled(cp.is_built(port))
-        rename.clicked.connect(lambda _=False, p=port: self._rename(p))
-        row2.addWidget(rename)
-        if port.id == "pinyonshift":
-            lang = QPushButton("🌐  Español latino (TU/GOD)")
-            lang.clicked.connect(lambda _=False, p=port: self._language(p))
-            row2.addWidget(lang)
-        play = QPushButton("▶  Jugar")
-        play.setEnabled(cp.is_built(port))
-        play.clicked.connect(lambda _=False, p=port: self._play(p))
-        row2.addWidget(play)
-        row2.addStretch(1)
-        v.addLayout(row2)
+        row.addWidget(pick)
+        openb = QPushButton("▶  Abrir runtime original")
+        openb.clicked.connect(lambda _=False, p=port: self._open_runtime(p))
+        row.addWidget(openb)
+        if cp.is_user_port(port):
+            rm = QPushButton("🗑")
+            rm.setToolTip("Quitar este puerto de la lista")
+            rm.clicked.connect(lambda _=False, p=port: self._remove(p))
+            row.addWidget(rm)
+        row.addStretch(1)
+        v.addLayout(row)
         return card
 
     def _status_label(self, port):
-        if cp.is_built(port):
-            txt = "✅ Construido y listo para jugar."
-        elif port.is_cloned():
-            txt = "⬇ Obtenido; falta construirlo con tu copia del juego (su instalador lo hace)."
+        exe = cp.saved_exe(port) or cp.locate_built_exe(port)
+        if exe:
+            txt = f"✅ Runtime listo: {exe}"
+        elif port.repo:
+            txt = "Aún no has elegido su runtime. Obtén el puerto de su GitHub y pulsa «Elegir runtime…»."
         else:
-            txt = "Aún no obtenido. Pulsa «Obtener» para descargar su release (trae su propio toolchain)."
-        return label(txt, "Hint")
+            txt = "Pulsa «Elegir runtime…» y apunta a su .exe o lanzador."
+        return label(txt, "Hint", wrap=True)
 
+    # ---------------------------------------------------------------- acciones
     def _open(self, url):
         try:
             QDesktopServices.openUrl(QUrl(url))
         except Exception:      # noqa: BLE001
             pass
 
-    def _game_root_for(self, port):
-        """Carpeta del proyecto del mismo juego en ReForge (para el icono real del XEX), o la del propio puerto."""
-        try:
-            if self.lib is not None:
-                for p in getattr(self.lib, "projects", []):
-                    if (getattr(p, "title_id", "") or "").upper() == port.title_id:
-                        return p.root
-        except Exception:      # noqa: BLE001
-            pass
-        return port.dir()
-
-    def _connect_and_launch(self, port, exe):
-        """Enlaza tu perfil/logros junto al .exe del puerto y lo lanza."""
-        from PySide6.QtWidgets import QMessageBox
-        res = cp.connect(port, exe, self._game_root_for(port), lib=self.lib)
-        cp.remember_exe(port, exe)
-        ok, msg = cp.launch(port, exe)
-        if not ok:
-            QMessageBox.warning(self, "Ports de la comunidad", msg)
-            return False
-        hint = "\n\n" + port.menu_hint if getattr(port, "menu_hint", "") else ""
-        QMessageBox.information(self, "Ports de la comunidad", msg + hint)
-        return True
-
     def _pick(self, port):
         from PySide6.QtWidgets import QFileDialog
-        exe, _ = QFileDialog.getOpenFileName(self, f"Elige el .exe construido de «{port.name}»", "",
-                                             "Ejecutable (*.exe)")
+        exe, _ = QFileDialog.getOpenFileName(self, f"Elige el runtime original de «{port.name}»", "",
+                                             "Ejecutable o lanzador (*.exe *.bat *.cmd);;Todos (*.*)")
         if not exe:
             return
-        if self._connect_and_launch(port, exe):
-            self.accept()
+        cp.remember_exe(port, exe)
+        self._open_runtime(port, exe)
 
-    def _play(self, port):
-        exe = cp.locate_built_exe(port)
-        if not exe:
-            return
-        if self._connect_and_launch(port, exe):
-            self.accept()
-
-    def _install(self, port):
+    def _open_runtime(self, port, path=""):
         from PySide6.QtWidgets import QMessageBox
-        game_dir = self._game_assets_dir(port)
-        ok, msg = cp.install_build(port, game_dir=game_dir)
-        box = QMessageBox.information if ok else QMessageBox.warning
-        box(self, "Instalar en ReForge", msg)
-
-    def _find(self, port):
-        from PySide6.QtWidgets import QMessageBox
-        exe = cp.find_installed(port)
-        if exe:
-            # renombrar al nombre bonito y conectar el perfil, sin lanzar
-            rok, exe = cp.rename_built(port, exe)
-            cp.connect(port, exe, self._game_root_for(port), lib=self.lib)
-            QMessageBox.information(self, "Buscar juego ya instalado",
-                                    f"Encontrado y conectado:\n{exe}\n\nYa está en la Biblioteca; pulsa «Jugar».")
+        ok, msg = cp.open_original(port, path)
+        if not ok:
+            QMessageBox.warning(self, "Ports de la comunidad", msg)
             self._refresh()
-        else:
-            dirs = "\n".join(port.known_dirs) or "—"
-            QMessageBox.information(self, "Buscar juego ya instalado",
-                                    "No encontré el .exe en las carpetas conocidas:\n" + dirs +
-                                    "\n\nSi lo instalaste en otra ruta, usa «Elegir .exe construido…».")
+            return
+        hint = "\n\n" + port.menu_hint if getattr(port, "menu_hint", "") else ""
+        QMessageBox.information(self, "Ports de la comunidad", msg + hint)
+        self.accept()
 
-    def _rename(self, port):
+    def _add(self):
+        from PySide6.QtWidgets import QInputDialog, QMessageBox
+        repo, ok = QInputDialog.getText(self, "Agregar puerto", "URL del GitHub del puerto "
+                                        "(p. ej. https://github.com/autor/proyecto):")
+        if not ok or not repo.strip():
+            return
+        repo = repo.strip()
+        guess = repo.rstrip("/").split("/")[-1].replace("-", " ").replace("_", " ").title()
+        name, ok = QInputDialog.getText(self, "Agregar puerto", "Nombre del juego/puerto:", text=guess)
+        if not ok or not name.strip():
+            return
+        tid, _ = QInputDialog.getText(self, "Agregar puerto", "Title ID (opcional, 8 hex del juego de Xbox 360):")
+        cp.add_user_port(name.strip(), repo=repo, title_id=(tid or "").strip())
+        self._refresh()
+        QMessageBox.information(self, "Ports de la comunidad",
+                               f"«{name.strip()}» agregado. Obtén su runtime de GitHub, pulsa «Elegir runtime…» y "
+                               "luego «Abrir runtime original».")
+
+    def _remove(self, port):
         from PySide6.QtWidgets import QMessageBox
-        exe = cp.locate_built_exe(port)
-        if not exe:
-            return
-        ok, new = cp.rename_built(port, exe)
-        if ok:
-            QMessageBox.information(self, "Renombrar", f"Renombrado a:\n{new}")
+        if QMessageBox.question(self, "Quitar puerto", f"¿Quitar «{port.name}» de la lista?") \
+                == QMessageBox.StandardButton.Yes:
+            cp.remove_user_port(port.id)
             self._refresh()
-        else:
-            QMessageBox.warning(self, "Renombrar", "No se pudo renombrar el ejecutable.")
-
-    def _language(self, port):
-        from PySide6.QtWidgets import QFileDialog, QMessageBox
-        root = self._game_root_for(port)
-        if not root or root == port.dir():
-            QMessageBox.information(self, "Español latino",
-                                    "Primero necesito el proyecto de Forza Horizon en ReForge (su assets/"
-                                    "default.xex) para aplicarle la actualización. Crea/recompila el juego base "
-                                    "y vuelve a intentarlo.")
-            return
-        src = QFileDialog.getExistingDirectory(self, "Elige la carpeta del GOD/TU (p. ej. FHL-DLC-TU-GOD)")
-        if not src:
-            return
-        try:
-            info = cp.apply_title_update(root, src)
-        except Exception as e:      # noqa: BLE001
-            QMessageBox.warning(self, "Español latino", f"No se pudo aplicar la actualización:\n{e}")
-            return
-        QMessageBox.information(self, "Español latino",
-                               f"Actualización aplicada al proyecto (v{info.get('version', '?')}).\n\nReconstruye "
-                               "el puerto (su instalador) para que Horizon salga en español latino.")
-
-    def _game_assets_dir(self, port):
-        """La carpeta assets/ del proyecto del mismo juego en ReForge (de donde copiar el default.xex al puerto)."""
-        root = self._game_root_for(port)
-        import os
-        assets = os.path.join(root, "assets") if root else ""
-        return assets if assets and os.path.isdir(assets) else ""
 
     def _refresh(self):
-        """Vuelve a dibujar las tarjetas (estado, botones) tras un cambio."""
         try:
             while self.rows.count():
                 item = self.rows.takeAt(0)
                 w = item.widget()
                 if w is not None:
                     w.deleteLater()
-            for port in cp.all_ports():
-                self.rows.addWidget(self._card(port))
-            self.rows.addStretch(1)
+            self._fill()
         except Exception:      # noqa: BLE001
             pass
 

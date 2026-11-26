@@ -142,6 +142,28 @@ check(mode2 == "launcher" and target2.endswith("Jugar Forza Horizon.bat"),
       "con el lanzador al lado, lo usa (lleva --game_data_root y el puente con ReForge)")
 check(cp.launcher_bat(lexe).endswith("Jugar Forza Horizon.bat"), "prefiere el lanzador principal, no el (directo)")
 
+print("Puente: agregar puertos desde GitHub y abrir su runtime original")
+before = len(cp.all_ports())
+up = cp.add_user_port("Mi Puerto Test", repo="https://github.com/autor/mi-puerto", title_id="ABCD1234")
+check(up.id and up.repo.endswith("mi-puerto"), "add_user_port crea el puerto con su repo")
+check(len(cp.all_ports()) == before + 1, "aparece junto a los preconfigurados")
+check(cp.by_id(up.id) is not None and cp.is_user_port(cp.by_id(up.id)), "se reconoce como puerto del usuario")
+check(cp.for_title("ABCD1234").id == up.id, "se encuentra por Title ID")
+
+# abrir el runtime original: sin ejecutable elegido, avisa; con uno, lo abre (sin añadir args)
+ok3, msg3 = cp.open_original(up)
+check(ok3 is False and "Elegir runtime" in msg3, "sin runtime elegido, pide elegirlo (no lanza nada)")
+rt = tempfile.mkdtemp()
+orig = os.path.join(rt, "AuthorLauncher.exe")
+open(orig, "wb").write(b"\0" * 100)
+abierto = {}
+cp.subprocess.Popen = lambda args, **k: abierto.update(args=args)
+ok4, _ = cp.open_original(up, orig)
+check(ok4 and abierto.get("args", [None])[0] == orig, "abre el runtime original tal cual (su propio .exe/lanzador)")
+check(cp.saved_exe(up) == orig, "recuerda la ruta del runtime")
+
+check(cp.remove_user_port(up.id) is True and cp.by_id(up.id) is None, "se puede quitar de la lista")
+
 print("apply_title_update delega en title_update.install_update")
 import reforge.title_update as tu  # noqa: E402
 llamado = {}

@@ -463,6 +463,14 @@ class WorkshopPage(QWidget):
         self.btn_sweep.setEnabled(False)
         self._sweep = False
         self.btn_out.setText("📂  Carpeta")
+        # Cancelar junto al log: el Cancelar del formulario queda fuera de vista en ventana estrecha o cuando la
+        # recompilación la pide el lanzador del juego, así que aquí hay uno siempre a mano mientras se compila.
+        self.cancel_btn2 = QPushButton("■  Cancelar compilación")
+        self.cancel_btn2.setObjectName("Danger")
+        self.cancel_btn2.clicked.connect(self.runner.cancel)
+        self.cancel_btn2.setVisible(False)
+        self.cancel_btn2.setMinimumWidth(120)
+        bot.addWidget(self.cancel_btn2, 1)
         for b in (self.btn_play, self.btn_optim, self.btn_fix, self.btn_opts, self.btn_lnk):
             b.setMinimumWidth(120)
             bot.addWidget(b, 1)
@@ -1000,6 +1008,10 @@ class WorkshopPage(QWidget):
     def _set_running(self, on):
         self.start_btn.setEnabled(not on)
         self.cancel_btn.setEnabled(on)
+        # Cancelar junto al log: visible y activo solo mientras se compila; oculta «Jugar» para que no estorbe.
+        self.cancel_btn2.setVisible(on)
+        self.cancel_btn2.setEnabled(on)
+        self.btn_play.setVisible(not on)
         for w in (self.mode, self.src, self.name, self.parent_dir, self.clean):
             w.setEnabled(not on)
         for cb in self.checks.values():

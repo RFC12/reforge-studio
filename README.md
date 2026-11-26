@@ -4,7 +4,7 @@
 
 **Recompila juegos de Xbox 360 a PC desde una interfaz de escritorio — sin pelearte con la terminal.**
 
-[![Versión](https://img.shields.io/badge/versión-1.51.1-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
+[![Versión](https://img.shields.io/badge/versión-1.51.2-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
 [![Plataforma](https://img.shields.io/badge/Windows-10%20%2F%2011-19d3a2?style=flat-square&logo=windows&logoColor=white)](#instalación)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-19d3a2?style=flat-square&logo=python&logoColor=white)](#desarrollo)
 [![SDK](https://img.shields.io/badge/motor-rexglue%20%C2%B7%20XenonRecomp-19d3a2?style=flat-square)](https://github.com/rexglue/rexglue-sdk)
@@ -138,7 +138,7 @@ Atajos: `F11` pantalla completa · `Ctrl+1…9` secciones · flechas + `Enter` e
 
 ## 📜 Historial de versiones
 
-Lo más reciente es **1.51.1** (el botón «Jugar» de los puertos ahora usa el lanzador correcto con `--game_data_root`, así que Forza Horizon ya no se cierra con el error de ReXGlue; además deja claro que el menú del juego en estos puertos se abre con **Back + Start**). Antes, **1.51.0** trajo el gestor de puertos (instalación/detección interna, renombrado a Horizon, español latino vía TU/GOD), el autoreinicio tras actualizar y la vista de logros del SDK 0.11 como la de 0.10.
+Lo más reciente es **1.51.2** (botón **Cancelar compilación** siempre a mano junto al log, también cuando la recompilación la pide el lanzador del juego; y «Ports de la comunidad» pasa a ser un **puente simple**: agrega puertos desde su GitHub y abre su **runtime original**, sin que ReForge los recompile). Antes, **1.51.1** arregló el lanzamiento de los puertos (`--game_data_root`) y aclaró que su menú se abre con **Back + Start**.
 El detalle de cada versión está en [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 🙏 Créditos
