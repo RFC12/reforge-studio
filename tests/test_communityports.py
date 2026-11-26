@@ -89,9 +89,51 @@ gr = tempfile.mkdtemp()
 proj = cp.wrap_in_reforge(port, cp.locate_built_exe(port), gr, lib=FakeLib(),
                           write_launcher=fake_launcher, ensure_icon=fake_icon)
 check(proj is not None and proj.title_id == "565507E4", "crea el Project del puerto")
-check(hechos["launcher"] is not None and port.name in hechos["launcher"][1], "le pone el lanzador temático de ReForge")
-check(hechos["icon"] == port.name, "le pone el icono")
+check(hechos["launcher"] is not None and port.play_name in hechos["launcher"][1],
+      "le pone el lanzador temático de ReForge con el nombre bonito")
+check(hechos["icon"] == port.play_name, "le pone el icono")
 check(len(hechos["lib"]) == 1, "lo añade a la Biblioteca")
+
+print("Nombres bonitos y carpetas de salida conocidas")
+check(forza.play_name == "Forza Horizon" and forza.exe_base == "Horizon", "Forza Horizon → Horizon")
+check(port.play_name == "Crash of the Titans", "Crash tiene nombre de juego")
+check(any("win-amd64-release" in d for d in forza.known_dirs), "conoce la carpeta de salida de Pinyon Shift")
+
+print("Recordar / olvidar la ruta del .exe")
+cp.remember_exe(forza, os.path.join(pd, "CrashOTT.exe"))
+check(cp.saved_exe(forza).endswith("CrashOTT.exe"), "recuerda la ruta elegida")
+cp.forget_exe(forza)
+check(cp.saved_exe(forza) == "", "la olvida cuando toca")
+
+print("Renombrar el .exe del puerto al nombre bonito (conserva el icono embebido)")
+rtmp = tempfile.mkdtemp()
+src_exe = os.path.join(rtmp, "pinyon_shift.exe")
+open(src_exe, "wb").write(b"\0" * 1000)
+ok, new = cp.rename_built(forza, src_exe)
+check(ok and os.path.basename(new) == "Horizon.exe", "pinyon_shift.exe → Horizon.exe")
+check(not os.path.isfile(src_exe) and os.path.isfile(new), "mueve el archivo, no lo duplica")
+check(cp.saved_exe(forza) == new, "recuerda la nueva ruta")
+
+print("find_installed detecta el puerto instalado a mano en una carpeta conocida")
+kd = tempfile.mkdtemp()
+open(os.path.join(kd, "pinyon_shift.exe"), "wb").write(b"\0" * 60000)
+forza.known_dirs = [kd]
+cp.forget_exe(forza)
+found = cp.find_installed(forza)
+check(found.endswith("pinyon_shift.exe"), "lo encuentra en la carpeta de salida conocida")
+check(cp.saved_exe(forza) == found, "y lo recuerda para «Jugar»")
+
+print("install_build sin instalador ejecutable devuelve el plan, no un falso éxito")
+ok2, msg2 = cp.install_build(forza, game_dir="", launch=False)
+check(ok2 is False and "releases" in msg2.lower(), "es honesto cuando no hay instalador que lanzar")
+
+print("apply_title_update delega en title_update.install_update")
+import reforge.title_update as tu  # noqa: E402
+llamado = {}
+tu.install_update = lambda root, src, log=None: llamado.update(root=root, src=src) or {"version": "1.2"}
+info = cp.apply_title_update("/proyecto/forza", "/downloads/FHL-DLC-TU-GOD")
+check(llamado.get("src", "").endswith("FHL-DLC-TU-GOD") and info["version"] == "1.2",
+      "aplica la actualización (español latino) al proyecto del juego")
 
 print()
 if fallos:

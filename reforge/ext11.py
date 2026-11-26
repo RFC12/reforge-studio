@@ -203,6 +203,16 @@ void DrawTrophy(ImDrawList* dl, ImVec2 c, float ir, float sq, ImU32 col) {
   dl->AddRectFilled(P(-0.27f, 0.32f), P(0.27f, 0.43f), col, 0.04f * ir);
 }
 
+// Candado para los logros aún no conseguidos (como la Guía de 0.10 cuando no hay icono).
+void DrawLock(ImDrawList* dl, ImVec2 c, float r, ImU32 col) {
+  const float th = std::max(1.5f, r * 0.26f);
+  // arco superior
+  dl->PathArcTo(ImVec2(c.x, c.y - r * 0.18f), r * 0.55f, 3.14159265f, 2.0f * 3.14159265f, 12);
+  dl->PathStroke(col, 0, th);
+  // cuerpo
+  dl->AddRectFilled(ImVec2(c.x - r * 0.75f, c.y - r * 0.1f), ImVec2(c.x + r * 0.75f, c.y + r), col, r * 0.18f);
+}
+
 // La imagen de jugador del perfil de ReForge (Perfil → Imagen de jugador), dibujada con primitivas: en 0.11
 // no hay texturas a mano y la figura es la misma que enseña ReForge, con sus colores.
 void DrawAvatar(ImDrawList* dl, ImVec2 p, float size, float a, uint32_t accent, const Profile& prof) {
@@ -688,8 +698,21 @@ class GuideMenu final : public rex::ui::DialogBase {
       if (list.empty()) {
         Text(dl, fs, ImVec2(x, y), dim, "Este juego no tiene logros registrados.", w - 2 * pad);
       } else {
+        const float right = x0 + w - pad;
+        // Resumen y barra de progreso arriba de la lista, como la Guía del 360 de 0.10.
+        std::snprintf(line, sizeof(line), "%u de %zu logros  ·  %u / %u G", unlocked_, list.size(), score_,
+                      score_total_);
+        Text(dl, fs * 0.95f, ImVec2(x, y), dim, line);
+        const float barY = y + fs * 1.45f, barH = 7.0f * u, barW = right - x;
+        dl->AddRectFilled(ImVec2(x, barY), ImVec2(x + barW, barY + barH),
+                          IM_COL32(40, 44, 52, static_cast<int>(255 * a)), barH * 0.5f);
+        const float frac = list.empty() ? 0.0f : static_cast<float>(unlocked_) / static_cast<float>(list.size());
+        if (frac > 0.0f)
+          dl->AddRectFilled(ImVec2(x, barY), ImVec2(x + barW * frac, barY + barH), Rgba(accent, a), barH * 0.5f);
+        y += fs * 2.3f;
+
         const float row = 64.0f * u;
-        const float detail_h = fs * 3.0f;
+        const float detail_h = fs * 3.4f;   // descripción completa + puntos y fecha del logro elegido (como 0.10)
         const int visible = std::max(1, static_cast<int>((list_bottom - detail_h - y) / row));
         int& sel = sel_[kAchievements];
         if (sel >= static_cast<int>(list.size())) sel = 0;
@@ -697,32 +720,47 @@ class GuideMenu final : public rex::ui::DialogBase {
         if (sel >= scroll_ + visible) scroll_ = sel - visible + 1;
         for (int i = scroll_; i < static_cast<int>(list.size()) && i < scroll_ + visible; ++i) {
           const auto& ach = list[i];
+          const bool got = ach.unlocked;
           const float ry = y + (i - scroll_) * row;
           if (i == sel)
-            dl->AddRectFilled(ImVec2(x - 8 * u, ry - 4 * u), ImVec2(x0 + w - pad + 8 * u, ry + row - 8 * u),
+            dl->AddRectFilled(ImVec2(x - 8 * u, ry - 4 * u), ImVec2(right + 8 * u, ry + row - 8 * u),
                               Rgba(accent, 0.22f * a), 8 * u);
-          if (open_ && Clicked(ImVec2(x, ry), ImVec2(x0 + w - pad, ry + row))) sel = i;
+          if (open_ && Clicked(ImVec2(x, ry), ImVec2(right, ry + row))) sel = i;
           const float ic = row - 16 * u;
           dl->AddRectFilled(ImVec2(x, ry), ImVec2(x + ic, ry + ic), IM_COL32(40, 44, 52, static_cast<int>(255 * a)),
                             6 * u);
-          DrawTrophy(dl, ImVec2(x + ic / 2, ry + ic / 2), ic * 0.40f, 1.0f, ach.unlocked ? Rgba(accent, a) : dim);
+          if (got)
+            DrawTrophy(dl, ImVec2(x + ic / 2, ry + ic / 2), ic * 0.40f, 1.0f, Rgba(accent, a));
+          else
+            DrawLock(dl, ImVec2(x + ic / 2, ry + ic / 2), ic * 0.30f, dim);
           const float tx2 = x + ic + 12 * u;
-          const std::string title = Ellipsize(ach.label, fs, x0 + w - pad - 70 * u - tx2);
-          Text(dl, fs, ImVec2(tx2, ry), ach.unlocked ? white : dim, title.c_str());
-          const std::string shown = Ellipsize(ach.GetDescription(), fs * 0.78f, x0 + w - pad - 96 * u - tx2);
+          const bool secret = !got && ach.GetDescription().empty();
+          const std::string name = secret ? std::string("Logro secreto") : std::string(ach.label);
+          const std::string title = Ellipsize(name, fs, right - 70 * u - tx2);
+          Text(dl, fs, ImVec2(tx2, ry), got ? white : dim, title.c_str());
+          const std::string desc = secret ? std::string("Se revela al conseguirlo") : ach.GetDescription();
+          const std::string shown = Ellipsize(desc, fs * 0.78f, right - 96 * u - tx2);
           Text(dl, fs * 0.78f, ImVec2(tx2, ry + fs * 1.25f), dim, shown.c_str());
           std::snprintf(line, sizeof(line), "%uG", ach.gamerscore);
-          Text(dl, fs * 0.9f, ImVec2(x0 + w - pad - 50 * u, ry), ach.unlocked ? Rgba(accent, a) : dim, line);
-          if (ach.unlocked) {
+          Text(dl, fs * 0.9f, ImVec2(right - 50 * u, ry), got ? Rgba(accent, a) : dim, line);
+          if (got) {
             const std::string d = DateFromFiletime(ach.unlock_time);
-            Text(dl, fs * 0.7f, ImVec2(x0 + w - pad - 84 * u, ry + fs * 1.3f), dim, d.c_str());
+            Text(dl, fs * 0.7f, ImVec2(right - 84 * u, ry + fs * 1.3f), dim, d.c_str());
           }
         }
         if (sel >= 0 && sel < static_cast<int>(list.size())) {
+          const auto& ach = list[sel];
+          const bool got = ach.unlocked;
           const float dy = list_bottom - detail_h + fs * 0.4f;
-          dl->AddLine(ImVec2(x, dy - fs * 0.3f), ImVec2(x0 + w - pad, dy - fs * 0.3f),
+          dl->AddLine(ImVec2(x, dy - fs * 0.3f), ImVec2(right, dy - fs * 0.3f),
                       IM_COL32(60, 66, 76, static_cast<int>(255 * a)));
-          Text(dl, fs * 0.82f, ImVec2(x, dy), white, list[sel].GetDescription().c_str(), w - 2 * pad);
+          const std::string desc = (!got && ach.GetDescription().empty())
+                                       ? std::string("Logro secreto · se revela al conseguirlo")
+                                       : ach.GetDescription();
+          Text(dl, fs * 0.82f, ImVec2(x, dy), white, desc.c_str(), w - 2 * pad);
+          std::snprintf(line, sizeof(line), got ? "%uG · conseguido el %s" : "%uG · bloqueado",
+                        ach.gamerscore, got ? DateFromFiletime(ach.unlock_time).c_str() : "");
+          Text(dl, fs * 0.76f, ImVec2(x, dy + fs * 1.9f), got ? Rgba(accent, a) : dim, line);
         }
       }
     }

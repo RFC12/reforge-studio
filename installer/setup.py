@@ -694,8 +694,16 @@ def main():
             return 2
         print(f"Acción: {p['action']} · {p['old'] or '—'} → {p['new']} · {p['dir']}")
         opt = lambda k: args[args.index(k) + 1] if k in args else None  # noqa: E731
-        install(p["dir"], desktop="--no-desktop" not in args, workspace=opt("--workspace"),
-                sdk="--sdk" in args, sdk_zip=opt("--sdk-zip") or "")
+        exe = install(p["dir"], desktop="--no-desktop" not in args, workspace=opt("--workspace"),
+                      sdk="--sdk" in args, sdk_zip=opt("--sdk-zip") or "")
+        if "--relaunch" in args and exe and os.path.isfile(exe):
+            # Reabrir ReForge automáticamente tras actualizar, para no tener que abrirlo a mano.
+            try:
+                subprocess.Popen([exe], cwd=os.path.dirname(exe),
+                                 creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
+                                 close_fds=True)
+            except OSError:
+                pass
         return 0
     if "--info" in args:
         print(json.dumps(plan(), indent=2))

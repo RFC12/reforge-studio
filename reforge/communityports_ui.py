@@ -48,22 +48,41 @@ class CommunityPortsDialog(QDialog):
         v.addWidget(label(f"Autor: {port.author} · Motor: {port.engine} · Title ID: {port.title_id}", "Hint"))
         v.addWidget(label(port.notes, "Hint", wrap=True))
         v.addWidget(self._status_label(port))
-        row = QHBoxLayout()
+        # Fila 1: obtener e instalar dentro de ReForge.
+        row1 = QHBoxLayout()
         get = QPushButton("🌐  Obtener (releases)")
         get.clicked.connect(lambda _=False, p=port: self._open(p.releases_url))
-        row.addWidget(get)
+        row1.addWidget(get)
+        install = QPushButton("⬇  Instalar en ReForge")
+        install.clicked.connect(lambda _=False, p=port: self._install(p))
+        row1.addWidget(install)
+        find = QPushButton("🔍  Buscar juego ya instalado")
+        find.clicked.connect(lambda _=False, p=port: self._find(p))
+        row1.addWidget(find)
         repo = QPushButton("Código")
         repo.clicked.connect(lambda _=False, p=port: self._open(p.repo))
-        row.addWidget(repo)
+        row1.addWidget(repo)
+        row1.addStretch(1)
+        v.addLayout(row1)
+        # Fila 2: elegir, renombrar, idioma y jugar.
+        row2 = QHBoxLayout()
         pick = QPushButton("Elegir .exe construido…")
         pick.clicked.connect(lambda _=False, p=port: self._pick(p))
-        row.addWidget(pick)
+        row2.addWidget(pick)
+        rename = QPushButton(f"✏  Renombrar a «{port.exe_base}»")
+        rename.setEnabled(cp.is_built(port))
+        rename.clicked.connect(lambda _=False, p=port: self._rename(p))
+        row2.addWidget(rename)
+        if port.id == "pinyonshift":
+            lang = QPushButton("🌐  Español latino (TU/GOD)")
+            lang.clicked.connect(lambda _=False, p=port: self._language(p))
+            row2.addWidget(lang)
         play = QPushButton("▶  Jugar")
         play.setEnabled(cp.is_built(port))
         play.clicked.connect(lambda _=False, p=port: self._play(p))
-        row.addWidget(play)
-        row.addStretch(1)
-        v.addLayout(row)
+        row2.addWidget(play)
+        row2.addStretch(1)
+        v.addLayout(row2)
         return card
 
     def _status_label(self, port):
@@ -92,26 +111,109 @@ class CommunityPortsDialog(QDialog):
             pass
         return port.dir()
 
+    def _connect_and_launch(self, port, exe):
+        """Enlaza tu perfil/logros junto al .exe del puerto y lo lanza."""
+        from PySide6.QtWidgets import QMessageBox
+        res = cp.connect(port, exe, self._game_root_for(port), lib=self.lib)
+        cp.remember_exe(port, exe)
+        ok, msg = cp.launch(port, exe)
+        if not ok:
+            QMessageBox.warning(self, "Ports de la comunidad", msg)
+            return False
+        return True
+
     def _pick(self, port):
-        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        from PySide6.QtWidgets import QFileDialog
         exe, _ = QFileDialog.getOpenFileName(self, f"Elige el .exe construido de «{port.name}»", "",
                                              "Ejecutable (*.exe)")
         if not exe:
             return
-        cp.wrap_in_reforge(port, exe, self._game_root_for(port), lib=self.lib)
-        ok, msg = cp.launch(port, exe)
-        if not ok:
-            QMessageBox.warning(self, "Ports de la comunidad", msg)
-        else:
+        if self._connect_and_launch(port, exe):
             self.accept()
 
     def _play(self, port):
         exe = cp.locate_built_exe(port)
         if not exe:
             return
-        cp.wrap_in_reforge(port, exe, self._game_root_for(port), lib=self.lib)
-        cp.launch(port, exe)
-        self.accept()
+        if self._connect_and_launch(port, exe):
+            self.accept()
+
+    def _install(self, port):
+        from PySide6.QtWidgets import QMessageBox
+        game_dir = self._game_assets_dir(port)
+        ok, msg = cp.install_build(port, game_dir=game_dir)
+        box = QMessageBox.information if ok else QMessageBox.warning
+        box(self, "Instalar en ReForge", msg)
+
+    def _find(self, port):
+        from PySide6.QtWidgets import QMessageBox
+        exe = cp.find_installed(port)
+        if exe:
+            # renombrar al nombre bonito y conectar el perfil, sin lanzar
+            rok, exe = cp.rename_built(port, exe)
+            cp.connect(port, exe, self._game_root_for(port), lib=self.lib)
+            QMessageBox.information(self, "Buscar juego ya instalado",
+                                    f"Encontrado y conectado:\n{exe}\n\nYa está en la Biblioteca; pulsa «Jugar».")
+            self._refresh()
+        else:
+            dirs = "\n".join(port.known_dirs) or "—"
+            QMessageBox.information(self, "Buscar juego ya instalado",
+                                    "No encontré el .exe en las carpetas conocidas:\n" + dirs +
+                                    "\n\nSi lo instalaste en otra ruta, usa «Elegir .exe construido…».")
+
+    def _rename(self, port):
+        from PySide6.QtWidgets import QMessageBox
+        exe = cp.locate_built_exe(port)
+        if not exe:
+            return
+        ok, new = cp.rename_built(port, exe)
+        if ok:
+            QMessageBox.information(self, "Renombrar", f"Renombrado a:\n{new}")
+            self._refresh()
+        else:
+            QMessageBox.warning(self, "Renombrar", "No se pudo renombrar el ejecutable.")
+
+    def _language(self, port):
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        root = self._game_root_for(port)
+        if not root or root == port.dir():
+            QMessageBox.information(self, "Español latino",
+                                    "Primero necesito el proyecto de Forza Horizon en ReForge (su assets/"
+                                    "default.xex) para aplicarle la actualización. Crea/recompila el juego base "
+                                    "y vuelve a intentarlo.")
+            return
+        src = QFileDialog.getExistingDirectory(self, "Elige la carpeta del GOD/TU (p. ej. FHL-DLC-TU-GOD)")
+        if not src:
+            return
+        try:
+            info = cp.apply_title_update(root, src)
+        except Exception as e:      # noqa: BLE001
+            QMessageBox.warning(self, "Español latino", f"No se pudo aplicar la actualización:\n{e}")
+            return
+        QMessageBox.information(self, "Español latino",
+                               f"Actualización aplicada al proyecto (v{info.get('version', '?')}).\n\nReconstruye "
+                               "el puerto (su instalador) para que Horizon salga en español latino.")
+
+    def _game_assets_dir(self, port):
+        """La carpeta assets/ del proyecto del mismo juego en ReForge (de donde copiar el default.xex al puerto)."""
+        root = self._game_root_for(port)
+        import os
+        assets = os.path.join(root, "assets") if root else ""
+        return assets if assets and os.path.isdir(assets) else ""
+
+    def _refresh(self):
+        """Vuelve a dibujar las tarjetas (estado, botones) tras un cambio."""
+        try:
+            while self.rows.count():
+                item = self.rows.takeAt(0)
+                w = item.widget()
+                if w is not None:
+                    w.deleteLater()
+            for port in cp.all_ports():
+                self.rows.addWidget(self._card(port))
+            self.rows.addStretch(1)
+        except Exception:      # noqa: BLE001
+            pass
 
 
 def open_dialog(parent=None, lib=None):

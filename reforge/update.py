@@ -231,13 +231,21 @@ def _verify(path, info, token=""):
     return h.hexdigest().lower() == want
 
 
-def install(setup_exe, silent=False):
-    """Lanza el instalador descargado y devuelve True. ReForge debe cerrarse después."""
+def install(setup_exe, silent=False, relaunch=False):
+    """Lanza el instalador descargado y devuelve True. ReForge debe cerrarse después.
+
+    Con `relaunch=True` (y `silent=True`), el instalador reabre ReForge automáticamente al terminar, así no hay
+    que abrirlo a mano para ver la versión nueva.
+    """
     if not os.path.isfile(setup_exe):
         raise UpdateError("No se encuentra el instalador descargado.")
     if sys.platform != "win32":
         raise UpdateError("La actualización automática solo está disponible en Windows.")
-    args = [setup_exe] + (["--silent"] if silent else [])
+    args = [setup_exe]
+    if silent:
+        args.append("--silent")
+    if relaunch:
+        args.append("--relaunch")
     subprocess.Popen(args, close_fds=True,
                      creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
     return True

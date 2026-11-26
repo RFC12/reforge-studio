@@ -210,7 +210,10 @@ class DownloadDialog(QDialog):
             self.sub.setText("Descarga verificada. Abriendo el instalador…")
             upd.cleanup(keep=self.ruta)
             try:
-                upd.install(self.ruta, silent=self.silent)
+                # En una actualización silenciosa (automática), reabrir ReForge solo al terminar,
+                # salvo que el usuario lo haya desactivado. Así la versión nueva aparece sin abrirla a mano.
+                relaunch = self.silent and cfg.get("auto_relaunch", True)
+                upd.install(self.ruta, silent=self.silent, relaunch=relaunch)
             except upd.UpdateError as e:
                 self.error = str(e)
                 self.reject()

@@ -2,6 +2,36 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.51.0 — Puertos: instalación/detección interna, logros y español; autoreinicio; logros 0.11 como 0.10
+
+- **Instalar el puerto desde ReForge.** «⬇ Instalar en ReForge» clona el puerto, copia tu `default.xex` desde
+  el proyecto del juego y lanza su propio instalador/compilación (su toolchain hace el trabajo pesado; ReForge
+  lo orquesta). Si el puerto no trae un instalador ejecutable, enseña el plan y su página de releases en vez de
+  fingir éxito.
+- **«🔍 Buscar juego ya instalado».** Si lo instalaste a mano, ReForge lo detecta en las carpetas de salida
+  conocidas (p. ej. `C:\ReForgeBuild\pinyon-shift\out\build\win-amd64-release`), lo recuerda, lo renombra y lo
+  conecta. También puedes **«Elegir .exe construido…»** para una ruta cualquiera; ReForge la recuerda para
+  «Jugar».
+- **Renombrado al nombre bonito.** «✏ Renombrar» deja `pinyon_shift.exe` como **`Horizon.exe`** (y Crash como
+  `Crash of the Titans.exe`). El icono va embebido en el .exe, así que sobrevive al renombrado; en la Biblioteca
+  aparece con la **carátula real** del juego (misma del XEX, mismo Title ID).
+- **Conexión de tu perfil y logros.** Al jugar un puerto, ReForge deja junto a su .exe la MISMA identidad que
+  usa en sus juegos recompilados (`reforge_ext.ini` + sidecars del perfil: Gamertag, idioma, color de acento,
+  sonido y notificación de logros). Como estos puertos son de la familia rexglue, su runtime la lee y muestra
+  tus logros con tu perfil. La base de datos de logros/saltos/código es la del juego de Xbox 360 (mismo Title
+  ID): ReForge no inventa definiciones, solo aporta la identidad y lee el progreso guardado si existe.
+- **Español latino a Forza Horizon.** «🌐 Español latino (TU/GOD)» aplica tu actualización de título (p. ej.
+  `FHL-DLC-TU-GOD`) al proyecto del juego; al reconstruir el puerto desde esos assets, Horizon sale en español
+  latino.
+- **ReForge se reabre solo tras actualizar.** La actualización automática ahora pasa `--relaunch` al instalador,
+  que vuelve a abrir ReForge al terminar: ya no hay que abrirlo a mano para ver la versión nueva (se puede
+  desactivar con `auto_relaunch`).
+- **Menú Guía del SDK 0.11 con la vista de logros cómoda de 0.10.** La pestaña Logros gana barra de progreso,
+  panel de detalle con los puntos y la fecha del logro elegido, y trato de **logros secretos/bloqueados**
+  (candado y «se revela al conseguirlo»), igual que la Guía de 0.10. *(Requiere reconstruir el juego 0.11 para
+  verlo.)*
+- Suite 64/64 (tests nuevos: conexión de perfil/logros de puertos y autoreinicio tras actualizar).
+
 ## 1.50.0 — Gestor de puertos de la comunidad con las comodidades de ReForge
 
 - **Nuevo: «Ports de la comunidad»** (tile en Inicio). Lista los puertos nativos hechos por otros autores (con
