@@ -163,7 +163,11 @@ preparar el renderer** o **después de presentar una imagen**, y preparo el parc
 presentación — nunca sustituyendo texto del juego a ciegas). **Prueba clave:** quita la TU y arranca; si deja de
 cerrarse, confirma que el disparador es un texto no-UTF-8 que entra con la TU.
 
-## Cierre UTF-8 al enumerar contenido — avance con tu log 121 (actualizado)
+## Cierre UTF-8 en una operación diferida — avance con los logs (121 y 123–125)
+
+> Nota: el evento visible justo antes del fatal **cambia** entre ejecuciones (en el 121 fue `XamContentCreateEnumerator`;
+> en 123/124/125 fue `XNetLogonGetTitleID`), y siempre cae en un hilo distinto del que lanza. Es decir, **no
+> identifica la operación**. El campo y el origen están **pendientes** hasta tener la pila (ver más abajo).
 
 Leí tu `build\logs\asuraswrath_121.log` completo (18 914 líneas). La secuencia exacta del fatal:
 
@@ -235,6 +239,36 @@ dispara la validación, y corrijo esa frontera (decodificar con la codificación
 propio SDK en otras rutas, con U+FFFD — sin tocar nombres/rutas/texto válidos). Si prefieres no instalar cdb,
 mándame directamente `build\logs\asuraswrath_121.log`: ya lo tengo leído, pero con uno nuevo tras un arranque
 limpio confirmo que la secuencia es idéntica.
+
+### Intentos 123/124/125 — leídos completos (actualización)
+
+Los tres llegaron al **menú del título jugando a 30 FPS** (cargando `D:\BCGame\Movies\…`, `TitleMenu_Bg00`) y
+cerraron con el mismo fatal UTF-8. La secuencia **común** en los tres, ~1–1,5 s antes del fatal:
+
+```
+… [ReForge] FPS 30 …
+[krnl] [tXXXXX] __imp__XNetLogonGetTitleID STUB          ← Xbox LIVE (logon), en un hilo de kernel
+[core] [tYYYYY] [ReForge] Guardián: imagen normal con readback_resolve=full
+[critical] [core] [tZZZZZ] [FATAL] Dispatch thread: deferred completion threw 'Invalid UTF-8'   ← otro hilo
+```
+
+- En el **121** el evento visible anterior era `XamContentCreateEnumerator`; en **123/124/125** es
+  `__imp__XNetLogonGetTitleID` (Live). **Conclusión honesta:** el evento visible anterior cae en un **hilo
+  distinto** del hilo del despachador que lanza, así que **no prueba** quién encoló la tarea. Mi resumen anterior
+  atribuía «XamContent/nombre de contenido» por arrastre del 121 — era una suposición. Corregido: la interfaz
+  ahora muestra un **único** mensaje, «Excepción `Invalid UTF-8` en una operación diferida. Campo y origen
+  pendientes de identificar», y la línea fatal se muestra **una sola vez** por sesión (los tres intentos siguen
+  contando como tres fallos independientes).
+- No aparece `ResolvePath(UPDATE:\)` ni `XamContent` en la ventana de 123/124/125 (sí en el 121). El denominador
+  común es: **una completion diferida en el hilo del despachador, cerca del logon de Live, tras llegar al menú**.
+
+### Lo que ya está descartado (verificado en tu PC)
+
+Tu `reforge_game.json` tiene **`live_offline: true`** — Xbox Live simulado ya está DESACTIVADO — y aun así el
+juego llama a `__imp__XNetLogonGetTitleID` (un stub que solo escribe en el log) y cierra con el UTF-8. Por tanto
+el logon de Live **no es la causa**: ese `XNetLogon` es ruido en otro hilo, no el que encola la tarea que lanza.
+El origen real sigue **sin identificar** y por eso necesito la **pila del lanzamiento** (el bloque `cdb` de
+arriba), que es lo único que señala la función y el dato exactos sin suponer.
 
 ### Arreglo del falso éxito (ya en el código, con prueba)
 

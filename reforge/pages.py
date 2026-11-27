@@ -1178,9 +1178,7 @@ class WorkshopPage(QWidget):
             if cls.get("first_error"):
                 ctx.log("   Primer error de esta sesión: " + cls["first_error"], "dim")
             if cls.get("cause") == "utf8_deferred":
-                ctx.log("   Causa: una operación diferida del runtime leyó un texto del juego como UTF-8 estricto "
-                        "y no lo era (reproducible al añadir una actualización/TU con nombres que no son UTF-8).",
-                        "dim")
+                ctx.log("   " + game.UTF8_DEFERRED_MSG, "dim")
             elif cls.get("case") == "crash_unconfirmed":
                 ctx.log("   0xC0000409 sin [FATAL] en el log: causa pendiente de confirmar; se mantiene como "
                         "caso aparte.", "dim")
@@ -1431,8 +1429,7 @@ class WorkshopPage(QWidget):
             if out.get("killed"):
                 self.log.write("   El supervisor de ReForge cerró el proceso al ver [FATAL].", "dim")
             if cls.get("cause") == "utf8_deferred":
-                self.log.write("   Causa: completion diferida de la enumeración de contenido (XamContent*) que "
-                               "convirtió el nombre de un contenido a UTF-8 estricto y no lo era.", "dim")
+                self.log.write("   " + game.UTF8_DEFERRED_MSG, "dim")
             for ln in out.get("lines", []):
                 self.log.write("   " + ln, "dim")
             self._handle_crash(out, o)          # explica y lanza el mantenimiento automático
@@ -1653,10 +1650,8 @@ class WorkshopPage(QWidget):
                 self._utf8_retries = tries + 1
                 self.status_lbl.setText("Reabriendo el juego para confirmar el patrón…")
                 if es_utf8:
-                    self.log.write("⚠ El juego se cerró en una completion diferida del despachador del runtime al "
-                                   "leer un texto del juego como UTF-8 estricto que no lo era. Si te pasa SIEMPRE "
-                                   "(p. ej. desde que añadiste una actualización/TU), es reproducible y está en el "
-                                   "runtime/SDK, no en tu recompilación: recompilar no lo arregla.", "warn")
+                    self.log.write("⚠ " + game.UTF8_DEFERRED_MSG + " Es del runtime/SDK, no de tu recompilación: "
+                                   "recompilar no lo arregla.", "warn")
                 else:
                     self.log.write(f"⚠ El juego se cerró ({caso}) sin una firma que señale a tu código "
                                    "recompilado. Puede ser del runtime del SDK.", "warn")

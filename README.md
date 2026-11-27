@@ -4,7 +4,7 @@
 
 **Recompila juegos de Xbox 360 a PC desde una interfaz de escritorio — sin pelearte con la terminal.**
 
-[![Versión](https://img.shields.io/badge/versión-1.54.0-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
+[![Versión](https://img.shields.io/badge/versión-1.55.0-19d3a2?style=flat-square)](https://github.com/RFC12/reforge-studio/releases)
 [![Plataforma](https://img.shields.io/badge/Windows-10%20%2F%2011-19d3a2?style=flat-square&logo=windows&logoColor=white)](#instalación)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-19d3a2?style=flat-square&logo=python&logoColor=white)](#desarrollo)
 [![SDK](https://img.shields.io/badge/motor-rexglue%20%C2%B7%20XenonRecomp-19d3a2?style=flat-square)](https://github.com/rexglue/rexglue-sdk)
@@ -138,7 +138,7 @@ Atajos: `F11` pantalla completa · `Ctrl+1…9` secciones · flechas + `Enter` e
 
 ## 📜 Historial de versiones
 
-Lo más reciente es **1.54.0** (Asura: arreglo del **falso éxito** del Taller —si el juego sigue abierto a los 45 s muestra «▶ En ejecución · seguimiento activo» en vez de «Proceso completado», y un fatal tardío marca **esa misma sesión** como fallida con su primer error/código/supervisor por separado— más el avance de la causa del cierre UTF-8, localizado con tu log real en la **enumeración de contenido** `XamContentCreateEnumerator`, con captura first-chance sin recompilar). Antes, **1.53.0** trajo los hitos desde el runtime C++, las dos vistas del launcher y el etiquetado correcto del cierre.
+Lo más reciente es **1.55.0** (Asura: diagnóstico del cierre UTF-8 **unificado y honesto** —un solo mensaje «Campo y origen pendientes de identificar», sin atribuir el fallo a `XamContent`/TU sin la pila— y la línea fatal se muestra **una sola vez** por sesión; los tres intentos siguen como fallos independientes). Antes, **1.54.0** acabó con el falso éxito del Taller ante un fatal tardío.
 El detalle de cada versión está en [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 🙏 Créditos

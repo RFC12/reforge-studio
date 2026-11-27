@@ -1789,7 +1789,10 @@ def analyze_runtime_log(path, exit_code=None):
     # [critical]/[error]), así que un cierre por «deferred completion threw 'Invalid UTF-8'» pasaba por «clean»
     # y el Taller lo marcaba ✔/★. Eso se corrige aquí.
     if fatal_lines:
-        return {"kind": "fatal", "address": None, "lines": (fatal_lines + bad)[-8:], "path": path,
+        # Dedup: la línea [FATAL] es «[critical] … [FATAL] …», así que casa con RUNTIME_FATAL_RE y con
+        # RUNTIME_BAD_RE; sin dedup aparecería dos veces. Se muestra una sola vez por sesión.
+        merged = list(dict.fromkeys(fatal_lines + bad))
+        return {"kind": "fatal", "address": None, "lines": merged[-8:], "path": path,
                 "crash": crash, "hotplug": hotplug, "first_error": first_error, "utf8": utf8}
     if crash:
         return {"kind": "crash", "address": None, "lines": bad[-8:], "path": path, "crash": crash,
@@ -2101,6 +2104,12 @@ CASE_LABEL = {
     "supervisor_killed": "el supervisor cerró el proceso (vio [FATAL])",
     "crash_unconfirmed": "causa pendiente de confirmar (0xC0000409 sin [FATAL])",
 }
+
+# Mensaje ÚNICO para el cierre «Invalid UTF-8»: mientras no haya una traza (pila) que identifique el campo, no se
+# atribuye a una operación concreta. El log solo conserva e.what() del despachador; la operación que lanza corre
+# en el hilo del despachador y el evento visible anterior suele estar en OTRO hilo, así que no prueba el origen.
+UTF8_DEFERRED_MSG = ("Excepción «Invalid UTF-8» en una operación diferida. Campo y origen pendientes de "
+                     "identificar (hace falta la pila del lanzamiento; ver docs/ASURA_PILOT.md).")
 
 
 def attempt_result(res):

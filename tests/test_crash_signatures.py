@@ -68,6 +68,19 @@ print("Los tres casos son distinguibles entre sí")
 check(c104["case"] == c106["case"] and c105["case"] != c104["case"],
       "104 y 106 comparten caso; el 105 es distinto")
 
+print("La línea [FATAL] no se duplica en el resumen (casa con FATAL y con [critical])")
+dup = game.analyze_runtime_log(write("[info] runtime initialized\n"
+                                     "[critical] [core] [FATAL] Dispatch thread: deferred completion threw "
+                                     "'Invalid UTF-8'\n"), None)
+fat = [ln for ln in dup["lines"] if "deferred completion threw" in ln]
+check(len(fat) == 1, "la misma línea fatal aparece una sola vez")
+check(len(dup["lines"]) == len(set(dup["lines"])), "no hay líneas duplicadas en el resumen")
+
+print("Diagnóstico UNIFICADO: no se atribuye el campo sin traza")
+check("pendientes de identificar" in game.UTF8_DEFERRED_MSG, "el mensaje dice que el campo/origen están pendientes")
+check("XamContent" not in game.UTF8_DEFERRED_MSG and "contenido" not in game.UTF8_DEFERRED_MSG,
+      "no atribuye el fallo a una operación concreta (ni XamContent ni TU) sin la pila")
+
 print("Un cierre LIMPIO sigue siendo éxito (no se rompe lo que funciona)")
 clean = game.analyze_runtime_log(write("[info] runtime initialized\nWindow closing, shutting down\n"), 0)
 check(game.attempt_result(clean)["ok"] is True, "el juego que se cierra solo sin error cuenta como terminado bien")

@@ -133,12 +133,14 @@ ISSUES = [
                  "«[FATAL] Dispatch thread: deferred completion threw 'Invalid UTF-8'» (o 'Not enough space': "
                  "el texto de la excepción cambia). A veces Windows ni llega a escribir la línea [FATAL] y solo "
                  "queda el cierre por 0xC0000409. Si lo vuelves a abrir, normalmente arranca bien.",
-        causa="Es una CARRERA dentro del runtime de rexglue: una tarea asíncrona (completion de XOVERLAPPED del "
-              "sistema —UI o enumeración de contenido—) decodifica una cadena con un conversor UTF-8 que lanza "
-              "excepción, y el despachador (dispatcher.cpp) convierte cualquier excepción ahí en un cierre "
-              "fatal. Pasa solo en parte de los arranques, por eso es intermitente. El arreglo de fondo (que el "
-              "despachador tolere esa excepción o use conversión UTF-8 sin fallo) está en el runtime "
-              "PRECOMPILADO del SDK, así que ReForge no puede parchearlo por proyecto; recompilar no lo cambia.",
+        causa="Una operación DIFERIDA del runtime (una completion de XOVERLAPPED en el hilo del despachador) lanza "
+              "una excepción «Invalid UTF-8» al validar/convertir una cadena, y el despachador (dispatcher.cpp) "
+              "convierte cualquier excepción ahí en un cierre fatal, perdiendo el nombre de la operación. El "
+              "CAMPO y el ORIGEN del dato aún no están identificados: hace falta la pila del lanzamiento, porque "
+              "el evento visible anterior en el log suele estar en otro hilo y no prueba quién encoló la tarea. "
+              "Puede salir en todos los arranques (reproducible, p. ej. con una actualización/TU aplicada) o solo "
+              "en algunos. El arreglo de fondo está en el runtime PRECOMPILADO del SDK, así que ReForge no lo "
+              "parchea por proyecto; recompilar no lo cambia.",
         # Cualquier excepción del despachador en una completion diferida es este mismo bug: el texto cambia
         # («Invalid UTF-8», «Not enough space»…) pero el sitio del runtime es el mismo.
         match=lambda log, info: ("deferred completion threw" in (log or ""))

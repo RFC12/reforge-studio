@@ -2,6 +2,24 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.55.0 — Asura: diagnóstico del cierre UTF-8 unificado y honesto (sin atribuir el campo sin la pila)
+
+- **Un solo mensaje para el cierre UTF-8** (`game.UTF8_DEFERRED_MSG`): «Excepción `Invalid UTF-8` en una
+  operación diferida. Campo y origen pendientes de identificar.» Se elimina la atribución inconsistente (antes la
+  ruta temprana decía «XamContent/nombre de contenido» y otras «nombres de la TU») — eran suposiciones: leído el
+  log, el evento visible antes del fatal **cambia** entre ejecuciones (121 → `XamContentCreateEnumerator`;
+  123/124/125 → `XNetLogonGetTitleID`) y siempre cae en un **hilo distinto** del que lanza, así que no identifica
+  la operación. Mismo mensaje en el Taller, el seguimiento tardío y el diagnóstico de reintentos.
+- **La línea `[FATAL]` se muestra una sola vez** por sesión: casa con `RUNTIME_FATAL_RE` y con `RUNTIME_BAD_RE`
+  (`[critical]`), así que se deduplica en `analyze_runtime_log`. Los tres intentos siguen contando como **tres
+  fallos independientes**.
+- **Investigación con los logs reales (123/124/125, vía puente):** los tres llegan al **menú del título a 30 FPS**
+  y cierran igual; verificado que `live_offline` ya está en `true` (Live simulado OFF) y aun así ocurre, de modo
+  que el logon de Live **queda descartado** como causa. El origen real necesita la **pila del lanzamiento**.
+- **Guía** (`docs/ASURA_PILOT.md`): secuencia común de los tres intentos, lo descartado, y la captura
+  **first-chance (cdb)** de un solo intento (sin recompilar, sin supervisor, conservando TU y guardados) con el
+  ZIP a devolver. Regresión ampliada en `tests/test_crash_signatures.py` (dedup + mensaje unificado). Suite 69/69.
+
 ## 1.54.0 — Asura: fin del falso éxito (fatal tardío) y avance de la causa del cierre UTF-8
 
 - **Fin del falso éxito del Taller.** Si el juego sigue abierto pasada la ventana de vigilancia (p. ej. a los
