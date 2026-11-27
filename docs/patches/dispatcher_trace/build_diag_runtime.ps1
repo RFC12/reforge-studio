@@ -15,12 +15,31 @@ $run   = Join-Path $diag 'run'                           # carpeta de ejecucion 
 New-Item -ItemType Directory -Force -Path $diag | Out-Null
 function Need($c,$m){ if(-not $c){ Write-Error "FALTA: $m"; exit 2 } }
 
+# Resuelve una herramienta por rutas explicitas (como las del CMakeCache original) y, si no, por PATH.
+function ResolveTool([string]$name,[string[]]$cands){
+  foreach($c in $cands){ if($c -and (Test-Path $c)){ return (Resolve-Path $c).Path } }
+  $g = Get-Command $name -ErrorAction SilentlyContinue
+  if($g){ return $g.Source }
+  return $null
+}
 Write-Host "== Requisitos (se comprueban ANTES de arrancar) =="
 Need (Test-Path (Join-Path $sdk 'src\kernel\dispatcher.cpp')) "SDK en $sdk"
 Need (Test-Path (Join-Path $proj 'build\asuraswrath.exe')) "asuraswrath.exe compilado"
-Need (Get-Command cmake -ErrorAction SilentlyContinue) "cmake en PATH"
-Need (Get-Command ninja -ErrorAction SilentlyContinue) "ninja en PATH"
+# cmake/ninja NO suelen estar en el PATH: vienen con Visual Studio. Se resuelven por ruta explicita.
+$cmakeExe = ResolveTool 'cmake' @(
+  'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe',
+  'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe',
+  'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe',
+  'C:\Program Files\CMake\bin\cmake.exe')
+$ninjaExe = ResolveTool 'ninja' @(
+  'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe',
+  'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe',
+  'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe')
+Need $cmakeExe "cmake (ni en rutas de Visual Studio/CMake conocidas ni en PATH)"
+Need $ninjaExe "ninja (ni en rutas de Visual Studio conocidas ni en PATH)"
 Need (Test-Path (Join-Path $clang 'clang++.exe')) "clang en $clang"
+Write-Host "  cmake: $cmakeExe"
+Write-Host "  ninja: $ninjaExe"
 # Revision del SDK (sin depender de git en PATH: usamos el .git/HEAD y packed-refs si estan)
 $rev = '?'; $head = Join-Path $sdk '.git\HEAD'
 if (Test-Path $head) { $rev = (Get-Content $head -Raw).Trim() }
@@ -138,11 +157,13 @@ Copy-Item $disp (Join-Path $diag 'dispatcher.patched.cpp') -Force
 Write-Host "Parche OK."
 
 Write-Host "== 3) Configurar (directorio NUEVO) y compilar rexruntime (RelWithDebInfo, con simbolos) =="
-$env:PATH = "$clang;$env:PATH"
-& cmake -S $sdkc -B $build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DREXGLUE_ENABLE_FIDELITYFX=$fx `
+# clang y ninja al frente del PATH para que cmake los encuentre durante la compilacion.
+$env:PATH = "$clang;$(Split-Path $ninjaExe);$env:PATH"
+& $cmakeExe -S $sdkc -B $build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DREXGLUE_ENABLE_FIDELITYFX=$fx `
+        -DCMAKE_MAKE_PROGRAM="$ninjaExe" `
         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ 2>&1 | Tee-Object (Join-Path $diag 'cmake_configure.txt')
 if ($LASTEXITCODE -ne 0) { Write-Host "CONFIGURE FALLO ($LASTEXITCODE). Se entregan los logs, NO se lanza el juego."; Compress-Archive -Path (Join-Path $diag '*') -DestinationPath "$diag.zip" -Force; Write-Host "Devuelve: $diag.zip"; exit 4 }
-& cmake --build $build --target rexruntime 2>&1 | Tee-Object (Join-Path $diag 'cmake_build.txt')
+& $cmakeExe --build $build --target rexruntime 2>&1 | Tee-Object (Join-Path $diag 'cmake_build.txt')
 if ($LASTEXITCODE -ne 0) { Write-Host "BUILD FALLO ($LASTEXITCODE). Se entregan los logs, NO se lanza el juego."; Compress-Archive -Path (Join-Path $diag '*') -DestinationPath "$diag.zip" -Force; Write-Host "Devuelve: $diag.zip"; exit 5 }
 $newdll = Get-ChildItem $build -Recurse -Filter rexruntime.dll | Sort-Object LastWriteTime -desc | Select-Object -First 1
 $newpdb = Get-ChildItem $build -Recurse -Filter rexruntime.pdb -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -desc | Select-Object -First 1
