@@ -210,8 +210,9 @@ if ($cfgExit -ne 0) { $ErrorActionPreference = $prevEAP; Write-Host "CONFIGURE F
 $bldExit = $LASTEXITCODE
 $ErrorActionPreference = $prevEAP
 if ($bldExit -ne 0) { Write-Host "BUILD FALLO ($bldExit). Se entregan los logs, NO se lanza el juego."; Compress-Archive -Path (Join-Path $diag '*') -DestinationPath "$diag.zip" -Force; Write-Host "Devuelve: $diag.zip"; exit 5 }
-$newdll = Get-ChildItem $build -Recurse -Filter rexruntime.dll | Sort-Object LastWriteTime -desc | Select-Object -First 1
-$newpdb = Get-ChildItem $build -Recurse -Filter rexruntime.pdb -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -desc | Select-Object -First 1
+# RelWithDebInfo anade el sufijo 'rd' al nombre (rexruntimerd.dll), por eso el glob con comodin.
+$newdll = Get-ChildItem $build -Recurse -Filter 'rexruntime*.dll' | Sort-Object LastWriteTime -desc | Select-Object -First 1
+$newpdb = Get-ChildItem $build -Recurse -Filter 'rexruntime*.pdb' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -desc | Select-Object -First 1
 Need $newdll "no se genero rexruntime.dll (ver cmake_build.txt)"
 Need $newpdb "no se generaron simbolos rexruntime.pdb (hace falta RelWithDebInfo)"
 
