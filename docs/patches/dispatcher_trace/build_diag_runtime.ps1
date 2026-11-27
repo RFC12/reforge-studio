@@ -192,6 +192,15 @@ foreach($m in @('rf_deferred_counter{1};','[deferred] enqueue id=','rf_active_de
   if(([regex]::Matches($s,[regex]::Escape($m))).Count -ne 1){ throw "marca '$m' no quedo exactamente 1 vez" } }
 Set-Content $disp $s -Encoding UTF8 -NoNewline
 Copy-Item $disp (Join-Path $diag 'kernel_state.patched.cpp') -Force
+# Quitar el sufijo 'rd' de RelWithDebInfo: si no, el runtime sale como rexruntimerd.dll y el plugin de GPU
+# importa rexruntimerd.dll, pero el .exe del juego importa rexruntime.dll (sin sufijo) y no casan. Sin sufijo,
+# runtime, plugin y exe usan el mismo nombre rexruntime.dll, como el build original.
+$cmTop = Join-Path $sdkc 'CMakeLists.txt'
+$cmTxt = (Get-Content $cmTop -Raw)
+$cmNew = $cmTxt.Replace('set(CMAKE_RELWITHDEBINFO_POSTFIX rd)', 'set(CMAKE_RELWITHDEBINFO_POSTFIX "")')
+if ($cmNew -eq $cmTxt) { Write-Error "FALTA: no se pudo quitar CMAKE_RELWITHDEBINFO_POSTFIX (ancla no encontrada)"; exit 2 }
+Set-Content $cmTop $cmNew -Encoding UTF8 -NoNewline
+Write-Host "Sufijo RelWithDebInfo quitado (DLLs sin 'rd')."
 Write-Host "Parche OK."
 
 Write-Host "== 3) Configurar (directorio NUEVO) y compilar rexruntime (RelWithDebInfo, con simbolos) =="
@@ -206,20 +215,25 @@ $prevEAP = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ 2>&1 | Tee-Object (Join-Path $diag 'cmake_configure.txt')
 $cfgExit = $LASTEXITCODE
 if ($cfgExit -ne 0) { $ErrorActionPreference = $prevEAP; Write-Host "CONFIGURE FALLO ($cfgExit). Se entregan los logs, NO se lanza el juego."; Compress-Archive -Path (Join-Path $diag '*') -DestinationPath "$diag.zip" -Force; Write-Host "Devuelve: $diag.zip"; exit 4 }
-& $cmakeExe --build $build --target rexruntime 2>&1 | Tee-Object (Join-Path $diag 'cmake_build.txt')
+# El juego carga el plugin de GPU 'xenos' (rexgpu-xenos.dll), que importa el runtime; hay que compilarlo tambien y
+# ponerlo junto al runtime, o el juego no arranca y no se llega a la enumeracion de contenido (donde esta el cierre).
+& $cmakeExe --build $build --target rexruntime --target rexgpu-xenos 2>&1 | Tee-Object (Join-Path $diag 'cmake_build.txt')
 $bldExit = $LASTEXITCODE
 $ErrorActionPreference = $prevEAP
 if ($bldExit -ne 0) { Write-Host "BUILD FALLO ($bldExit). Se entregan los logs, NO se lanza el juego."; Compress-Archive -Path (Join-Path $diag '*') -DestinationPath "$diag.zip" -Force; Write-Host "Devuelve: $diag.zip"; exit 5 }
-# RelWithDebInfo anade el sufijo 'rd' al nombre (rexruntimerd.dll), por eso el glob con comodin.
-$newdll = Get-ChildItem $build -Recurse -Filter 'rexruntime*.dll' | Sort-Object LastWriteTime -desc | Select-Object -First 1
-$newpdb = Get-ChildItem $build -Recurse -Filter 'rexruntime*.pdb' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -desc | Select-Object -First 1
+# Los binarios salen en out\<plataforma> (CMAKE_RUNTIME_OUTPUT_DIRECTORY), no dentro del build dir.
+$outdir = Join-Path $sdkc 'out\win-amd64'
+$newdll = Get-ChildItem $outdir -Filter 'rexruntime*.dll' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -desc | Select-Object -First 1
+$newpdb = Get-ChildItem $outdir -Filter 'rexruntime*.pdb' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -desc | Select-Object -First 1
 Need $newdll "no se genero rexruntime.dll (ver cmake_build.txt)"
 Need $newpdb "no se generaron simbolos rexruntime.pdb (hace falta RelWithDebInfo)"
 
 Write-Host "== 4) Ejecutar UN intento en carpeta aparte, con logs VACIOS (sin supervisor ni reintentos) =="
 Copy-Item (Join-Path $proj 'build') $run -Recurse -Force
-Copy-Item $newdll.FullName (Join-Path $run 'rexruntime.dll') -Force
-Copy-Item $newpdb.FullName (Join-Path $run 'rexruntime.pdb') -Force
+# Nuestro runtime + plugin de GPU + Tracy (todos sin sufijo, mismo commit) sobrescriben los del juego en la carpeta
+# de ejecucion, para que TODO resuelva a nuestro build instrumentado (mismas exports, compatibles entre si).
+Get-ChildItem $outdir -Filter '*.dll' | ForEach-Object { Copy-Item $_.FullName (Join-Path $run $_.Name) -Force }
+Get-ChildItem $outdir -Filter '*.pdb' | ForEach-Object { Copy-Item $_.FullName (Join-Path $run $_.Name) -Force }
 Get-FileHash (Join-Path $run 'rexruntime.dll') -Algorithm SHA256 | Tee-Object (Join-Path $diag 'runtime_dll.sha256.txt')
 $rlogs = Join-Path $run 'logs'; if (Test-Path $rlogs) { Remove-Item (Join-Path $rlogs '*') -Force -ErrorAction SilentlyContinue } else { New-Item -ItemType Directory -Force -Path $rlogs | Out-Null }
 $exe = Join-Path $run 'asuraswrath.exe'
