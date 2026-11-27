@@ -1,10 +1,12 @@
 # Parche de traza del despachador — runtime de diagnóstico
 
-Objetivo: que `rexruntime.dll` diga **quién encoló** la tarea diferida que lanza `Invalid UTF-8` y **qué id** tenía
-la tarea activa en el fatal, para distinguir dos tareas que reutilizan la misma dirección `overlapped`.
+Objetivo: que `rexruntime.dll` diga **quién encoló** la tarea diferida que lanza `Invalid UTF-8`, **en qué fase**
+falló (`pre`/`work`/`complete`/`post`) y **qué id** tenía la tarea activa, para distinguir dos tareas que
+reutilizan la misma dirección `overlapped`.
 
 Se instrumenta **solo** `src/kernel/dispatcher.cpp` (sin cambiar firmas de interfaz). Las líneas salen a nivel
-**WARN** para que aparezcan aunque el log no esté en modo debug. ReForge las lee con `reforge/deferred_trace.py`.
+**WARN** (`REXSYS_WARN`, verificado que existe en `include/rex/logging/log_category.h`) para que aparezcan aunque
+el log no esté en modo debug. ReForge las lee con `reforge/deferred_trace.py`.
 
 ## Qué añade al log
 
@@ -12,114 +14,61 @@ Se instrumenta **solo** `src/kernel/dispatcher.cpp` (sin cambiar firmas de inter
 [warning] [deferred] enqueue id=<n> ra=<hex> thread=<hex> overlapped=<hex>   ← al encolar (ra = quién la encoló)
 [warning] [deferred] run id=<n> overlapped=<hex>                             ← al empezar a ejecutarla
 [warning] [deferred] done id=<n> result=<hex>                               ← si terminó bien
-[critical] [FATAL] Dispatch thread: deferred completion (task <n> ra=<hex>) threw '<msg>'   ← la que falló
+[critical] [FATAL] Dispatch thread: deferred completion (task <n> phase=<fase> ra=<hex>) threw '<msg>'
 ```
 
 `ra` es la dirección de retorno del llamador de `CompleteDeferred` (`__builtin_return_address`, Clang). Se
-simboliza restando la base de `rexruntime.dll` (que el ZIP de diagnóstico incluye) y buscando el RVA en el `.map`
-o con `llvm-symbolizer`/`cdb`.
+simboliza restando la base de `rexruntime.dll` (que el ZIP incluye en `modules.txt`) y buscando el RVA con el
+`.pdb`/`.map` o `llvm-symbolizer`.
 
-## Los tres cambios en `src/kernel/dispatcher.cpp`
+## El id activo se mantiene durante pre → work → complete → post
 
-### 1. Estado de traza (añadir una vez, cerca de la cabecera del archivo, tras los `#include`)
+El lambda encolado fija `rf_active_deferred = {id, ra, overlapped, "pre"}` al entrar y actualiza `phase` antes de
+cada etapa (`"work"` antes de `work()`, `"complete"` tras ella, `"post"` dentro de `if (post)`), y se limpia al
+final. Así, **una excepción en `post` deja el fatal con el id correcto y `phase=post`** (y lo mismo para `work`).
 
-```cpp
-#include <cstdint>
-namespace {
-struct RfDeferredTag { uint64_t id = 0; const void* ra = nullptr; uint32_t overlapped = 0; };
-thread_local RfDeferredTag rf_active_deferred{};
-thread_local const void* rf_enqueue_ra = nullptr;
-std::atomic<uint64_t> rf_deferred_counter{1};
-}  // namespace
-#define RF_RETURN_ADDRESS() __builtin_return_address(0)
-```
+## Los 4 cambios en `src/kernel/dispatcher.cpp` (anclas únicas, verificadas x1)
 
-### 2. En `CompleteDeferred` (la sobrecarga que ENCOLA, la de `MoveOnlyFunction<CompletionOptions()> work`)
+1. **Estado de traza** antes de `void Dispatcher::CompleteDeferred(u32 overlapped, rex::MoveOnlyFunction<void()> work,`:
+   ```cpp
+   #include <cstdint>
+   namespace {
+   struct RfDeferredTag { uint64_t id = 0; const void* ra = nullptr; uint32_t overlapped = 0; const char* phase = "idle"; };
+   thread_local RfDeferredTag rf_active_deferred{};
+   thread_local const void* rf_enqueue_ra = nullptr;
+   std::atomic<uint64_t> rf_deferred_counter{1};
+   }  // namespace
+   #define RF_RETURN_ADDRESS() __builtin_return_address(0)
+   ```
+2. **ra real en la primera sobrecarga** (la de `void()` work): `rf_enqueue_ra = RF_RETURN_ADDRESS();` justo tras
+   `rex::MoveOnlyFunction<void()> post) {` y antes de `CompleteDeferred(`.
+3. **Lambda instrumentado**: se sustituye el bloque `dispatch_queue_.push_back(...)` completo por la versión que
+   calcula `rf_task_id`/`rf_ra`, registra `enqueue`, captura `rf_task_id, rf_ra` en el lambda, fija
+   `rf_active_deferred` con la fase, registra `run`/`done` y limpia al final.
+4. **Fatal con id y fase**: se sustituye
+   `REXSYS_FATAL("Dispatch thread: deferred completion threw '{}'", e.what());` por la versión con
+   `(task {} phase={} ra={:016X})`.
 
-**Antes:**
-```cpp
-  REXSYS_DEBUG("CompleteDeferred: queuing for overlapped {:08X}", overlapped);
-  auto ptr = StateOf(runtime_).GetAddressSpace()->TranslateVirtual(overlapped);
-  XOverlappedSetResult(ptr, X_ERROR_IO_PENDING);
-  XOverlappedSetContext(ptr, KernelThread::GetCurrentThreadHandle());
-  std::lock_guard lock(dispatch_mutex_);
-  dispatch_queue_.push_back([this, work = std::move(work), overlapped, pre = std::move(pre),
-                             post = std::move(post)]() mutable {
-    REXSYS_DEBUG("Deferred overlapped {:08X}: running pre", overlapped);
-```
-**Después:**
-```cpp
-  const uint64_t rf_task_id = rf_deferred_counter.fetch_add(1);
-  const void* rf_ra = rf_enqueue_ra ? rf_enqueue_ra : RF_RETURN_ADDRESS();
-  rf_enqueue_ra = nullptr;
-  REXSYS_WARN("[deferred] enqueue id={} ra={:016X} thread={:08X} overlapped={:08X}", rf_task_id,
-              reinterpret_cast<uintptr_t>(rf_ra),
-              static_cast<uint32_t>(reinterpret_cast<uintptr_t>(KernelThread::GetCurrentThreadHandle())),
-              overlapped);
-  REXSYS_DEBUG("CompleteDeferred: queuing for overlapped {:08X}", overlapped);
-  auto ptr = StateOf(runtime_).GetAddressSpace()->TranslateVirtual(overlapped);
-  XOverlappedSetResult(ptr, X_ERROR_IO_PENDING);
-  XOverlappedSetContext(ptr, KernelThread::GetCurrentThreadHandle());
-  std::lock_guard lock(dispatch_mutex_);
-  dispatch_queue_.push_back([this, work = std::move(work), overlapped, pre = std::move(pre),
-                             post = std::move(post), rf_task_id, rf_ra]() mutable {
-    rf_active_deferred = RfDeferredTag{rf_task_id, rf_ra, overlapped};
-    REXSYS_WARN("[deferred] run id={} overlapped={:08X}", rf_task_id, overlapped);
-    REXSYS_DEBUG("Deferred overlapped {:08X}: running pre", overlapped);
-```
+El texto exacto de cada cambio está en `build_diag_runtime.ps1`, que los aplica **verificando que cada ancla
+aparece exactamente una vez** (y aborta si no).
 
-Y tras `CompleteOverlappedEx(overlapped, options.result, ExtendedError(options), Length(options));` (dentro del
-mismo lambda):
+## Qué se probó realmente (en Windows, por Claude, vía puente)
 
-**Antes:**
-```cpp
-    CompleteOverlappedEx(overlapped, options.result, ExtendedError(options), Length(options));
-    if (post) {
-```
-**Después:**
-```cpp
-    CompleteOverlappedEx(overlapped, options.result, ExtendedError(options), Length(options));
-    REXSYS_WARN("[deferred] done id={} result={:08X}", rf_task_id, options.result);
-    rf_active_deferred = RfDeferredTag{};
-    if (post) {
-```
+- **Aplicación del parche** sobre tu `dispatcher.cpp` real: los 4 cambios se aplican **1 vez cada uno** y las 5
+  marcas quedan exactamente una vez (`patch_apply`). Anclas confirmadas únicas; `REXSYS_WARN` existe; la variante
+  `-fsr` = `REXGLUE_ENABLE_FIDELITYFX=ON`.
+- **Mecanismo C++** (`dispatcher_trace_selftest.cpp`, compilado con tu `clang++` y ejecutado): **5/5**. Dos tareas
+  en la misma dirección `41F0FF50` (una termina, otra lanza en `post`) → el fatal culpa a la **#2** con
+  `phase=post`; una excepción en `work` → `phase=work`. Esta es la **prueba del despachador C++ instrumentado**.
+- **ZIP por lista explícita**: incluye solo los 10 archivos de diagnóstico y **excluye** juego, DLL, TU, partidas
+  y `run\`.
 
-### 3. En la primera sobrecarga de `CompleteDeferred` (la de `MoveOnlyFunction<void()> work`), marca el ra real
+**Lo que NO se ha probado en tu equipo** (y corre al ejecutar el script): la **compilación completa** de
+`rexruntime.dll` y el **arranque** del juego. Por eso el script comprueba el código de salida de cada `cmake` y,
+si falla, entrega los logs **sin lanzar** el juego.
 
-**Antes:**
-```cpp
-                                  rex::MoveOnlyFunction<void()> post) {
-  CompleteDeferred(
-      overlapped,
-```
-**Después:**
-```cpp
-                                  rex::MoveOnlyFunction<void()> post) {
-  rf_enqueue_ra = RF_RETURN_ADDRESS();
-  CompleteDeferred(
-      overlapped,
-```
+## Prueba del parser en ReForge
 
-### 4. En el `catch` del hilo despachador (`Dispatcher::Start`), nombra la tarea activa
-
-**Antes:**
-```cpp
-      } catch (const std::exception& e) {
-        REXSYS_FATAL("Dispatch thread: deferred completion threw '{}'", e.what());
-```
-**Después:**
-```cpp
-      } catch (const std::exception& e) {
-        REXSYS_FATAL("Dispatch thread: deferred completion (task {} ra={:016X}) threw '{}'",
-                     rf_active_deferred.id, reinterpret_cast<uintptr_t>(rf_active_deferred.ra), e.what());
-```
-
-## Autoprueba del mecanismo (dos tareas, misma dirección)
-
-La atribución (una tarea termina en `41F0FF50`, otra lanza en la misma dirección → se culpa a la segunda) está
-**probada en ReForge** con `tests/test_deferred_trace.py` sobre una traza sintética idéntica a la del 121. En la
-DLL, el mismo patrón produce `enqueue id=1 … done id=1` y `enqueue id=2 … FATAL task=2`, y ReForge lo atribuye a
-la #2. (Si quieres la prueba dentro del SDK, añade un test que encole dos tareas con el mismo `overlapped`, una
-que retorne y otra que `throw std::runtime_error("x")`, y comprueba que el fatal lleva `task=2`.)
-
-Construcción y captura: `build_diag_runtime.ps1` (en esta carpeta).
+`tests/test_deferred_trace.py` (en el repo) reproduce la traza y comprueba la atribución (incluida la fase y el
+descarte de la tarea que terminó bien). ReForge la muestra en el Taller cuando el cierre viene de un runtime
+instrumentado.

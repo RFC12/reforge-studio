@@ -22,7 +22,8 @@ _ENQ = re.compile(r"\[deferred\]\s*enqueue\s+id=(\d+)\s+ra=(0x[0-9A-Fa-f]+|[0-9A
                   r"thread=(0x[0-9A-Fa-f]+|[0-9A-Fa-f]+)\s+overlapped=([0-9A-Fa-f]+)")
 _RUN = re.compile(r"\[deferred\]\s*run\s+id=(\d+)\s+overlapped=([0-9A-Fa-f]+)")
 _DONE = re.compile(r"\[deferred\]\s*done\s+id=(\d+)\s+result=([0-9A-Fa-f]+)")
-_FATAL = re.compile(r"deferred completion \(task (\d+)\s+ra=(0x[0-9A-Fa-f]+|[0-9A-Fa-f]+)\) threw '([^']*)'")
+_FATAL = re.compile(r"deferred completion \(task (\d+)(?:\s+phase=(\w+))?\s+ra=(0x[0-9A-Fa-f]+|[0-9A-Fa-f]+)\) "
+                    r"threw '([^']*)'")
 
 
 def is_instrumented(log_text):
@@ -50,6 +51,7 @@ def attribute(log_text):
         return None
     m = fatals[-1]
     task_id = int(m.group(1))
+    phase = m.group(2) or ""
     enq = enqueues(log_text)
     info = enq.get(task_id)
     overlapped = info["overlapped"] if info else None
@@ -61,9 +63,10 @@ def attribute(log_text):
                 same.append(i)
     return {
         "id": task_id,
-        "ra": m.group(2),
+        "phase": phase,            # pre | work | complete | post — dónde lanzó
+        "ra": m.group(3),
         "overlapped": overlapped,
-        "message": m.group(3),
+        "message": m.group(4),
         "enqueue": info,
         "completed_same_overlapped": sorted(same),
     }
@@ -74,9 +77,11 @@ def summary(log_text):
     a = attribute(log_text)
     if not a:
         return ""
-    base = (f"Tarea diferida #{a['id']} (encolada desde ra={a['ra']}"
+    base = (f"Tarea diferida #{a['id']}"
+            + (f" (falló en fase «{a['phase']}»)" if a.get("phase") else "")
+            + f" encolada desde ra={a['ra']}"
             + (f", overlapped {a['overlapped']}" if a['overlapped'] else "")
-            + f") lanzó «{a['message']}».")
+            + f" lanzó «{a['message']}».")
     if a["completed_same_overlapped"]:
         base += (f" Otra(s) tarea(s) {a['completed_same_overlapped']} usaron esa misma dirección y terminaron "
                  "bien: no son la causa.")

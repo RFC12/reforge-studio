@@ -23,7 +23,7 @@ LOG = """\
 [00:00:00.003] [warning] [sys] [t200] [deferred] done id=1 result=00000000
 [00:00:00.060] [warning] [sys] [t100] [deferred] enqueue id=2 ra=0x7ffab0009abc thread=0x1A2B overlapped=41F0FF50
 [00:00:00.061] [warning] [sys] [t200] [deferred] run id=2 overlapped=41F0FF50
-[00:00:00.160] [critical] [core] [t200] [FATAL] Dispatch thread: deferred completion (task 2 ra=0x7ffab0009abc) threw 'Invalid UTF-8'
+[00:00:00.160] [critical] [core] [t200] [FATAL] Dispatch thread: deferred completion (task 2 phase=post ra=0x7ffab0009abc) threw 'Invalid UTF-8'
 """
 
 print("Detecta que el log viene de un runtime instrumentado")
@@ -33,6 +33,7 @@ print("Atribuye el fatal a la tarea correcta aunque comparta la dirección overl
 a = dt.attribute(LOG)
 check(a is not None and a["id"] == 2, "la tarea que falló es la #2, no la #1 que terminó bien")
 check(a["ra"] == "0x7ffab0009abc", "da la dirección de retorno del encolador de la #2")
+check(a["phase"] == "post", "registra la FASE en que lanzó (post)")
 check(a["overlapped"] == "41F0FF50", "y la dirección overlapped reutilizada")
 check(a["completed_same_overlapped"] == [1], "identifica que la #1 usó esa misma dirección y terminó bien")
 check(a["enqueue"] and a["enqueue"]["ra"] == "0x7ffab0009abc", "enlaza el fatal con su línea de encolado")
@@ -40,7 +41,13 @@ check(a["message"] == "Invalid UTF-8", "conserva el texto de la excepción")
 
 print("La línea de resumen explica la atribución")
 s = dt.summary(LOG)
-check("#2" in s and "0x7ffab0009abc" in s and "no son la causa" in s, "el resumen nombra la tarea y descarta la #1")
+check("#2" in s and "0x7ffab0009abc" in s and "no son la causa" in s and "post" in s,
+      "el resumen nombra la tarea, la fase y descarta la #1")
+
+print("Compatibilidad: también lee el fatal SIN fase (parche anterior)")
+nofase = LOG.replace("phase=post ", "")
+b = dt.attribute(nofase)
+check(b is not None and b["id"] == 2 and b["phase"] == "", "sigue atribuyendo aunque falte la fase")
 
 print("Sin instrumentar o sin fatal, no inventa nada")
 check(dt.attribute("[info] runtime initialized\n") is None, "log normal → sin atribución")

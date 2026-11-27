@@ -2,6 +2,24 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.57.0 — Asura: runtime de diagnóstico corregido y PROBADO en Windows (fases + atribución por id)
+
+- **Script de compilación corregido** (`docs/patches/dispatcher_trace/build_diag_runtime.ps1`): se arregla el
+  `-replace` con tres argumentos (inválido en PowerShell) usando `.Replace()` con **verificación de que cada
+  ancla aparece exactamente una vez** (y aborta si no). Ya no depende de `git` en PATH. Copia **aislada** del SDK
+  (robocopy sin `out\`/`.git\`), **directorio de compilación nuevo**, `-DREXGLUE_ENABLE_FIDELITYFX=ON` (la
+  variante **-fsr**) y `RelWithDebInfo` (símbolos). **Comprueba el código de salida de cada `cmake`** y, si falla,
+  entrega los logs **sin lanzar** el juego. Sesión con **carpeta de logs vacía**; **ZIP por lista explícita** que
+  excluye juego, DLL, TU, partidas y `run\`, e imprime su contenido y tamaño antes de compartirlo.
+- **Fases en la traza:** el id de la tarea activa se mantiene durante `pre/work/complete/post` y el `[FATAL]`
+  incluye `phase=`. Una excepción en `post` conserva el id correcto y `phase=post`.
+- **Probado en Windows (por el puente):** aplicación del parche sobre el `dispatcher.cpp` real (4 cambios, 1 vez
+  cada uno; `REXSYS_WARN` existe; anclas únicas); **prueba C++ del despachador instrumentado** compilada con tu
+  `clang++` y ejecutada (**5/5**: dos tareas en la misma dirección → se culpa a la que lanza, con su fase); y la
+  lógica del ZIP (10 archivos, sin juego/DLL/TU/`run\`). Queda por probar en tu equipo la compilación completa de
+  `rexruntime.dll` y el arranque.
+- **Parser** (`reforge/deferred_trace.py`) lee la `phase`; `tests/test_deferred_trace.py` lo cubre. Suite 70/70.
+
 ## 1.56.0 — Asura: runtime de diagnóstico instrumentado para identificar quién encola la tarea diferida
 
 - **Parche de traza del despachador** (`docs/patches/dispatcher_trace/`): instrumenta `src/kernel/dispatcher.cpp`
