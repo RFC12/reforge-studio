@@ -88,6 +88,10 @@ foreach($path in ($subs.Keys | Sort-Object)){
     Need $okSub "no se pudo extraer $path @$($want.Substring(0,8)) offline (necesitaria red)"
     Write-Host ("  {0} <- object store (commit {1})" -f $path, $want.Substring(0,8))
   }
+  # El SDK valida submodulos con 'if(NOT EXISTS <sub>/.git)' (thirdparty/CMakeLists.txt). La copia de working
+  # dir ya trae ese archivo; para la extraida del object store lo creamos (solo centinela, no es un repo).
+  $dotgit = Join-Path $destSub '.git'
+  if(-not (Test-Path $dotgit)){ Set-Content $dotgit "rf-diag offline (centinela, no es un repo git)" -Encoding ASCII }
 }
 $disp = Join-Path $sdkc 'src\system\kernel_state.cpp'
 Need (Test-Path $disp) "no se reconstruyo src/system/kernel_state.cpp (0.10.1)"
@@ -196,7 +200,7 @@ $env:PATH = "$clang;$(Split-Path $ninjaExe);$env:PATH"
 # Mandamos SOLO por el codigo de salida: bajamos a 'Continue' durante las llamadas nativas y lo restauramos.
 $prevEAP = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
 & $cmakeExe -S $sdkc -B $build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DREXGLUE_ENABLE_FIDELITYFX=$fx `
-        -DCMAKE_MAKE_PROGRAM="$ninjaExe" `
+        -DREXGLUE_BUILD_TESTS=OFF -DCMAKE_MAKE_PROGRAM="$ninjaExe" `
         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ 2>&1 | Tee-Object (Join-Path $diag 'cmake_configure.txt')
 $cfgExit = $LASTEXITCODE
 if ($cfgExit -ne 0) { $ErrorActionPreference = $prevEAP; Write-Host "CONFIGURE FALLO ($cfgExit). Se entregan los logs, NO se lanza el juego."; Compress-Archive -Path (Join-Path $diag '*') -DestinationPath "$diag.zip" -Force; Write-Host "Devuelve: $diag.zip"; exit 4 }
