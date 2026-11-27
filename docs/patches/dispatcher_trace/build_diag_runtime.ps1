@@ -50,8 +50,11 @@ Need $gitExe "git (GitHub Desktop o Git for Windows)"
 $rev0101 = 'bd833a2a'
 Need ((& $gitExe -C $sdk cat-file -t $rev0101 2>&1) -eq 'commit') "el commit $rev0101 (v0.10.1) no esta en tu repo"
 "Instrumentando 0.10.1 ($rev0101); tu juego carga 0.10.0.24-dev.gbd833a2. Tu SDK esta en 0.11 y NO se toca." | Tee-Object (Join-Path $diag 'sdk_rev.txt')
-# En 0.10.1 la variante -fsr = REXGLUE_ENABLE_FIDELITYFX ON (la option existe en ese commit; confirmado).
-$fx = 'ON'
+# FidelityFX (-fsr) se baja por FetchContent (red) en configure y NO esta en objetos locales, asi que para
+# quedarnos OFFLINE lo dejamos OFF. Es irrelevante para este cierre: es GPU/upscaling (vive en rexgpu y en el
+# amd_fidelityfx_dx12.dll instalado, que no tocamos), y rexruntime ni siquiera lo enlaza. El kernel/XAM/UTF-8
+# (donde ocurre el fatal) es byte-identico con o sin FSR: misma rama de codigo del commit 0.10.1.
+$fx = 'OFF'
 
 Write-Host "== 1) Reconstruir el arbol 0.10.1 OFFLINE (superproyecto + submodulos desde objetos locales) =="
 New-Item -ItemType Directory -Force -Path $sdkc | Out-Null
