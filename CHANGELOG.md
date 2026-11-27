@@ -2,6 +2,27 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.54.0 — Asura: fin del falso éxito (fatal tardío) y avance de la causa del cierre UTF-8
+
+- **Fin del falso éxito del Taller.** Si el juego sigue abierto pasada la ventana de vigilancia (p. ej. a los
+  45 s), el resumen ya **no** dice «Proceso completado»: muestra **«▶ En ejecución · seguimiento activo»** y la
+  sesión queda atada a su PID. Si llega un `[FATAL]` más tarde (como el UTF-8 a los ~45 s del intento 121), se
+  actualiza **esa misma sesión como fallida**, conservando por separado el **caso**, el **primer error**, el
+  **código de salida** y si **intervino el supervisor**. (`runner.on_complete_text`, `WorkshopPage._completion_text`,
+  `post_session`.)
+- **Regresión independiente del juego** (`tests/test_session_tracking.py`): proceso que supera el umbral y falla
+  después, cierre limpio, y un segundo arranque con su propio log.
+- **Causa del cierre UTF-8 — avance con el log real.** Leído `asuraswrath_121.log`: el fatal es una *deferred
+  completion* de la **enumeración de contenido** (`XamContentCreateEnumerator`, 5 ítems), a los ~45 s. El log
+  pierde la operación porque `dispatcher.cpp` ejecuta un `fn()` sin nombre y solo guarda `e.what()`. La conversión
+  propia del SDK (`ToUTF16`/`DecodeUTF8`) ya es **tolerante** (U+FFFD), así que «Invalid UTF-8» viene de una
+  validación estricta de librería (toml++/utfcpp) al leer un archivo/campo del contenido. Verificado además que
+  el `default.xexp` aplicado (573 440 B, `918cdee9…`) es el XEX-patch **interno** del contenedor TU (626 688 B,
+  `43914d51…`), y que el proceso carga la variante **-fsr**.
+- **Diagnóstico sin recompilar** (`docs/ASURA_PILOT.md`): bloque PowerShell de **un solo intento** con captura
+  **first-chance** (cdb) que vuelca la pila y los bytes cuando se lanza la excepción, y arma un ZIP (sin juego, TU
+  ni guardados) a devolver. Suite **69/69**.
+
 ## 1.53.0 — Piloto de Asura's Wrath: hitos desde el runtime, dos vistas, y arreglo del cierre «Invalid UTF-8»
 
 - **Hitos sin falsos positivos, con intentos y evidencia** (`reforge/milestones.py`). `Vulkan initialization

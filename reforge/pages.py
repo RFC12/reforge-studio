@@ -298,6 +298,9 @@ class WorkshopPage(QWidget):
         super().__init__()
         self.win = win
         self.runner = PipelineRunner(self)
+        # Al terminar la vigilancia con el juego aún abierto, el resumen no debe decir «Proceso completado»
+        # (sería un falso éxito): el juego solo está EN EJECUCIÓN y se le sigue hasta que cierre.
+        self.runner.on_complete_text = self._completion_text
         self.current = None
         self._auto_name = True
         self._result = {}
@@ -1152,7 +1155,9 @@ class WorkshopPage(QWidget):
             res = game.launch_and_watch(cfg, exe, p.root, int(o.repair_watch_seconds), ctx, detect_hang=hang)
             self._watch_result = res
             if res["kind"] == "running":
-                ctx.log(f"✔ El juego sigue abierto tras {o.repair_watch_seconds} s: arrancó correctamente.", "ok")
+                ctx.log(f"▶ El juego sigue abierto tras {o.repair_watch_seconds} s. En ejecución · seguimiento "
+                        "activo (se le sigue hasta que cierre; si falla más tarde, se marca esta misma sesión "
+                        "como fallida).", "ok")
                 if res.get("path"):
                     ctx.log(f"Log del juego: {res['path']}", "dim")
                 return
@@ -1338,18 +1343,25 @@ class WorkshopPage(QWidget):
             self._utf8_retries = 0          # arrancó: la cadena de reintentos del cierre intermitente termina
             if self._sweep:
                 self._sweep_report(res)
-            self.status_lbl.setText("✔ El juego arrancó · vigilando mientras juegas")
+            self.status_lbl.setText("▶ En ejecución · seguimiento activo")
             self._session = (p, game.game_exe(p.root, p.name), res)
             self._session_timer.start()
             if self._repair_round:
                 self.log.write(f"★ Arranque reparado en {self._repair_round} ronda(s). "
                                f"Funciones declaradas: {len(game.declared_functions(p.root))}.", "ok")
-            self.win.notify("ReForge Studio", f"{p.name} arrancó y sigue abierto")
+            self.win.notify("ReForge Studio", f"{p.name} en ejecución · seguimiento activo")
             p.status = "Jugable"
             self.win.lib.upsert(p)
             self.project_changed.emit()
             return
         self._handle_crash(res, o)
+
+    def _completion_text(self, ok):
+        """Mensaje final del pipeline. Con el juego aún en ejecución, evita el falso «Proceso completado»."""
+        res = self._watch_result
+        if ok and res and res.get("kind") == "running":
+            return "▶ En ejecución · seguimiento activo"
+        return None
 
     def _poll_session(self):
         if not self._session or self.runner.running:
@@ -1408,8 +1420,19 @@ class WorkshopPage(QWidget):
             self._handle_crash(out, o)
             return
         if kind in ("crash", "guest_av", "fatal", "split"):
-            if kind in ("fatal", "split"):
-                self.log.write("El juego se cerró con un error:", "err")
+            # Falló DESPUÉS de arrancar (p. ej. el fatal UTF-8 al enumerar contenido ~45 s). Se actualiza esta
+            # misma sesión como FALLIDA, conservando por separado el caso, el primer error, el código de salida
+            # y si intervino el supervisor.
+            cls = game.attempt_result(out)
+            caso = game.CASE_LABEL.get(cls["case"], cls["case"])
+            self.log.write(f"✖ La sesión en curso FALLÓ: {caso} · código {out.get('exit_code')}.", "err")
+            if cls.get("first_error"):
+                self.log.write("   Primer error: " + cls["first_error"], "dim")
+            if out.get("killed"):
+                self.log.write("   El supervisor de ReForge cerró el proceso al ver [FATAL].", "dim")
+            if cls.get("cause") == "utf8_deferred":
+                self.log.write("   Causa: completion diferida de la enumeración de contenido (XamContent*) que "
+                               "convirtió el nombre de un contenido a UTF-8 estricto y no lo era.", "dim")
             for ln in out.get("lines", []):
                 self.log.write("   " + ln, "dim")
             self._handle_crash(out, o)          # explica y lanza el mantenimiento automático

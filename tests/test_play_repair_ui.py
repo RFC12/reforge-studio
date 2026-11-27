@@ -105,7 +105,8 @@ check(game.declared_functions(proj) >= {0x8263E990, 0x8264AA00, 0x8229A1A8},
       "declaró también la función que falló minutos después de arrancar")
 check(calls.count("codegen") == 3, "regeneró y recompiló una vez por función")
 check(ws._watch_result and ws._watch_result["kind"] == "running", "el juego terminó arrancando y sigue abierto")
-check("mientras jugabas" in text and "Reparación automática · ronda 3" in text and "arrancó correctamente" in text, "el Taller lo explica en el log")
+check("mientras jugabas" in text and "Reparación automática · ronda 3" in text
+      and "seguimiento activo" in text, "el Taller lo explica en el log")
 check(time.time() - t_start < 60, "no espera a que el proceso colgado termine solo")
 import subprocess  # noqa: E402
 hung = subprocess.run(["pgrep", "-f", exe], capture_output=True, text=True).stdout.split()

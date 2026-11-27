@@ -107,6 +107,9 @@ class PipelineRunner(QObject):
         self._buf = ""
         self._step_done = False
         self._t0 = self._step_t0 = 0.0
+        # Mensaje final opcional: callable(ok)->str|None. Sirve, p. ej., para que al terminar la vigilancia con
+        # el juego aún abierto el resumen diga «En ejecución · seguimiento activo» en vez de «Proceso completado».
+        self.on_complete_text = None
 
     # ---------------------------------------------------------------- API
     def start(self, steps, project_root=None):
@@ -264,7 +267,13 @@ class PipelineRunner(QObject):
         self.proc = None
         dt = time.time() - self._t0
         m, s = divmod(int(dt), 60)
-        self.log.emit(("★ Proceso completado" if ok else "Proceso detenido") + f" · {m} min {s} s",
-                      "ok" if ok else "warn")
+        override = None
+        try:
+            if self.on_complete_text is not None:
+                override = self.on_complete_text(ok)
+        except Exception:      # noqa: BLE001
+            override = None
+        base = override or ("★ Proceso completado" if ok else "Proceso detenido")
+        self.log.emit(base + f" · {m} min {s} s", "ok" if ok else "warn")
         self.progress.emit(1 if ok else 0, 1)
         self.finished.emit(ok)

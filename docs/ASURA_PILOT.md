@@ -163,6 +163,90 @@ preparar el renderer** o **después de presentar una imagen**, y preparo el parc
 presentación — nunca sustituyendo texto del juego a ciegas). **Prueba clave:** quita la TU y arranca; si deja de
 cerrarse, confirma que el disparador es un texto no-UTF-8 que entra con la TU.
 
+## Cierre UTF-8 al enumerar contenido — avance con tu log 121 (actualizado)
+
+Leí tu `build\logs\asuraswrath_121.log` completo (18 914 líneas). La secuencia exacta del fatal:
+
+```
+23:40:35.928 [krnl] XamContentCreateEnumerator: added 5 items to enumerator
+23:40:35.928 [sys]  CompleteOverlappedDeferredEx: queuing for overlapped 41F0FF50
+23:40:36.028 [sys]  Deferred overlapped 41F0FF50: completing with result 00000000   (1ª completion OK)
+23:40:36.060 [sys]  CompleteOverlappedDeferredEx: queuing for overlapped 41F0FF50   (se reencola)
+23:40:36.160 [sys]  Deferred overlapped 41F0FF50: running completion
+23:40:36.160 [critical] [FATAL] Dispatch thread: deferred completion threw 'Invalid UTF-8'
+```
+
+- **Operación (confirmada):** una *deferred completion* de la **enumeración de contenido** (`XamContentCreateEnumerator`,
+  5 ítems: TU/DLC/guardados del Title ID). Ocurrió **a los ~45 s**, ya pasada la ventana de vigilancia — por eso
+  el Taller había dicho «arrancó» (ver el arreglo del seguimiento abajo).
+- **Por qué el log pierde la operación:** `rexglue-sdk/src/kernel/dispatcher.cpp:331` saca un `fn()` sin nombre de
+  la cola y, al lanzar, hace `REXSYS_FATAL("…threw '{}'", e.what())`. Solo queda `e.what()` = «Invalid UTF-8».
+- **De dónde NO sale:** la conversión propia del SDK (`ToUTF16`/`DecodeUTF8` en `src/base/utf8.cpp` +
+  `utf8_codec.h`) ya es **tolerante** (sustituye el byte inválido por U+FFFD, **no** lanza). Tampoco hay uso
+  directo de `utf8::` en el SDK. Es decir, «Invalid UTF-8» viene de una **validación estricta de una librería**
+  (toml++/utfcpp, que sí lanzan ese texto) al **leer un archivo o campo** del contenido durante la enumeración.
+  Pinchar el campo exacto necesita la **pila del lanzamiento**, que el log no guarda.
+
+**¿Qué archivo seleccionó ReForge? (verificado con hashes en tu PC):**
+- Paquete TU adjunto: 626 688 bytes · SHA-256 `43914d51…`.
+- `default.xexp` que ReForge **extrajo y aplicó** (en `assets\` y `update\`): **573 440 bytes** ·
+  SHA-256 `918cdee90389f27dee0bfe1bdfd758bc52cc4148666dcae1e35a1c0297f2005c`. Es el XEX-patch **interno** del
+  contenedor TU, no el contenedor. (La discrepancia `0.0.0.6` del 117 vs `0.0.1.5` del 121 es del generador
+  —módulo cacheado vs 414 archivos regenerados— y queda para la traza del generador.)
+- **Binarios que carga el proceso:** `rexruntime.dll` (0.10.0.24), `rexgpu-xenos.dll`, `amd_fidelityfx_dx12.dll`
+  → variante **-fsr**.
+
+### Captura del campo exacto SIN recompilar (first-chance con cdb)
+
+Esto detiene la ejecución **cuando se lanza** la excepción C++ (antes de que el despachador la convierta en un
+fatal genérico) y vuelca la pila real. Necesita las *Debugging Tools for Windows* (cdb). Un solo intento, no toca
+guardados:
+
+```powershell
+# --- Captura first-chance de UN intento (no toca tus guardados) ---
+$proj = "C:\Users\roger\ReForgeProjects\asura_s_wrath"
+$exe  = Join-Path $proj "build\asuraswrath.exe"
+$cdb  = "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe"
+$out  = Join-Path $proj ("diag_asura_" + (Get-Date -Format "yyyyMMdd_HHmmss"))
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+# Hashes y versiones (sin incluir juego/TU/guardados):
+Get-FileHash $exe -Algorithm SHA256 | Tee-Object (Join-Path $out "exe.sha256.txt")
+Get-FileHash (Join-Path $proj "build\rexruntime.dll") -Algorithm SHA256 | Tee-Object (Join-Path $out "runtime.sha256.txt")
+if (Test-Path $cdb) {
+  # Rompe en la 1ª excepción C++ (0xE06D7363), imprime pila y los 32 bytes del dato, y sigue hasta el fatal:
+  & $cdb -g -G -c "sxe -c `"kc 40; .echo ---; db @rdx L20; gN`" e06d7363; g; q" `
+        -o $exe "--game_data_root=$proj\assets" *> (Join-Path $out "cdb.txt")
+} else {
+  "cdb no encontrado; ejecución directa (sin pila). Instala Debugging Tools for Windows para la pila." |
+    Tee-Object (Join-Path $out "cdb.txt")
+  Push-Location (Join-Path $proj "build"); $p = Start-Process $exe -ArgumentList "--game_data_root=$proj\assets" -PassThru; $p.WaitForExit(); Pop-Location
+}
+# El log de ESTA sesión:
+$log = Get-ChildItem (Join-Path $proj "build\logs\*.log") | Sort LastWriteTime -desc | Select -First 1
+Copy-Item $log.FullName (Join-Path $out "session.log")
+Select-String $log.FullName -Pattern 'XamContent|overlapped|Invalid UTF-8|deferred completion|\[render\]|present' |
+  Select -Last 60 | % { $_.Line } | Tee-Object (Join-Path $out "resumen.txt")
+Compress-Archive -Path "$out\*" -DestinationPath "$out.zip" -Force
+"Devuélveme: $out.zip   (contiene cdb.txt con la pila, session.log y los hashes; sin juego, TU ni guardados)"
+```
+
+**Devuélveme `diag_asura_*.zip`.** Con la pila de `cdb.txt` veré qué función de contenido y qué archivo/campo
+dispara la validación, y corrijo esa frontera (decodificar con la codificación real del campo o, como ya hace el
+propio SDK en otras rutas, con U+FFFD — sin tocar nombres/rutas/texto válidos). Si prefieres no instalar cdb,
+mándame directamente `build\logs\asuraswrath_121.log`: ya lo tengo leído, pero con uno nuevo tras un arranque
+limpio confirmo que la secuencia es idéntica.
+
+### Arreglo del falso éxito (ya en el código, con prueba)
+
+Tu intento 121 arrancó, el Taller dijo «arrancó correctamente / Proceso completado», y **38 s después** llegó el
+fatal. Corregido:
+- A los 45 s con el proceso vivo, el Taller muestra **«▶ En ejecución · seguimiento activo»** (no «Proceso
+  completado»). La sesión queda atada a su PID.
+- Si llega un fatal más tarde, se actualiza **esa misma sesión como fallida**, conservando por separado el caso,
+  el primer error, el código de salida y si **intervino el supervisor**.
+- Regresión `tests/test_session_tracking.py`: proceso que supera el umbral y falla después, cierre limpio, y un
+  segundo arranque con su propio log.
+
 ## Capturas del launcher (piloto)
 
 Vista rápida y avanzada, mismas opciones (una sola definición), navegables con mando/teclado/ratón, con foco
