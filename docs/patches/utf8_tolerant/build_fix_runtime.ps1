@@ -82,70 +82,19 @@ foreach($path in ($subs.Keys | Sort-Object)){
 $u8 = Join-Path $sdkc 'src\core\utf8.cpp'
 Need (Test-Path $u8) "no se reconstruyo src/core/utf8.cpp (0.10.1)"
 
-Write-Host "== 2) Aplicar el fix de utf8.cpp (conversiones/iteracion TOLERANTES, 4 cambios x1) =="
-$s = (Get-Content $u8 -Raw) -replace "`r`n", "`n"
-function Apply1([string]$old,[string]$new,[string]$name){
-  $n = ([regex]::Matches($script:s,[regex]::Escape($old))).Count
-  if($n -ne 1){ throw "cambio '$name': se esperaba 1 ancla, hay $n" }
-  $script:s = $script:s.Replace($old,$new); Write-Host "  '$name' aplicado (1 vez)"
+Write-Host "== 2) Aplicar el fix de utf8.cpp (iterador tolerante + conversiones tolerantes) via git apply =="
+# El parche vive junto a este script (utf8_tolerant.diff), relativo a src/core/utf8.cpp.
+$diff = Join-Path $PSScriptRoot 'utf8_tolerant.diff'
+if(-not (Test-Path $diff)){ $diff = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'utf8_tolerant.diff' }
+Need (Test-Path $diff) "no se encontro utf8_tolerant.diff junto al script"
+& $gitExe -C $sdkc apply --verbose --whitespace=nowarn $diff 2>&1 | ForEach-Object { Write-Host "  $_" }
+Need ($LASTEXITCODE -eq 0) "git apply del parche utf8 fallo ($LASTEXITCODE)"
+# Verificar que el fix quedo aplicado
+$s = Get-Content $u8 -Raw
+foreach($m in @('class utf8_citer','rf_detail::rf_seq_len','utfcpp::replace_invalid(source.begin()')){
+  if(-not ($s -match [regex]::Escape($m))){ throw "marca '$m' ausente tras aplicar el parche" }
 }
-Apply1 '#include <tuple>' "#include <iterator>`n#include <tuple>" 'include-iterator'
-Apply1 'using utf8_citer = utfcpp::iterator<std::string_view::const_iterator>;' `
-       'using utf8_citer = utfcpp::unchecked::iterator<std::string_view::const_iterator>;' 'iterador-unchecked'
-$t8Old = (@'
-std::string to_utf8(const std::u16string_view source) {
-  return utfcpp::utf16to8(source);
-}
-'@) -replace "`r`n","`n"
-$t8New = (@'
-std::string to_utf8(const std::u16string_view source) {
-  // Tolerante: nunca lanzar por UTF-16 invalido (surrogates sueltos); caer a la version unchecked.
-  try {
-    return utfcpp::utf16to8(source);
-  } catch (...) {
-    std::string result;
-    utfcpp::unchecked::utf16to8(source.begin(), source.end(), std::back_inserter(result));
-    return result;
-  }
-}
-'@) -replace "`r`n","`n"
-Apply1 $t8Old $t8New 'to_utf8-tolerante'
-$t16Old = (@'
-std::u16string to_utf16(const std::string_view source) {
-  return utfcpp::utf8to16(source);
-}
-'@) -replace "`r`n","`n"
-$t16New = (@'
-std::u16string to_utf16(const std::string_view source) {
-  // Tolerante: reemplaza las secuencias UTF-8 invalidas por U+FFFD en vez de lanzar utf8::invalid_utf8.
-  // Un nombre de contenido (DLC/partida/TU) con bytes invalidos ya no tumba el hilo de despacho.
-  std::string sanitized;
-  sanitized.reserve(source.size());
-  utfcpp::replace_invalid(source.begin(), source.end(), std::back_inserter(sanitized));
-  return utfcpp::utf8to16(sanitized);
-}
-'@) -replace "`r`n","`n"
-Apply1 $t16Old $t16New 'to_utf16-tolerante'
-# El iterador unchecked solo tiene constructor de 1 argumento: adaptar make_citer (2 sobrecargas).
-$mc1Old = (@'
-  return {utf8_citer(view.cbegin(), view.cbegin(), view.cend()),
-          utf8_citer(view.cend(), view.cbegin(), view.cend())};
-'@) -replace "`r`n","`n"
-$mc1New = (@'
-  return {utf8_citer(view.cbegin()), utf8_citer(view.cend())};
-'@) -replace "`r`n","`n"
-Apply1 $mc1Old $mc1New 'make_citer-view'
-$mc2Old = (@'
-  return {utf8_citer(begin.base(), begin.base(), end.base()),
-          utf8_citer(end.base(), begin.base(), end.base())};
-'@) -replace "`r`n","`n"
-$mc2New = (@'
-  return {utf8_citer(begin.base()), utf8_citer(end.base())};
-'@) -replace "`r`n","`n"
-Apply1 $mc2Old $mc2New 'make_citer-iter'
-foreach($m in @('utfcpp::unchecked::iterator<std::string_view','utfcpp::replace_invalid(source.begin()','utfcpp::unchecked::utf16to8(source.begin()')){
-  if(([regex]::Matches($s,[regex]::Escape($m))).Count -ne 1){ throw "marca '$m' no quedo 1 vez" } }
-Set-Content $u8 $s -Encoding UTF8 -NoNewline
+Write-Host "  parche aplicado y verificado (class utf8_citer tolerante, to_utf16/to_utf8 tolerantes)"
 Copy-Item $u8 (Join-Path $outbase 'utf8.fixed.cpp') -Force
 Write-Host "Fix aplicado."
 

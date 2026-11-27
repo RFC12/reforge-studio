@@ -1,3 +1,4 @@
+diff --git a/src/core/utf8.cpp b/src/core/utf8.cpp
 --- a/src/core/utf8.cpp
 +++ b/src/core/utf8.cpp
 @@ -13,6 +13,7 @@
@@ -8,12 +9,90 @@
  #include <tuple>
 
  #include <rex/string/utf8.h>
-@@ -23,16 +24,28 @@
+@@ -23,16 +24,106 @@
  namespace utfcpp = utf8;
 
  using citer = std::string_view::const_iterator;
 -using utf8_citer = utfcpp::iterator<std::string_view::const_iterator>;
-+using utf8_citer = utfcpp::unchecked::iterator<std::string_view::const_iterator>;
++
++// --- ReForge: iterador UTF-8 TOLERANTE y acotado --------------------------------------------
++// Reemplaza a utfcpp::iterator (checked, que lanzaba utf8::invalid_utf8 ante bytes invalidos y
++// tumbaba el hilo de despacho al enumerar contenido con nombres mal formados) y evita tambien el
++// sobre-avance del iterador unchecked (que leia pasado el final y colgaba/crasheaba). Decodifica
++// de forma leniente: una secuencia invalida o truncada produce U+FFFD y avanza SOLO los bytes
++// disponibles, sin pasar nunca de [start, end). Nunca lanza, nunca entra en bucle.
++namespace rf_detail {
++inline int rf_seq_len(unsigned char c) {
++  if (c < 0x80) return 1;
++  if ((c & 0xE0) == 0xC0) return 2;
++  if ((c & 0xF0) == 0xE0) return 3;
++  if ((c & 0xF8) == 0xF0) return 4;
++  return 1;  // byte de continuacion suelto o lider invalido
++}
++}  // namespace rf_detail
++
++class utf8_citer {
++ public:
++  using iterator_category = std::bidirectional_iterator_tag;
++  using value_type = char32_t;
++  using difference_type = std::ptrdiff_t;
++  using pointer = const char32_t*;
++  using reference = char32_t;
++  using octet_iterator = std::string_view::const_iterator;
++
++  utf8_citer() = default;
++  utf8_citer(octet_iterator it, octet_iterator start, octet_iterator end)
++      : it_(it), start_(start), end_(end) {}
++
++  octet_iterator base() const { return it_; }
++
++  char32_t operator*() const {
++    unsigned char c0 = static_cast<unsigned char>(*it_);
++    int len = rf_detail::rf_seq_len(c0);
++    if (len == 1) return c0 < 0x80 ? char32_t(c0) : char32_t(0xFFFD);
++    char32_t cp = static_cast<char32_t>(c0 & (0x3F >> (len - 1)));
++    octet_iterator q = it_;
++    ++q;
++    for (int i = 1; i < len; ++i) {
++      if (q == end_) return 0xFFFD;
++      unsigned char cc = static_cast<unsigned char>(*q);
++      if ((cc & 0xC0) != 0x80) return 0xFFFD;
++      cp = (cp << 6) | (cc & 0x3F);
++      ++q;
++    }
++    return cp;
++  }
++
++  utf8_citer& operator++() {
++    int len = rf_detail::rf_seq_len(static_cast<unsigned char>(*it_));
++    ++it_;  // siempre avanza al menos 1 byte
++    for (int i = 1; i < len && it_ != end_; ++i) {
++      if ((static_cast<unsigned char>(*it_) & 0xC0) != 0x80) break;  // continuacion rota
++      ++it_;
++    }
++    return *this;
++  }
++  utf8_citer operator++(int) { utf8_citer t = *this; ++(*this); return t; }
++
++  utf8_citer& operator--() {
++    --it_;  // retrocede al inicio del codepoint anterior (salta hasta 3 bytes de continuacion)
++    for (int i = 0; i < 3 && it_ != start_ &&
++                    (static_cast<unsigned char>(*it_) & 0xC0) == 0x80;
++         ++i) {
++      --it_;
++    }
++    return *this;
++  }
++  utf8_citer operator--(int) { utf8_citer t = *this; --(*this); return t; }
++
++  bool operator==(const utf8_citer& o) const { return it_ == o.it_; }
++  bool operator!=(const utf8_citer& o) const { return it_ != o.it_; }
++
++ private:
++  octet_iterator it_{};
++  octet_iterator start_{};
++  octet_iterator end_{};
++};
 
  namespace rex::string {
 
@@ -40,19 +119,3 @@
  }
 
  std::string to_string(char32_t c) {
-@@ -54,13 +67,11 @@ bool equal_ascii_case(const uint32_t l, const uint32_t r) {
- }
-
- std::pair<utf8_citer, utf8_citer> make_citer(const std::string_view view) {
--  return {utf8_citer(view.cbegin(), view.cbegin(), view.cend()),
--          utf8_citer(view.cend(), view.cbegin(), view.cend())};
-+  return {utf8_citer(view.cbegin()), utf8_citer(view.cend())};
- }
-
- std::pair<utf8_citer, utf8_citer> make_citer(const utf8_citer begin, const utf8_citer end) {
--  return {utf8_citer(begin.base(), begin.base(), end.base()),
--          utf8_citer(end.base(), begin.base(), end.base())};
-+  return {utf8_citer(begin.base()), utf8_citer(end.base())};
- }
-
- size_t byte_length(utf8_citer begin, utf8_citer end) {
