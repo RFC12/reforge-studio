@@ -159,12 +159,19 @@ Write-Host "Parche OK."
 Write-Host "== 3) Configurar (directorio NUEVO) y compilar rexruntime (RelWithDebInfo, con simbolos) =="
 # clang y ninja al frente del PATH para que cmake los encuentre durante la compilacion.
 $env:PATH = "$clang;$(Split-Path $ninjaExe);$env:PATH"
+# IMPORTANTE (PS 5.1): cmake escribe avisos a stderr; con ErrorActionPreference='Stop' + '2>&1' esa linea de
+# stderr se convierte en un error TERMINANTE (NativeCommandError) y aborta el script aunque el exit sea 0.
+# Mandamos SOLO por el codigo de salida: bajamos a 'Continue' durante las llamadas nativas y lo restauramos.
+$prevEAP = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
 & $cmakeExe -S $sdkc -B $build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DREXGLUE_ENABLE_FIDELITYFX=$fx `
         -DCMAKE_MAKE_PROGRAM="$ninjaExe" `
         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ 2>&1 | Tee-Object (Join-Path $diag 'cmake_configure.txt')
-if ($LASTEXITCODE -ne 0) { Write-Host "CONFIGURE FALLO ($LASTEXITCODE). Se entregan los logs, NO se lanza el juego."; Compress-Archive -Path (Join-Path $diag '*') -DestinationPath "$diag.zip" -Force; Write-Host "Devuelve: $diag.zip"; exit 4 }
+$cfgExit = $LASTEXITCODE
+if ($cfgExit -ne 0) { $ErrorActionPreference = $prevEAP; Write-Host "CONFIGURE FALLO ($cfgExit). Se entregan los logs, NO se lanza el juego."; Compress-Archive -Path (Join-Path $diag '*') -DestinationPath "$diag.zip" -Force; Write-Host "Devuelve: $diag.zip"; exit 4 }
 & $cmakeExe --build $build --target rexruntime 2>&1 | Tee-Object (Join-Path $diag 'cmake_build.txt')
-if ($LASTEXITCODE -ne 0) { Write-Host "BUILD FALLO ($LASTEXITCODE). Se entregan los logs, NO se lanza el juego."; Compress-Archive -Path (Join-Path $diag '*') -DestinationPath "$diag.zip" -Force; Write-Host "Devuelve: $diag.zip"; exit 5 }
+$bldExit = $LASTEXITCODE
+$ErrorActionPreference = $prevEAP
+if ($bldExit -ne 0) { Write-Host "BUILD FALLO ($bldExit). Se entregan los logs, NO se lanza el juego."; Compress-Archive -Path (Join-Path $diag '*') -DestinationPath "$diag.zip" -Force; Write-Host "Devuelve: $diag.zip"; exit 5 }
 $newdll = Get-ChildItem $build -Recurse -Filter rexruntime.dll | Sort-Object LastWriteTime -desc | Select-Object -First 1
 $newpdb = Get-ChildItem $build -Recurse -Filter rexruntime.pdb -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -desc | Select-Object -First 1
 Need $newdll "no se genero rexruntime.dll (ver cmake_build.txt)"
