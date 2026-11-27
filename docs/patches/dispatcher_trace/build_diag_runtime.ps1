@@ -1,8 +1,9 @@
 # build_diag_runtime.ps1  -  Windows PowerShell 5.1
-# Compila un rexruntime.dll de DIAGNOSTICO (instrumentado) desde una COPIA AISLADA del SDK, lo ejecuta en una
-# carpeta aparte (sin tocar tu instalacion, TU ni partidas) y arma un ZIP SOLO con el diagnostico.
-# Probado por Claude en tu PC: aplicacion del parche (4 cambios, 1 vez cada uno) y el mecanismo C++ (selftest 5/5).
-# Lo que corre aqui y NO se ha probado en tu equipo: la compilacion completa de rexruntime.dll y el arranque.
+# Compila un rexruntime.dll de DIAGNOSTICO (instrumentado) de la version EXACTA que carga tu juego:
+# 0.10.1 (commit bd833a2a = runtime 0.10.0.24-dev.gbd833a2). Reconstruye ese arbol OFFLINE desde tus
+# objetos git locales (sin red, sin tocar tu SDK en 0.11 ni sus cambios sin commit), aplica el parche de
+# traza a src/system/kernel_state.cpp (fatal REX_FATAL, encolador CompleteOverlappedDeferredEx), compila,
+# ejecuta UN intento en carpeta aparte y arma un ZIP SOLO con el diagnostico (sin juego, DLL, TU ni partidas).
 $ErrorActionPreference = 'Stop'
 $sdk   = 'C:\ReForgeBuild\rexglue-sdk'
 $proj  = 'C:\Users\roger\ReForgeProjects\asura_s_wrath'
@@ -23,7 +24,7 @@ function ResolveTool([string]$name,[string[]]$cands){
   return $null
 }
 Write-Host "== Requisitos (se comprueban ANTES de arrancar) =="
-Need (Test-Path (Join-Path $sdk 'src\kernel\dispatcher.cpp')) "SDK en $sdk"
+Need (Test-Path (Join-Path $sdk '.git')) "repo git del SDK en $sdk"
 Need (Test-Path (Join-Path $proj 'build\asuraswrath.exe')) "asuraswrath.exe compilado"
 # cmake/ninja NO suelen estar en el PATH: vienen con Visual Studio. Se resuelven por ruta explicita.
 $cmakeExe = ResolveTool 'cmake' @(
@@ -40,21 +41,58 @@ Need $ninjaExe "ninja (ni en rutas de Visual Studio conocidas ni en PATH)"
 Need (Test-Path (Join-Path $clang 'clang++.exe')) "clang en $clang"
 Write-Host "  cmake: $cmakeExe"
 Write-Host "  ninja: $ninjaExe"
-# Revision del SDK (sin depender de git en PATH: usamos el .git/HEAD y packed-refs si estan)
-$rev = '?'; $head = Join-Path $sdk '.git\HEAD'
-if (Test-Path $head) { $rev = (Get-Content $head -Raw).Trim() }
-"SDK HEAD: $rev   (tu runtime cargado es 0.10.0.24-dev.gbd833a2-fsr)" | Tee-Object (Join-Path $diag 'sdk_rev.txt')
-# Variante -fsr = REXGLUE_ENABLE_FIDELITYFX ON (confirmado en tu CMakeCache)
+# git (GitHub Desktop no lo pone en PATH): se resuelve por ruta explicita.
+$gitExe = ResolveTool 'git' @(
+  'C:\Users\roger\AppData\Local\GitHubDesktop\app-3.6.11\resources\app\git\cmd\git.exe',
+  'C:\Program Files\Git\cmd\git.exe')
+Need $gitExe "git (GitHub Desktop o Git for Windows)"
+# Tu juego carga rexruntime.dll 0.10.0.24-dev.gbd833a2 = commit bd833a2a (tag v0.10.1). Instrumentamos ESA.
+$rev0101 = 'bd833a2a'
+Need ((& $gitExe -C $sdk cat-file -t $rev0101 2>&1) -eq 'commit') "el commit $rev0101 (v0.10.1) no esta en tu repo"
+"Instrumentando 0.10.1 ($rev0101); tu juego carga 0.10.0.24-dev.gbd833a2. Tu SDK esta en 0.11 y NO se toca." | Tee-Object (Join-Path $diag 'sdk_rev.txt')
+# En 0.10.1 la variante -fsr = REXGLUE_ENABLE_FIDELITYFX ON (la option existe en ese commit; confirmado).
 $fx = 'ON'
 
-Write-Host "== 1) Copia AISLADA del SDK (sin out\ ni .git\) =="
-# robocopy: /MIR espeja; se excluyen artefactos de compilacion y el repo git para que sea solo fuente.
-$null = robocopy $sdk $sdkc /E /NFL /NDL /NJH /NJS /NP /XD (Join-Path $sdk 'out') (Join-Path $sdk '.git')
-if ($LASTEXITCODE -ge 8) { Write-Error "robocopy fallo ($LASTEXITCODE)"; exit 3 }
-$disp = Join-Path $sdkc 'src\kernel\dispatcher.cpp'
-Need (Test-Path $disp) "no se copio dispatcher.cpp"
+Write-Host "== 1) Reconstruir el arbol 0.10.1 OFFLINE (superproyecto + submodulos desde objetos locales) =="
+New-Item -ItemType Directory -Force -Path $sdkc | Out-Null
+# Extrae un commit a $dest via 'git archive' + Expand-Archive. $asGitDir=$true para un object store (.git/modules/...).
+function GitArchiveTo([string]$repo,[string]$rev,[string]$dest,[bool]$asGitDir){
+  New-Item -ItemType Directory -Force -Path $dest | Out-Null
+  $z = Join-Path $env:TEMP ("rfarc_" + [guid]::NewGuid().ToString('N') + ".zip")
+  if($asGitDir){ & $gitExe --git-dir=$repo archive --format=zip -o $z $rev 2>&1 | Out-Null }
+  else { & $gitExe -C $repo archive --format=zip -o $z $rev 2>&1 | Out-Null }
+  if($LASTEXITCODE -ne 0 -or -not (Test-Path $z)){ return $false }
+  Expand-Archive -Path $z -DestinationPath $dest -Force
+  Remove-Item $z -Force -ErrorAction SilentlyContinue
+  return $true
+}
+# 1a) superproyecto 0.10.1 (solo archivos versionados; sin submodulos, sin .git)
+$okSuper = GitArchiveTo $sdk $rev0101 $sdkc $false
+Need $okSuper "no se pudo extraer el superproyecto 0.10.1 (offline)"
+# 1b) submodulos: commit esperado @0.10.1 y commit actual en tu arbol principal
+$subs = @{}; (& $gitExe -C $sdk ls-tree -r $rev0101) | ForEach-Object { if($_ -match '^160000 commit ([0-9a-f]+)\s+(.+)$'){ $subs[$matches[2]] = $matches[1] } }
+$cur  = @{}; (& $gitExe -C $sdk submodule status) | ForEach-Object { if($_ -match '^(.)([0-9a-f]+)\s+(\S+)'){ $cur[$matches[3]] = @{sha=$matches[2];flag=$matches[1]} } }
+foreach($path in ($subs.Keys | Sort-Object)){
+  $want = $subs[$path]; $destSub = Join-Path $sdkc ($path -replace '/','\'); $h = $cur[$path]
+  if($h -and $h.flag -ne '-' -and $h.sha -eq $want){
+    # ya poblado en el commit correcto -> copiar el working dir (incluye submodulos anidados)
+    $src = Join-Path $sdk ($path -replace '/','\')
+    $null = robocopy $src $destSub /E /NFL /NDL /NJH /NJS /NP /XD '.git'
+    if($LASTEXITCODE -ge 8){ Write-Error "copia de submodulo $path fallo ($LASTEXITCODE)"; exit 3 }
+    Write-Host ("  {0} <- working dir (match {1})" -f $path, $want.Substring(0,8))
+  } else {
+    # extraer el commit 0.10.1 desde el object store LOCAL del submodulo (offline, sin red)
+    $store = Join-Path $sdk ('.git\modules\' + ($path -replace '/','\'))
+    Need (Test-Path $store) "object store local de $path ausente (necesitaria red; usa la opcion 3)"
+    $okSub = GitArchiveTo $store $want $destSub $true
+    Need $okSub "no se pudo extraer $path @$($want.Substring(0,8)) offline (necesitaria red)"
+    Write-Host ("  {0} <- object store (commit {1})" -f $path, $want.Substring(0,8))
+  }
+}
+$disp = Join-Path $sdkc 'src\system\kernel_state.cpp'
+Need (Test-Path $disp) "no se reconstruyo src/system/kernel_state.cpp (0.10.1)"
 
-Write-Host "== 2) Aplicar el parche de traza (4 cambios, 1 vez cada uno) =="
+Write-Host "== 2) Aplicar el parche de traza a kernel_state.cpp (7 cambios, 1 vez cada uno) =="
 $s = (Get-Content $disp -Raw) -replace "`r`n", "`n"
 function Apply1([string]$old,[string]$new,[string]$name){
   $n = ([regex]::Matches($script:s,[regex]::Escape($old))).Count
@@ -62,98 +100,92 @@ function Apply1([string]$old,[string]$new,[string]$name){
   $script:s = $script:s.Replace($old,$new); Write-Host "  '$name' aplicado (1 vez)"
 }
 $state = (@'
+#include <atomic>
 #include <cstdint>
 namespace {
 struct RfDeferredTag { uint64_t id = 0; const void* ra = nullptr; uint32_t overlapped = 0; const char* phase = "idle"; };
 thread_local RfDeferredTag rf_active_deferred{};
-thread_local const void* rf_enqueue_ra = nullptr;
 std::atomic<uint64_t> rf_deferred_counter{1};
 }  // namespace
 #define RF_RETURN_ADDRESS() __builtin_return_address(0)
 
 '@) -replace "`r`n","`n"
-$sig = 'void Dispatcher::CompleteDeferred(u32 overlapped, rex::MoveOnlyFunction<void()> work,'
+$sig = (@'
+void KernelState::CompleteOverlappedDeferredEx(
+    std::function<X_RESULT(uint32_t&, uint32_t&)> completion_callback, uint32_t overlapped_ptr,
+'@) -replace "`r`n","`n"
 Apply1 $sig ($state + $sig) 'estado-de-traza'
-$bodyOld = (@'
-                                  rex::MoveOnlyFunction<void()> post) {
-  CompleteDeferred(
-      overlapped,
+# -- encolar: id/ra + log de encolado, justo antes del push_back --
+$enqOld = (@'
+  auto global_lock = global_critical_region_.Acquire();
+  dispatch_queue_.push_back(
 '@) -replace "`r`n","`n"
-$bodyNew = (@'
-                                  rex::MoveOnlyFunction<void()> post) {
-  rf_enqueue_ra = RF_RETURN_ADDRESS();
-  CompleteDeferred(
-      overlapped,
-'@) -replace "`r`n","`n"
-Apply1 $bodyOld $bodyNew 'ra-en-primera-sobrecarga'
-$lamOld = (@'
-  dispatch_queue_.push_back([this, work = std::move(work), overlapped, pre = std::move(pre),
-                             post = std::move(post)]() mutable {
-    REXSYS_DEBUG("Deferred overlapped {:08X}: running pre", overlapped);
-    if (pre) {
-      pre();
-    }
-    REXSYS_DEBUG("Deferred overlapped {:08X}: sleeping {}ms", overlapped,
-                 kDeferredOverlappedDelayMillis);
-    rex::platform::SleepFor(std::chrono::milliseconds(kDeferredOverlappedDelayMillis));
-    REXSYS_DEBUG("Deferred overlapped {:08X}: running completion", overlapped);
-    const CompletionOptions options = work();
-    REXSYS_DEBUG("Deferred overlapped {:08X}: completing with result {:08X}", overlapped,
-                 options.result);
-    CompleteOverlappedEx(overlapped, options.result, ExtendedError(options), Length(options));
-    if (post) {
-      REXSYS_DEBUG("Deferred overlapped {:08X}: running post", overlapped);
-      post();
-    }
-  });
-'@) -replace "`r`n","`n"
-$lamNew = (@'
+$enqNew = (@'
   const uint64_t rf_task_id = rf_deferred_counter.fetch_add(1);
-  const void* rf_ra = rf_enqueue_ra ? rf_enqueue_ra : RF_RETURN_ADDRESS();
-  rf_enqueue_ra = nullptr;
+  const void* rf_ra = RF_RETURN_ADDRESS();
   REXSYS_WARN("[deferred] enqueue id={} ra={:016X} thread={:08X} overlapped={:08X}", rf_task_id,
               reinterpret_cast<uintptr_t>(rf_ra),
-              static_cast<uint32_t>(reinterpret_cast<uintptr_t>(KernelThread::GetCurrentThreadHandle())),
-              overlapped);
-  dispatch_queue_.push_back([this, work = std::move(work), overlapped, pre = std::move(pre),
-                             post = std::move(post), rf_task_id, rf_ra]() mutable {
-    rf_active_deferred = RfDeferredTag{rf_task_id, rf_ra, overlapped, "pre"};
-    REXSYS_WARN("[deferred] run id={} overlapped={:08X}", rf_task_id, overlapped);
-    REXSYS_DEBUG("Deferred overlapped {:08X}: running pre", overlapped);
-    if (pre) {
-      pre();
-    }
-    REXSYS_DEBUG("Deferred overlapped {:08X}: sleeping {}ms", overlapped,
-                 kDeferredOverlappedDelayMillis);
-    rex::platform::SleepFor(std::chrono::milliseconds(kDeferredOverlappedDelayMillis));
-    rf_active_deferred.phase = "work";
-    REXSYS_DEBUG("Deferred overlapped {:08X}: running completion", overlapped);
-    const CompletionOptions options = work();
-    rf_active_deferred.phase = "complete";
-    REXSYS_DEBUG("Deferred overlapped {:08X}: completing with result {:08X}", overlapped,
-                 options.result);
-    CompleteOverlappedEx(overlapped, options.result, ExtendedError(options), Length(options));
-    REXSYS_WARN("[deferred] done id={} result={:08X}", rf_task_id, options.result);
-    if (post) {
-      rf_active_deferred.phase = "post";
-      REXSYS_DEBUG("Deferred overlapped {:08X}: running post", overlapped);
-      post();
-    }
-    rf_active_deferred = RfDeferredTag{};
-  });
+              static_cast<uint32_t>(reinterpret_cast<uintptr_t>(XThread::GetCurrentThreadHandle())),
+              overlapped_ptr);
+  auto global_lock = global_critical_region_.Acquire();
+  dispatch_queue_.push_back(
 '@) -replace "`r`n","`n"
-Apply1 $lamOld $lamNew 'lambda-instrumentado'
-$fatOld = "        REXSYS_FATAL(""Dispatch thread: deferred completion threw '{}'"", e.what());"
+Apply1 $enqOld $enqNew 'encolado-id-ra'
+# -- captura en el lambda + fase "pre" + log run --
+$capOld = '      [this, completion_callback, overlapped_ptr, pre_callback, post_callback]() {'
+$capNew = (@'
+      [this, completion_callback, overlapped_ptr, pre_callback, post_callback, rf_task_id, rf_ra]() {
+        rf_active_deferred = RfDeferredTag{rf_task_id, rf_ra, overlapped_ptr, "pre"};
+        REXSYS_WARN("[deferred] run id={} overlapped={:08X}", rf_task_id, overlapped_ptr);
+'@) -replace "`r`n","`n"
+Apply1 $capOld $capNew 'captura-lambda-y-pre'
+# -- fase "work" tras el sleep --
+$workOld = '        rex::thread::Sleep(std::chrono::milliseconds(kDeferredOverlappedDelayMillis));'
+$workNew = (@'
+        rex::thread::Sleep(std::chrono::milliseconds(kDeferredOverlappedDelayMillis));
+        rf_active_deferred.phase = "work";
+'@) -replace "`r`n","`n"
+Apply1 $workOld $workNew 'fase-work'
+# -- fase "complete" tras la completion --
+$compOld = '        auto result = completion_callback(extended_error, length);'
+$compNew = (@'
+        auto result = completion_callback(extended_error, length);
+        rf_active_deferred.phase = "complete";
+'@) -replace "`r`n","`n"
+Apply1 $compOld $compNew 'fase-complete'
+# -- log done + fase "post" + limpieza al final del lambda --
+$postOld = (@'
+        CompleteOverlappedEx(overlapped_ptr, result, extended_error, length);
+        if (post_callback) {
+          REXSYS_DEBUG("Deferred overlapped {:08X}: running post_callback", overlapped_ptr);
+          post_callback();
+        }
+      });
+'@) -replace "`r`n","`n"
+$postNew = (@'
+        CompleteOverlappedEx(overlapped_ptr, result, extended_error, length);
+        REXSYS_WARN("[deferred] done id={} result={:08X}", rf_task_id, result);
+        if (post_callback) {
+          rf_active_deferred.phase = "post";
+          REXSYS_DEBUG("Deferred overlapped {:08X}: running post_callback", overlapped_ptr);
+          post_callback();
+        }
+        rf_active_deferred = RfDeferredTag{};
+      });
+'@) -replace "`r`n","`n"
+Apply1 $postOld $postNew 'done-post-limpieza'
+# -- fatal con id, fase y ra (ancla sin sangria para ser robusta) --
+$fatOld = "REX_FATAL(""Dispatch thread: deferred completion threw '{}'"", e.what());"
 $fatNew = (@'
-        REXSYS_FATAL("Dispatch thread: deferred completion (task {} phase={} ra={:016X}) threw '{}'",
-                     rf_active_deferred.id, rf_active_deferred.phase,
-                     reinterpret_cast<uintptr_t>(rf_active_deferred.ra), e.what());
+REX_FATAL("Dispatch thread: deferred completion (task {} phase={} ra={:016X}) threw '{}'",
+                    rf_active_deferred.id, rf_active_deferred.phase,
+                    reinterpret_cast<uintptr_t>(rf_active_deferred.ra), e.what());
 '@) -replace "`r`n","`n"
 Apply1 $fatOld $fatNew 'fatal-con-id-y-fase'
 foreach($m in @('rf_deferred_counter{1};','[deferred] enqueue id=','rf_active_deferred.phase = "work";','rf_active_deferred.phase = "post";','deferred completion (task {} phase={} ra={:016X}) threw')){
   if(([regex]::Matches($s,[regex]::Escape($m))).Count -ne 1){ throw "marca '$m' no quedo exactamente 1 vez" } }
 Set-Content $disp $s -Encoding UTF8 -NoNewline
-Copy-Item $disp (Join-Path $diag 'dispatcher.patched.cpp') -Force
+Copy-Item $disp (Join-Path $diag 'kernel_state.patched.cpp') -Force
 Write-Host "Parche OK."
 
 Write-Host "== 3) Configurar (directorio NUEVO) y compilar rexruntime (RelWithDebInfo, con simbolos) =="
@@ -202,7 +234,7 @@ Get-FileHash $exe -Algorithm SHA256 | Tee-Object (Join-Path $diag 'exe.sha256.tx
 
 # ZIP por LISTA EXPLICITA: solo diagnostico. Se EXCLUYE run\ (juego, DLL, TU, partidas, build) y la .cpp pesada no entra.
 $include = 'sdk_rev.txt','cmake_configure.txt','cmake_build.txt','runtime_dll.sha256.txt','exe.sha256.txt',
-           'modules.txt','resultado.txt','task_trace.txt','session.log','dispatcher.patched.cpp'
+           'modules.txt','resultado.txt','task_trace.txt','session.log','kernel_state.patched.cpp'
 $zipItems = @(); foreach($f in $include){ $pth = Join-Path $diag $f; if(Test-Path $pth){ $zipItems += $pth } }
 $zip = "$diag.zip"; if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path $zipItems -DestinationPath $zip -Force
