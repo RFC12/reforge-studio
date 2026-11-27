@@ -2,7 +2,7 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
-## 1.51.2 — Botón «Cancelar compilación» a mano, y «Ports de la comunidad» como puente simple
+## 1.51.3 — Botón «Cancelar compilación» a mano, y «Ports de la comunidad» como puente simple
 
 - **Cancelar compilación siempre visible.** El botón de cancelar vivía en el formulario de la izquierda, que en
   ventana estrecha —o cuando la recompilación la pide el lanzador del juego («Reparación pedida desde el
