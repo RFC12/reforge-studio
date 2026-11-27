@@ -234,6 +234,9 @@ Copy-Item (Join-Path $proj 'build') $run -Recurse -Force
 # de ejecucion, para que TODO resuelva a nuestro build instrumentado (mismas exports, compatibles entre si).
 Get-ChildItem $outdir -Filter '*.dll' | ForEach-Object { Copy-Item $_.FullName (Join-Path $run $_.Name) -Force }
 Get-ChildItem $outdir -Filter '*.pdb' | ForEach-Object { Copy-Item $_.FullName (Join-Path $run $_.Name) -Force }
+# El cargador de plugins del runtime pide el plugin con el sufijo del build-config (rexgpu-xenosrd.dll para
+# RelWithDebInfo), aunque el archivo salga sin sufijo. Lo dejamos tambien con ese nombre para que lo encuentre.
+if (Test-Path (Join-Path $run 'rexgpu-xenos.dll')) { Copy-Item (Join-Path $run 'rexgpu-xenos.dll') (Join-Path $run 'rexgpu-xenosrd.dll') -Force }
 Get-FileHash (Join-Path $run 'rexruntime.dll') -Algorithm SHA256 | Tee-Object (Join-Path $diag 'runtime_dll.sha256.txt')
 $rlogs = Join-Path $run 'logs'; if (Test-Path $rlogs) { Remove-Item (Join-Path $rlogs '*') -Force -ErrorAction SilentlyContinue } else { New-Item -ItemType Directory -Force -Path $rlogs | Out-Null }
 $exe = Join-Path $run 'asuraswrath.exe'
@@ -242,8 +245,11 @@ Start-Sleep -Seconds 8
 try { $p.Refresh(); $p.Modules | Where-Object { $_.ModuleName -match 'rexruntime|asuraswrath' } |
       Select-Object ModuleName, FileName, @{n='Base';e={('0x{0:X}' -f $_.BaseAddress.ToInt64())}}, @{n='Size';e={$_.ModuleMemorySize}} |
       Format-Table -Auto | Out-String | Tee-Object (Join-Path $diag 'modules.txt') } catch {}
-$p.WaitForExit()
-"PID=$($p.Id)  exit=0x{0:X8}  hora_fin={1}" -f $p.ExitCode,(Get-Date) | Tee-Object (Join-Path $diag 'resultado.txt')
+# El cierre que buscamos ocurre pronto; si el juego NO cierra en 180s es que llego a menu/gameplay sin reproducirlo.
+$exited = $p.WaitForExit(180000)
+if (-not $exited) { Write-Host "El juego NO cerro en 180s (llego a menu/gameplay sin reproducir el cierre)."; try { $p.Kill() } catch {}; $p.WaitForExit() }
+$exitTxt = if ($exited) { "0x{0:X8}" -f $p.ExitCode } else { "(vivo>180s, cerrado por el script)" }
+"PID=$($p.Id)  exit=$exitTxt  salio_solo=$exited  hora_fin=$(Get-Date)" | Tee-Object (Join-Path $diag 'resultado.txt')
 
 Write-Host "== 5) Recoger SOLO el diagnostico =="
 $log = Get-ChildItem $rlogs -Filter *.log | Sort-Object LastWriteTime -desc | Select-Object -First 1
@@ -252,10 +258,20 @@ Copy-Item $log.FullName (Join-Path $diag 'session.log')
 Select-String $log.FullName -Pattern '\[deferred\]|Invalid UTF-8|deferred completion|XamContent|XNetLogon|\[render\]' |
   ForEach-Object { $_.Line } | Tee-Object (Join-Path $diag 'task_trace.txt')
 Get-FileHash $exe -Algorithm SHA256 | Tee-Object (Join-Path $diag 'exe.sha256.txt')
+# Simbolizar los 'ra' de los encoladores con el .pdb: nombra QUIEN encola cada tarea (y, si hubo fatal, su encolador).
+# VA = ra - base_cargada + imagebase_del_PE (0x180000000 para estos DLL). base_cargada sale de modules.txt.
+$symExe = Join-Path $clang 'llvm-symbolizer.exe'
+$modLine = Select-String (Join-Path $diag 'modules.txt') -Pattern 'rexruntime\.dll.*?0x([0-9A-Fa-f]+)' -ErrorAction SilentlyContinue | Select-Object -First 1
+if ((Test-Path $symExe) -and $modLine) {
+  $base = [Convert]::ToUInt64($modLine.Matches.Groups[1].Value, 16); $runDll = Join-Path $run 'rexruntime.dll'
+  $ras = Select-String $log.FullName -Pattern 'ra=([0-9A-Fa-f]{10,})' | ForEach-Object { $_.Matches.Groups[1].Value } | Sort-Object -Unique
+  $symOut = @(); foreach ($r in $ras) { $va = [Convert]::ToUInt64($r,16) - $base + 0x180000000; $sr = (& $symExe --obj="$runDll" ("0x{0:X}" -f $va) 2>&1) -join ' | '; $symOut += ("ra={0}  RVA=0x{1:X}  ->  {2}" -f $r, ([Convert]::ToUInt64($r,16)-$base), $sr) }
+  $symOut | Set-Content (Join-Path $diag 'symbols.txt'); Write-Host "Simbolos de encoladores -> symbols.txt"
+}
 
 # ZIP por LISTA EXPLICITA: solo diagnostico. Se EXCLUYE run\ (juego, DLL, TU, partidas, build) y la .cpp pesada no entra.
 $include = 'sdk_rev.txt','cmake_configure.txt','cmake_build.txt','runtime_dll.sha256.txt','exe.sha256.txt',
-           'modules.txt','resultado.txt','task_trace.txt','session.log','kernel_state.patched.cpp'
+           'modules.txt','resultado.txt','task_trace.txt','session.log','symbols.txt','kernel_state.patched.cpp'
 $zipItems = @(); foreach($f in $include){ $pth = Join-Path $diag $f; if(Test-Path $pth){ $zipItems += $pth } }
 $zip = "$diag.zip"; if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path $zipItems -DestinationPath $zip -Force

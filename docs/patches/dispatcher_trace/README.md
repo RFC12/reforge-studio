@@ -68,15 +68,27 @@ Luego configura con `-DREXGLUE_ENABLE_FIDELITYFX=ON -DCMAKE_BUILD_TYPE=RelWithDe
 ejecuta **un** intento en carpeta aparte con `run\logs` vacío, y arma el ZIP por lista explícita (sin juego, DLL,
 TU, partidas ni `run\`).
 
-## Estado
+## Estado (verificado end-to-end en Windows)
 
-- **Verificado**: la reconstrucción offline del árbol 0.10.1 (superproyecto + 22 submódulos desde objetos locales),
-  la resolución de `cmake`/`ninja` fuera del PATH, y que el script no aborta por los avisos de cmake en stderr
-  (PS 5.1). El mecanismo de atribución id/fase lo cubre `tests/test_deferred_trace.py` y el self-test C++
-  `dispatcher_trace_selftest.cpp`.
-- **Pendiente de confirmar en tu equipo al ejecutarlo**: que el parche encaje x1 en tu `kernel_state.cpp` de
-  0.10.1, la compilación completa de `rexruntime.dll` instrumentado y el arranque. Si la compilación falla, el
-  script entrega los logs de CMake **sin lanzar** el juego.
+El script se corrió completo en el PC: reconstruye 0.10.1 offline (22 submódulos desde objetos locales), aplica
+los 7 cambios ×1 sobre el `kernel_state.cpp` real, compila `rexruntime` **y** `rexgpu-xenos` (sin sufijo, con
+símbolos), los planta en una carpeta aislada y **arranca el juego con el runtime instrumentado**. El juego llega
+a menú/gameplay y la traza `[deferred] enqueue/run/done` sale correctamente.
+
+**Encoladores identificados** (ra simbolizado contra el `.pdb`, en `symbols.txt`):
+
+- `xeXamEnumerate` (`src/kernel/xam/xam_enum.cpp:66`) — encola la mayoría de las tareas diferidas (enumeración).
+- `xeXamContentCreate` (`src/kernel/xam/xam_content.cpp:231`).
+- `KernelState::CompleteOverlappedDeferred` (wrapper interno; el origen XAM real está un frame arriba).
+
+Es decir, las tareas diferidas que lanzan `Invalid UTF-8` las encolan las rutas de **enumeración/creación de
+contenido** (XAM), que es donde se parsea el nombre/metadatos del contenido (DLC/partida/TU).
+
+**Pendiente**: en la corrida de validación el cierre `Invalid UTF-8` **no se reprodujo** (las tareas completaron
+`done result=0` y el juego corrió >2,5 min). Para capturar el fatal `(task N phase=X ra=Y)` hay que ejecutar la
+build instrumentada **bajo la condición que lo dispara** (la TU/el contenido con el campo UTF-8 inválido aplicado).
+El script deja la build lista y simboliza automáticamente; con el fatal presente, `deferred_trace.py` ata la tarea
+a su encolador y `symbols.txt` da la función exacta.
 
 ## Prueba del parser en ReForge
 
