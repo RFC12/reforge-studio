@@ -48,6 +48,8 @@ class GameLauncher(QWidget):
         self.o = GameOptions.load(self.root)
         self.proc = None
         self.watch = None
+        from . import titleprofiles
+        self.profile = titleprofiles.resolve(self.root)      # perfil por título/variante (tema, opciones, estado)
         self.timer = QTimer(self)
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self._poll)
@@ -55,6 +57,7 @@ class GameLauncher(QWidget):
         self.setObjectName("Root")
         fit_to_screen(self, 720, 640)
         self._build()
+        self._apply_theme()
 
     # ---------------------------------------------------------------- interfaz
     def _build(self):
@@ -81,6 +84,11 @@ class GameLauncher(QWidget):
         sub = " · ".join(x for x in (f"Title ID {self.title_id}" if self.title_id else "",
                                      os.path.basename(self.exe) if self.exe else "sin ejecutable") if x)
         v.addWidget(label(sub, "Hint"))
+        # Estado doble del perfil: «perfil visual» (a medida/básico, siempre creado) y «compatibilidad jugable»
+        # (hasta dónde llega el juego de verdad). Son resultados DISTINTOS y se muestran por separado.
+        self.pstatus = label("", "Hint", wrap=True)
+        v.addWidget(self.pstatus)
+        self._refresh_pstatus()
 
         card = QFrame()
         card.setObjectName("Card")
@@ -167,6 +175,25 @@ class GameLauncher(QWidget):
         self.play_btn.clicked.connect(self.play)
         bot.addWidget(self.play_btn)
         v.addLayout(bot)
+
+    def _apply_theme(self):
+        """Aplica el tema del perfil a esta ventana (fondo y acento). Para Asura, carbón y cobre."""
+        try:
+            t = self.profile.theme
+            self.setStyleSheet(f"#Root {{ background: {t.bg}; }} "
+                               f"QPushButton#Primary {{ background: {t.accent}; color: #0b0b0b; }}")
+        except Exception:      # noqa: BLE001 — el tema es un extra; nunca debe impedir jugar
+            pass
+
+    def _refresh_pstatus(self):
+        try:
+            from . import titleprofiles
+            st = titleprofiles.status(self.root, self.profile)
+            visual = "a medida" if st["visual"] == "a medida" else "básico (auto)"
+            self.pstatus.setText(f"Perfil visual: {visual} · «{self.profile.theme.name}»    |    "
+                                 f"Compatibilidad jugable: {st['playable']}")
+        except Exception:      # noqa: BLE001
+            pass
 
     def _engine_hint(self):
         self.engine_hint.setText(PRESET_DESC.get(self.engine.currentData(), "Lo elegido en 🎮 Opciones."))
@@ -261,6 +288,12 @@ class GameLauncher(QWidget):
             QTimer.singleShot(400, self.play)
             return
         self._intermit_retries = 0
+        try:
+            from . import milestones
+            milestones.record_from_run(self.exe, out)
+            self._refresh_pstatus()
+        except Exception:      # noqa: BLE001
+            pass
         if out["kind"] == "unregistered":
             addr = out["address"]
             self.status.setText(f"El juego se cerró: falta la función 0x{addr:08X}.")
@@ -329,11 +362,15 @@ def run_launcher(root):
     app = QApplication.instance()
     cfg = AppConfig.load()
     try:
-        accent = accent_color(cfg.accent)
+        from . import titleprofiles
+        accent = titleprofiles.resolve(root).theme.accent or accent_color(cfg.accent)
         app.setProperty("accent", accent)
         app.setStyleSheet(build_qss(accent))
     except Exception:      # noqa: BLE001 — el lanzador funciona aunque falle el tema
-        pass
+        try:
+            app.setStyleSheet(build_qss(accent_color(cfg.accent)))
+        except Exception:      # noqa: BLE001
+            pass
     w = GameLauncher(root)
     w.show()
     return app.exec()

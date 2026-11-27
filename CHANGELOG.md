@@ -2,6 +2,32 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.52.0 — Perfiles por título: cada juego con su launcher, opciones y estado (piloto: Asura's Wrath)
+
+- **Elegir un juego produce su propia experiencia.** Nueva infraestructura `reforge/titleprofiles.py`: un
+  **perfil por título (y variante)** define el **tema** visual, las **opciones** disponibles y las
+  **adaptaciones** verificadas. Cada opción declara **quién la aplica** (launcher/runtime/codegen), **cuándo**
+  (al instante / al reiniciar / al recompilar) y **cómo se comprueba el valor efectivo** — una sola definición
+  compartida por el launcher y el menú del juego. Se resuelve por **Title ID**, y las revisiones por la huella
+  del XEX (`media_id`/`version`).
+- **Asura's Wrath** (Title ID `43430817`) es el **primer perfil a medida**: launcher con fondo **carbón** y
+  acentos **cobre/rojo**, sus adaptaciones (SEH 210/210; reintento del cierre intermitente hasta 8 veces), y las
+  mejoras de **FPS alto** y **ultrapanorámica** definidas pero **sin verificar** (no se ofrecen como listas hasta
+  comprobar QTE, cámara/HUD/vídeos).
+- **Perfil genérico utilizable** para cualquier otro juego (nombre, recursos locales, opciones generales). Añadir
+  un perfil a `PROFILES` basta para personalizar el siguiente juego, **sin que ningún hook de Asura se active
+  para otro ejecutable** (probado). Se muestran **dos estados por separado**: «perfil visual» (a medida/básico,
+  siempre creado) y «compatibilidad jugable».
+- **Hitos del juego** (`reforge/milestones.py`): escalera `ejecutable generado → runtime iniciado → primera
+  función del título → primer fotograma → menú interactivo → escena jugable`. El launcher **anota el hito** tras
+  cada partida (lo infiere del log) y muestra «Compatibilidad jugable»; el runtime puede escribir el suyo en
+  `reforge_milestones.txt` junto al `.exe`.
+- **Launcher conectado al perfil** (`reforge/launcher.py`): resuelve el perfil al abrir, aplica su tema, muestra
+  nombre + los dos estados y registra el hito jugable. «Ports de la comunidad» se mantiene como puente a los
+  runtimes originales.
+- Guía del piloto en `docs/ASURA_PILOT.md` (cómo abrir el launcher de Asura, verificar hitos/QTE/DLSS en tu PC
+  con comandos exactos, y añadir el perfil del siguiente juego). Suite 66/66.
+
 ## 1.51.3 — Botón «Cancelar compilación» a mano, y «Ports de la comunidad» como puente simple
 
 - **Cancelar compilación siempre visible.** El botón de cancelar vivía en el formulario de la izquierda, que en
