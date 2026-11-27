@@ -33,10 +33,13 @@ check(ms.analyze_text("Vulkan initialization failed")["first_error"] != "",
 
 print("Positivos reales (con evidencia)")
 a = ms.analyze_text("rexglue runtime initialized\npresented frame 1 ok\nframe time: 16 ms  fps: 60")
-check(a["level"] == ms.KEY_LEVEL["PLAYABLE_SCENE"], "init + present + tiempos de fotograma → escena jugable")
+check(a["level"] == ms.KEY_LEVEL["FIRST_FRAME"],
+      "init + present + 30/60 FPS → PRIMER FOTOGRAMA (no escena jugable sin entrada)")
 check(a["confirmed"].get("FIRST_FRAME", "").startswith("log:"), "guarda la evidencia del fotograma")
-check(ms.analyze_text("[milestone] FIRST_FRAME")["level"] == ms.KEY_LEVEL["FIRST_FRAME"],
-      "un marcador explícito en el log cuenta")
+check(ms.analyze_text("presented frame 1\ngameplay frame rendered")["level"] == ms.KEY_LEVEL["PLAYABLE_SCENE"],
+      "escena jugable solo con señal específica (gameplay), no con FPS del menú")
+check(ms.analyze_text("[milestone] INTERACTIVE_MENU")["level"] == ms.KEY_LEVEL["INTERACTIVE_MENU"],
+      "el menú interactivo requiere marcador explícito (entrada reconocida)")
 
 print("Separación por intentos, con el primer error de cada uno")
 d = tempfile.mkdtemp()
@@ -52,11 +55,11 @@ open(os.path.join(logs, "g_2.log"), "w").write("runtime initialized\npresented f
 ats = ms.attempts(exe)
 check(len(ats) == 2, "dos intentos, uno por log")
 check(ats[0]["first_error"] and "failed" in ats[0]["first_error"].lower(), "el 1er intento conserva su error")
-check(ms.last_session(exe)["level"] == ms.KEY_LEVEL["PLAYABLE_SCENE"], "la última sesión llegó a escena jugable")
+check(ms.last_session(exe)["level"] == ms.KEY_LEVEL["FIRST_FRAME"], "la última sesión presentó fotogramas (30/60 FPS = primer fotograma, no escena)")
 
 print("Mejor histórico combina exe + marcadores + intentos")
 b = ms.best(exe)
-check(b["level"] == ms.KEY_LEVEL["PLAYABLE_SCENE"] and "EXE_BUILT" in b["evidence"], "mejor histórico con evidencia")
+check(b["level"] == ms.KEY_LEVEL["FIRST_FRAME"] and "EXE_BUILT" in b["evidence"], "mejor histórico con evidencia")
 
 print("record/read del archivo del runtime (y validación manual)")
 ms.record(exe, "INTERACTIVE_MENU", "manual: probé el menú con mando")

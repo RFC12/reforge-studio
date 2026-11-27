@@ -1179,6 +1179,9 @@ class WorkshopPage(QWidget):
                 ctx.log("   Primer error de esta sesión: " + cls["first_error"], "dim")
             if cls.get("cause") == "utf8_deferred":
                 ctx.log("   " + game.UTF8_DEFERRED_MSG, "dim")
+                _attr = game.deferred_attribution(res)
+                if _attr:
+                    ctx.log("   ▶ Runtime instrumentado: " + _attr, "ok")
             elif cls.get("case") == "crash_unconfirmed":
                 ctx.log("   0xC0000409 sin [FATAL] en el log: causa pendiente de confirmar; se mantiene como "
                         "caso aparte.", "dim")
@@ -1430,6 +1433,9 @@ class WorkshopPage(QWidget):
                 self.log.write("   El supervisor de ReForge cerró el proceso al ver [FATAL].", "dim")
             if cls.get("cause") == "utf8_deferred":
                 self.log.write("   " + game.UTF8_DEFERRED_MSG, "dim")
+                _attr = game.deferred_attribution(out)
+                if _attr:
+                    self.log.write("   ▶ Runtime instrumentado: " + _attr, "ok")
             for ln in out.get("lines", []):
                 self.log.write("   " + ln, "dim")
             self._handle_crash(out, o)          # explica y lanza el mantenimiento automático
@@ -1652,6 +1658,9 @@ class WorkshopPage(QWidget):
                 if es_utf8:
                     self.log.write("⚠ " + game.UTF8_DEFERRED_MSG + " Es del runtime/SDK, no de tu recompilación: "
                                    "recompilar no lo arregla.", "warn")
+                    _attr = game.deferred_attribution(res)
+                    if _attr:
+                        self.log.write("▶ Runtime instrumentado: " + _attr, "ok")
                 else:
                     self.log.write(f"⚠ El juego se cerró ({caso}) sin una firma que señale a tu código "
                                    "recompilado. Puede ser del runtime del SDK.", "warn")

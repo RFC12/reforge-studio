@@ -2112,6 +2112,20 @@ UTF8_DEFERRED_MSG = ("Excepción «Invalid UTF-8» en una operación diferida. C
                      "identificar (hace falta la pila del lanzamiento; ver docs/ASURA_PILOT.md).")
 
 
+def deferred_attribution(res):
+    """Si el log del cierre viene de un runtime INSTRUMENTADO (parche dispatcher_trace), devuelve una línea que
+    atribuye el fatal a la tarea/encolador que lo lanzó; si no, ''. Así, con el runtime de diagnóstico, el campo
+    deja de estar «pendiente» y se nombra quién lo encoló."""
+    try:
+        txt = _read_log_text(res.get("path")) if isinstance(res, dict) else ""
+        if not txt:
+            return ""
+        from . import deferred_trace
+        return deferred_trace.summary(txt)
+    except Exception:      # noqa: BLE001
+        return ""
+
+
 def attempt_result(res):
     """Clasifica UN intento para el Taller y el launcher, sin mezclar casos. Devuelve:
       ok     → el juego terminó bien (se cerró solo, sin error).

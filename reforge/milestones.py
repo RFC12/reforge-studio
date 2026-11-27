@@ -94,23 +94,26 @@ def _confirms_title_func(low):
                                   "title code", "recompiled entry"))
 
 
-def _confirms_frame(low):
-    if _is_fail(low):
-        return False
-    return any(t in low for t in ("presented", "present ok", "first frame", "frame presented",
-                                  "swapchain created", "displayed frame", "present succeeded"))
-
-
-# Escena jugable: solo con tiempos de fotograma REALES (números), no con «stutter monitoring enabled».
+# Fotogramas presentados: una señal de presentación, O FPS/tiempos de fotograma sostenidos (el juego dibuja
+# —aunque sea el menú del título—). «stutter monitoring enabled» NO cuenta (no es un número).
 _FRAMETIME_NUM = re.compile(r"frame\s*time\s*[:=]?\s*\d|\b\d+(\.\d+)?\s*ms\b.*\bfps\b|\bfps\s*[:=]?\s*\d{2,}")
 
 
-def _confirms_scene(low):
+def _confirms_frame(low):
     if _is_fail(low):
         return False
-    if "playable" in low or "gameplay frame" in low:
+    if any(t in low for t in ("presented", "present ok", "first frame", "frame presented",
+                              "swapchain created", "displayed frame", "present succeeded")):
         return True
-    return bool(_FRAMETIME_NUM.search(low))
+    return bool(_FRAMETIME_NUM.search(low))     # FPS/tiempos reales = se están presentando fotogramas
+
+
+def _confirms_scene(low):
+    # Escena jugable: NO se infiere de dibujar a 30 FPS (el menú del título también dibuja). Requiere una señal
+    # específica (marcador del runtime instrumentado o validación manual: input reconocido / escena cargada).
+    if _is_fail(low):
+        return False
+    return ("playable" in low or "gameplay frame" in low or "entered scene" in low)
 
 
 def _explicit_marker(low):
@@ -267,10 +270,8 @@ def record_from_run(exe, outcome):
         return 0
     a = last_session(exe)
     level = a["level"]
-    kind = (outcome or {}).get("kind", "")
-    # un cierre limpio tras presentar frames es, al menos, juego en marcha
-    if kind == "clean" and level >= KEY_LEVEL["FIRST_FRAME"]:
-        level = max(level, KEY_LEVEL["PLAYABLE_SCENE"])
+    # No se sube a «escena jugable» ni «menú interactivo» por presentar fotogramas: eso exige una entrada
+    # reconocida (marcador explícito). Presentar a 30 FPS en el título queda en «primer fotograma presentado».
     if level:
         record(exe, LADDER[level][0], a["confirmed"].get(LADDER[level][0], "inferido tras la partida"))
     return level

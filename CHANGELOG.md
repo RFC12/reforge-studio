@@ -2,6 +2,25 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.56.0 — Asura: runtime de diagnóstico instrumentado para identificar quién encola la tarea diferida
+
+- **Parche de traza del despachador** (`docs/patches/dispatcher_trace/`): instrumenta `src/kernel/dispatcher.cpp`
+  del SDK para asignar un **id único** a cada tarea diferida y escribir, a nivel WARN (aparece sin modo debug),
+  `enqueue id/ra/overlapped`, `run id`, `done id/result`, y el **id de la tarea activa en el `[FATAL]`**. `ra` es
+  la dirección de retorno del que encoló (`__builtin_return_address`), sin cambiar firmas de interfaz. Así se
+  distinguen dos tareas que reutilizan la misma dirección `overlapped` (las dos sobre `41F0FF50` del 121) y se
+  identifica **quién encola** la que lanza. Incluye `build_diag_runtime.ps1`: un comando que aplica el parche,
+  compila `rexruntime.dll` con símbolos, lo ejecuta en una carpeta aparte (sin tocar instalación/TU/partidas),
+  hace **un intento** y arma el ZIP (traza de tareas, módulos+bases, hash de la DLL, log).
+- **Lector de traza en ReForge** (`reforge/deferred_trace.py`): cuando el cierre viene de un runtime
+  instrumentado, el Taller muestra «▶ Runtime instrumentado: Tarea diferida #N (encolada desde ra=…) lanzó
+  «Invalid UTF-8»; otra(s) tarea(s) usaron esa misma dirección y terminaron bien: no son la causa». Mecanismo
+  **probado** con `tests/test_deferred_trace.py` (dos tareas en la misma dirección → se culpa a la segunda).
+- **Hitos más honestos:** presentar a 30 FPS (incluido el menú del título) cuenta como **primer fotograma**, no
+  como escena jugable; **menú interactivo** y **escena jugable** exigen una señal específica (entrada reconocida /
+  marcador), no se infieren del framerate. Ajustado `milestones.record_from_run` y las pruebas.
+- Suite **70/70**.
+
 ## 1.55.0 — Asura: diagnóstico del cierre UTF-8 unificado y honesto (sin atribuir el campo sin la pila)
 
 - **Un solo mensaje para el cierre UTF-8** (`game.UTF8_DEFERRED_MSG`): «Excepción `Invalid UTF-8` en una

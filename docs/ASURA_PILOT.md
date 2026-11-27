@@ -200,7 +200,27 @@ Leí tu `build\logs\asuraswrath_121.log` completo (18 914 líneas). La secuencia
 - **Binarios que carga el proceso:** `rexruntime.dll` (0.10.0.24), `rexgpu-xenos.dll`, `amd_fidelityfx_dx12.dll`
   → variante **-fsr**.
 
-### Captura del campo exacto SIN recompilar (first-chance con cdb)
+### Opción preferida: runtime de diagnóstico instrumentado (identifica quién encola)
+
+Como el log pierde la operación (el despachador ejecuta un `fn()` sin nombre), la vía más directa es un
+`rexruntime.dll` **instrumentado**: asigna un **id único** a cada tarea diferida y registra, a nivel WARN,
+`enqueue id/ra/overlapped`, `run id`, `done id/result`, y el **id de la tarea activa en el fatal**. Así se
+distinguen dos tareas que reutilizan la misma dirección `overlapped` (como las dos sobre `41F0FF50` del 121) y se
+sabe **quién encoló** la que lanza (`ra` = dirección de retorno del llamador, se simboliza con el `.map`).
+
+- Parche y pasos: `docs/patches/dispatcher_trace/README.md`.
+- Un solo comando que aplica el parche, compila el runtime con símbolos, lo pone en una carpeta aparte (sin tocar
+  tu instalación/TU/partidas), hace **un intento** y arma el ZIP: `docs/patches/dispatcher_trace/build_diag_runtime.ps1`.
+- El **mecanismo de atribución ya está probado** en ReForge: `tests/test_deferred_trace.py` reproduce las dos
+  tareas sobre la misma dirección (una termina, otra lanza) y comprueba que se culpa a la segunda. Y ReForge lee
+  esa traza automáticamente: cuando el cierre venga de un runtime instrumentado, el Taller mostrará
+  «▶ Runtime instrumentado: Tarea diferida #N (encolada desde ra=…) lanzó «Invalid UTF-8»…».
+
+**Devuélveme el `diag_asura_*.zip`** que genera ese script (trae `task_trace.txt` con las líneas `[deferred]`,
+`modules.txt` con las bases para simbolizar el `ra`, el hash de la DLL y el log del intento). Con eso simbolizo el
+`ra`, nombro la función que encola y corrijo esa frontera con una prueba de regresión.
+
+### Alternativa SIN recompilar (first-chance con cdb)
 
 Esto detiene la ejecución **cuando se lanza** la excepción C++ (antes de que el despachador la convierta en un
 fatal genérico) y vuelca la pila real. Necesita las *Debugging Tools for Windows* (cdb). Un solo intento, no toca
