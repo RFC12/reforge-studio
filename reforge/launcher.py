@@ -190,8 +190,21 @@ class GameLauncher(QWidget):
             from . import titleprofiles
             st = titleprofiles.status(self.root, self.profile)
             visual = "a medida" if st["visual"] == "a medida" else "básico (auto)"
-            self.pstatus.setText(f"Perfil visual: {visual} · «{self.profile.theme.name}»    |    "
-                                 f"Compatibilidad jugable: {st['playable']}")
+            parts = [f"Perfil visual: {visual} · «{self.profile.theme.name}»",
+                     f"Compatibilidad jugable: {st['playable']}"]
+            if st.get("evidence"):
+                parts[-1] += f" (evidencia: {st['evidence']})"
+            line2 = []
+            if st.get("attempts"):
+                line2.append(f"{st['attempts']} intento(s); última sesión: {st.get('last', '')}")
+            if st.get("first_error"):
+                line2.append(f"primer error: {st['first_error']}")
+            if st.get("triage") and st.get("playable_level", 0) < 4:
+                line2.append(f"si hay pantalla negra, falló {st['triage']}")
+            txt = "    |    ".join(parts)
+            if line2:
+                txt += "\n" + "  ·  ".join(line2)
+            self.pstatus.setText(txt)
         except Exception:      # noqa: BLE001
             pass
 

@@ -588,6 +588,17 @@ class GuideMenu final : public rex::ui::DialogBase {
 
   // ---------------------------------------------------------------- dibujo
   void Render(ImGuiIO& io) {
+    // Hitos de ReForge: el diálogo se dibuja cada fotograma; si se dibuja, el juego presentó una imagen
+    // (runtime arriba, código del título en ejecución). Se escriben una vez al log; el launcher los lee.
+    { static bool rf_once = false; if (!rf_once) { rf_once = true;
+        std::fprintf(stderr, "[milestone] RUNTIME_INIT overlay de ReForge activo\n");
+        std::fprintf(stderr, "[milestone] FIRST_TITLE_FUNC codigo del titulo en ejecucion\n");
+        std::fprintf(stderr, "[milestone] FIRST_FRAME overlay dibujado sobre un fotograma presentado\n");
+        std::fprintf(stderr, "[render] presented %.0fx%.0f\n", io.DisplaySize.x, io.DisplaySize.y);
+        std::fflush(stderr); } }
+    if (open_) { static bool rf_menu = false; if (!rf_menu) { rf_menu = true;
+        std::fprintf(stderr, "[milestone] INTERACTIVE_MENU menu Guia abierto con el mando\n");
+        std::fflush(stderr); } }
     if (open_ && tab_ == kAchievements && imgs_dirty_) {
       imgs_dirty_ = false;
     }

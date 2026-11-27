@@ -2,6 +2,37 @@
 
 > El README muestra solo lo esencial. Aquí está el detalle de cada versión.
 
+## 1.53.0 — Piloto de Asura's Wrath: hitos desde el runtime, dos vistas, y arreglo del cierre «Invalid UTF-8»
+
+- **Hitos sin falsos positivos, con intentos y evidencia** (`reforge/milestones.py`). `Vulkan initialization
+  failed`, `swapchain creation failed` o `stutter monitoring enabled` ya **no** confirman un fotograma ni una
+  escena (filtro consciente de fallos; la escena jugable exige tiempos de fotograma reales, no la palabra
+  «stutter»). Se separan **última sesión**, **cada intento** (con su primer error) y **mejor histórico**, cada
+  hito con su **evidencia**. Dimensiones **presentadas** leídas del runtime (`[render] presented WxH`).
+- **Instrumentación C++ del ejecutable** (`ext_cpp.py`/`ext11.py`): el overlay escribe al log `RUNTIME_INIT`,
+  `FIRST_TITLE_FUNC` y `FIRST_FRAME` (si el overlay se dibuja, el juego presentó una imagen) y `INTERACTIVE_MENU`
+  al abrir el menú; el launcher muestra **cuál fue la evidencia**. Para escena jugable, validación manual
+  identificada como tal.
+- **Dos vistas del launcher desde UNA definición de opciones** (`reforge/launcher_views.py`): rápida y avanzada
+  (Juego/Pantalla/Gráficos/Audio/Controles), navegables con mando/teclado/ratón, **foco visible**, **ayuda por
+  opción** (con quién la aplica, cuándo y cómo se comprueba), y se conserva la selección al alternar. Capturas
+  reales en `docs/img/`.
+- **Huella del XEX + adaptaciones por variante** (`titleprofiles.py`): dos revisiones con el mismo Title ID
+  comparten **tema** pero cada una recibe solo **sus** adaptaciones compatibles (probado).
+- **Ajuste de resolución y persistencia**: salida vs render interno modelados; los ajustes se cargan por la ruta
+  del proyecto y la config del runtime vive junto al `.exe` (ruta absoluta), así que **abrir el `.exe` desde otro
+  directorio conserva ajustes y datos** (probado).
+- **Triaje de pantalla negra**: «antes del código del juego» / «al preparar el renderer» / «después de presentar
+  una imagen».
+- **Cierre «Invalid UTF-8» al añadir la TU — etiquetado corregido.** Un `[FATAL]` ya **no** se clasifica como
+  `clean` (antes `[FATAL]` no estaba en `RUNTIME_BAD_RE`): el paso «Probar el juego» **figura como ✖**, conserva
+  el **primer error** y distingue **el juego terminó / el supervisor cerró el proceso / causa pendiente de
+  confirmar** (0xC0000409 sin `[FATAL]`, mantenido aparte). Se corrige la atribución: no es «una carrera benigna,
+  vuelve a abrir», es reproducible y del runtime/SDK (localizado en `dispatcher.cpp:334` + la conversión UTF-8
+  estricta de `string/text.h`). Regresión `tests/test_crash_signatures.py` con las firmas 104/105/106.
+- Guía `docs/ASURA_PILOT.md`: causa confirmada, binarios que carga el `.exe` (variante -fsr), y un bloque
+  PowerShell de **un solo intento** que conserva guardados y reúne el log a devolver. Suite **68/68**.
+
 ## 1.52.0 — Perfiles por título: cada juego con su launcher, opciones y estado (piloto: Asura's Wrath)
 
 - **Elegir un juego produce su propia experiencia.** Nueva infraestructura `reforge/titleprofiles.py`: un

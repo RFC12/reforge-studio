@@ -75,7 +75,8 @@ class _FuncThread(QThread):
             ok = not self.cancel_event.is_set()
             self.done.emit(ok, "" if ok else "Cancelado por el usuario")
         except Exception as e:  # noqa
-            self.log_signal.emit(traceback.format_exc().rstrip(), "dim")
+            if not getattr(e, "quiet", False):      # fallos esperados (p. ej. la prueba del juego) sin traza
+                self.log_signal.emit(traceback.format_exc().rstrip(), "dim")
             self.done.emit(False, str(e))
 
 

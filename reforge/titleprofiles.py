@@ -45,14 +45,22 @@ class Theme:
 
 
 @dataclass
+class Adaptation:
+    """Una adaptación verificada. `variants` vacío = aplica a todas las revisiones del mismo Title ID; si no,
+    solo a las que coincidan por media_id, version o huella del XEX."""
+    text: str
+    variants: tuple = ()
+
+
+@dataclass
 class TitleProfile:
     id: str
     title_id: str
     name: str
     theme: Theme
     options: list = field(default_factory=list)         # [OptionSpec]
-    adaptations: list = field(default_factory=list)     # notas de adaptaciones verificadas
-    variants: dict = field(default_factory=dict)        # media_id/version -> etiqueta
+    adaptations: list = field(default_factory=list)     # [Adaptation]
+    variants: dict = field(default_factory=dict)        # media_id/version/huella -> etiqueta
     notes: str = ""
     generic: bool = False
 
@@ -63,6 +71,17 @@ class TitleProfile:
         out = {g: [] for g in GROUPS}
         for o in self.options:
             out.setdefault(o.group, []).append(o)
+        return out
+
+    def adaptations_for(self, ident):
+        """Las adaptaciones aplicables a ESTA revisión: las globales más las de su variante. El TEMA se comparte
+        entre revisiones; las adaptaciones no."""
+        keys = {ident.get("media_id", ""), ident.get("version", ""), ident.get("fingerprint", "")}
+        keys.discard("")
+        out = []
+        for a in self.adaptations:
+            if not a.variants or (set(a.variants) & keys):
+                out.append(a)
         return out
 
 
@@ -130,9 +149,10 @@ ASURA = TitleProfile(
     theme=Theme(name="Asura · carbón y cobre", bg="#17120E", accent="#C8793C", accent2="#7A1E12"),
     options=_common_options() + [_fps_option(verified=False), _ultrawide_option(verified=False)],
     adaptations=[
-        "Compilación completa (SEH_TRY/SEH_CATCH/SEH_END resuelto): 210/210 funciones con manejadores.",
-        "Cierre intermitente al arrancar (carrera asíncrona del runtime): el launcher reintenta solo hasta 8 "
-        "veces; Asura llegó a necesitarlas.",
+        Adaptation("Compilación completa (SEH_TRY/SEH_CATCH/SEH_END resuelto): 210/210 funciones con "
+                   "manejadores."),
+        Adaptation("Cierre intermitente al arrancar (carrera asíncrona del runtime): el launcher reintenta solo "
+                   "hasta 8 veces; Asura llegó a necesitarlas."),
     ],
     notes="Piloto de la infraestructura de perfiles. Las mejoras de FPS alto y ultrapanorámica están definidas "
           "pero NO verificadas para este título: se ofrecerán cuando se compruebe su comportamiento (QTE, "
@@ -143,16 +163,33 @@ PROFILES = [ASURA]
 
 
 # --------------------------------------------------------------------------- identidad y resolución
+def xex_fingerprint(root):
+    """Huella estable de la revisión del juego: SHA-1 (16 hex) del primer MB del default.xex. '' si no se puede.
+
+    Distingue revisiones con el MISMO Title ID (que comparten tema) para darle a cada una solo sus adaptaciones
+    compatibles."""
+    import hashlib
+    xex = os.path.join(root, "assets", "default.xex")
+    try:
+        h = hashlib.sha1()
+        with open(xex, "rb") as f:
+            h.update(f.read(1 << 20))
+        return h.hexdigest()[:16]
+    except OSError:
+        return ""
+
+
 def identity(root):
-    """(title_id, media_id, version) del juego del proyecto, desde su XEX. Vacíos si no se puede leer."""
-    out = {"title_id": "", "media_id": "", "version": ""}
+    """(title_id, media_id, version, fingerprint) del juego del proyecto. Vacíos si no se puede leer."""
+    out = {"title_id": "", "media_id": "", "version": "", "fingerprint": ""}
     try:
         from .xex import read_xex_info
         xex = os.path.join(root, "assets", "default.xex")
         if os.path.isfile(xex):
             info = read_xex_info(xex)
-            for k in out:
+            for k in ("title_id", "media_id", "version"):
                 out[k] = info.get(k, "") or ""
+            out["fingerprint"] = xex_fingerprint(root)
     except Exception:      # noqa: BLE001
         pass
     return out
@@ -230,17 +267,23 @@ def status(root, profile=None):
     jugable» (hasta dónde llega el juego, por hitos). Devuelve un dict legible para la interfaz."""
     profile = profile or resolve(root)
     exe = _exe_for(root)
+    summ = {"best_level": 0, "best_desc": "sin datos", "best_evidence": "", "last_desc": "sin datos",
+            "last_first_error": "", "attempts": 0, "triage": ""}
     try:
         from . import milestones
-        level = milestones.level_for(root, exe)
-        playable = milestones.describe(level)
+        summ = milestones.summary(exe)
     except Exception:      # noqa: BLE001
-        level, playable = 0, "sin datos"
+        pass
     return {
         "visual": "a medida" if not profile.generic else "básico",
         "visual_ok": True,                 # el perfil visual siempre se crea
-        "playable": playable,
-        "playable_level": level,
+        "playable": summ["best_desc"],
+        "playable_level": summ["best_level"],
+        "evidence": summ.get("best_evidence", ""),
+        "last": summ.get("last_desc", ""),
+        "first_error": summ.get("last_first_error", ""),
+        "attempts": summ.get("attempts", 0),
+        "triage": summ.get("triage", ""),
         "exe": exe,
         "built": bool(exe),
     }

@@ -1153,18 +1153,38 @@ class WorkshopPage(QWidget):
             self._watch_result = res
             if res["kind"] == "running":
                 ctx.log(f"✔ El juego sigue abierto tras {o.repair_watch_seconds} s: arrancó correctamente.", "ok")
-            elif res["kind"] == "unregistered":
-                ctx.log(f"✖ El juego se cerró: llamada a una función no registrada en 0x{res['address']:08X}", "err")
-            elif res["kind"] in ("crash", "guest_av"):
-                ctx.log(f"✖ {game.crash_advice(res)} (tras {res.get('seconds')} s)", "err")
-            elif res["kind"] == "hang":
-                ctx.log("✖ El juego se quedó colgado (sin imagen) y se cerró.", "err")
+                if res.get("path"):
+                    ctx.log(f"Log del juego: {res['path']}", "dim")
+                return
+            cls = game.attempt_result(res)
+            caso = game.CASE_LABEL.get(cls["case"], cls["case"])
+            if cls["ok"]:
+                ctx.log(f"✔ El juego se cerró solo sin errores tras {res.get('seconds')} s ({caso}).", "ok")
+                if res.get("path"):
+                    ctx.log(f"Log del juego: {res['path']}", "dim")
+                return
+            # Falló la prueba. Se registra el caso y el PRIMER error de esta sesión, y el paso figura como ✖.
+            if res["kind"] == "unregistered":
+                ctx.log(f"✖ El juego se cerró: llamada a una función no registrada en 0x{res['address']:08X} "
+                        f"({caso}).", "err")
             else:
-                ctx.log(f"El juego se cerró (código {res.get('exit_code')}) tras {res.get('seconds')} s.", "warn")
+                ctx.log(f"✖ La prueba del juego FALLÓ: {caso} · código {res.get('exit_code')} · "
+                        f"tras {res.get('seconds')} s.", "err")
+            if cls.get("first_error"):
+                ctx.log("   Primer error de esta sesión: " + cls["first_error"], "dim")
+            if cls.get("cause") == "utf8_deferred":
+                ctx.log("   Causa: una operación diferida del runtime leyó un texto del juego como UTF-8 estricto "
+                        "y no lo era (reproducible al añadir una actualización/TU con nombres que no son UTF-8).",
+                        "dim")
+            elif cls.get("case") == "crash_unconfirmed":
+                ctx.log("   0xC0000409 sin [FATAL] en el log: causa pendiente de confirmar; se mantiene como "
+                        "caso aparte.", "dim")
             for ln in res.get("lines", []):
                 ctx.log("   " + ln, "dim")
             if res.get("path"):
                 ctx.log(f"Log del juego: {res['path']}", "dim")
+            if res["kind"] != "unregistered":      # la función no registrada tiene su propia ruta de reparación
+                raise game.GameRunFailed(caso)
         return Step("watch", "Probar el juego", func=do_watch)
 
     def _start_watch_only(self, p):
@@ -1307,7 +1327,9 @@ class WorkshopPage(QWidget):
         p = self.current
         res = self._watch_result
         self._update_play()
-        if not ok or not res:
+        # `ok` es False cuando la prueba del juego falló (GameRunFailed) o se canceló. Si hay resultado de la
+        # prueba (res), se maneja el cierre aunque el paso figure como ✖; solo sin resultado se detiene.
+        if not res:
             self.status_lbl.setText("Detenido")
             return
         o = GameOptions.load(p.root)
@@ -1598,21 +1620,34 @@ class WorkshopPage(QWidget):
             # lo confundía con una optimización agresiva y la apagaba, perdiendo rendimiento sin motivo. El
             # mensaje de la excepción cambia («Invalid UTF-8», «Not enough space») y a veces el log no llega a
             # escribirlo: también cuenta el 0xC0000409 sin nada que señale al juego.
+            cls = game.attempt_result(res)
+            caso = game.CASE_LABEL.get(cls["case"], cls["case"])
+            es_utf8 = cls.get("cause") == "utf8_deferred"
+            if cls.get("first_error"):
+                self.log.write("   Primer error de esta sesión: " + cls["first_error"], "dim")
             tries = getattr(self, "_utf8_retries", 0)
             if tries < 2:
                 self._utf8_retries = tries + 1
-                self.status_lbl.setText("Reabriendo el juego (fallo intermitente del SDK)…")
-                self.log.write("⚠ El juego se cerró por el fallo INTERMITENTE del runtime de rexglue "
-                               "(una completion diferida del despachador: «Invalid UTF-8», «Not enough space»…): "
-                               "es un bug conocido del SDK, no de tu juego ni de la optimización, y recompilar no "
-                               "lo arregla.", "warn")
-                self.log.write(f"↻ Se vuelve a abrir solo (intento {tries + 2} de 3)…", "warn")
+                self.status_lbl.setText("Reabriendo el juego para confirmar el patrón…")
+                if es_utf8:
+                    self.log.write("⚠ El juego se cerró en una completion diferida del despachador del runtime al "
+                                   "leer un texto del juego como UTF-8 estricto que no lo era. Si te pasa SIEMPRE "
+                                   "(p. ej. desde que añadiste una actualización/TU), es reproducible y está en el "
+                                   "runtime/SDK, no en tu recompilación: recompilar no lo arregla.", "warn")
+                else:
+                    self.log.write(f"⚠ El juego se cerró ({caso}) sin una firma que señale a tu código "
+                                   "recompilado. Puede ser del runtime del SDK.", "warn")
+                self.log.write(f"↻ Se vuelve a abrir para ver si es constante o intermitente "
+                               f"(intento {tries + 2} de 3)…", "warn")
                 QTimer.singleShot(800, lambda: self.play(auto=True))
             else:
                 self._utf8_retries = 0
-                self.log.write("El fallo intermitente del SDK ha salido 3 veces seguidas. No se toca la "
-                               "optimización ni se recompila: es una carrera interna del runtime; vuelve a "
-                               "abrir el juego en un rato.", "warn")
+                self.status_lbl.setText("El juego se cerró · causa en el runtime/SDK")
+                self.log.write("✖ Se cerró en los 3 arranques: NO es intermitente, es reproducible. No se toca la "
+                               "optimización ni se recompila (no es tu código). Siguiente paso: diagnóstico de un "
+                               "solo intento con símbolos para capturar qué texto no-UTF-8 lo provocó "
+                               "(ver docs/ASURA_PILOT.md). Si empezó al añadir una TU, prueba sin ella para "
+                               "confirmarlo.", "err")
             return
         if kind == "unregistered":
             addr = res["address"]

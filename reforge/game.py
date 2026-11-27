@@ -1769,19 +1769,35 @@ def analyze_runtime_log(path, exit_code=None):
     if sb:
         return {"kind": "split", "address": None, "lines": bad[-6:], "path": path,
                 "branch": (int(sb.group(1), 16), int(sb.group(2), 16))}
+    # El primer error del intento y si fue el fallo de texto no-UTF-8 del despachador (se conservan para el
+    # resultado del Taller/launcher, aunque luego haya una línea de cierre).
+    all_lines = txt.splitlines()
+    fatal_lines = [ln for ln in all_lines if RUNTIME_FATAL_RE.search(ln)]
+    first_error = next((ln.strip()[:200] for ln in all_lines
+                        if RUNTIME_FATAL_RE.search(ln) or RUNTIME_BAD_RE.search(ln)), "")
+    utf8 = ("deferred completion threw" in txt and "UTF-8" in txt) or "Invalid UTF-8" in txt
     av = GUEST_AV_RE.search(txt)
     if av:
         at = CRASH_AT_RE.search(txt)
         if at:
             bad = bad + [at.group(0)]
         return {"kind": "guest_av", "address": None, "lines": bad[-6:], "path": path, "crash": crash,
-                "access": av.group(1), "guest_address": int(av.group(2), 16), "hotplug": hotplug}
+                "access": av.group(1), "guest_address": int(av.group(2), 16), "hotplug": hotplug,
+                "first_error": first_error, "utf8": utf8}
+    # Un [FATAL] del runtime manda SIEMPRE: aunque el log también traiga una línea de cierre (el abort puede
+    # dejar «Title terminated»), NO es un cierre limpio. Antes [FATAL] no estaba en RUNTIME_BAD_RE (solo
+    # [critical]/[error]), así que un cierre por «deferred completion threw 'Invalid UTF-8'» pasaba por «clean»
+    # y el Taller lo marcaba ✔/★. Eso se corrige aquí.
+    if fatal_lines:
+        return {"kind": "fatal", "address": None, "lines": (fatal_lines + bad)[-8:], "path": path,
+                "crash": crash, "hotplug": hotplug, "first_error": first_error, "utf8": utf8}
     if crash:
         return {"kind": "crash", "address": None, "lines": bad[-8:], "path": path, "crash": crash,
-                "hotplug": hotplug}
+                "hotplug": hotplug, "first_error": first_error, "utf8": utf8}
     if bad and not CLEAN_EXIT_RE.search(txt):
-        return {"kind": "fatal", "address": None, "lines": bad[-8:], "path": path}
-    return {"kind": "clean", "address": None, "lines": [], "path": path}
+        return {"kind": "fatal", "address": None, "lines": bad[-8:], "path": path,
+                "first_error": first_error, "utf8": utf8}
+    return {"kind": "clean", "address": None, "lines": [], "path": path, "first_error": "", "utf8": False}
 
 
 ONLINE_STUB_RE = re.compile(r"__imp__(XamGetToken|XamGetServiceEndpoint|NetDll_XHttp\w+|XampXAuth\w+|XOnline\w+|"
@@ -2050,6 +2066,7 @@ def launch_and_watch(cfg, exe, root, seconds, ctx, detect_hang=False):
     res = analyze_runtime_log(_fresh_log(exe, before) or log_path, None if killed else p.returncode)
     res["exit_code"] = p.returncode
     res["seconds"] = round(time.time() - t0, 1)
+    res["killed"] = killed      # ¿lo cerró el supervisor (al ver [FATAL]) o terminó el propio juego?
     return res
 
 
@@ -2063,11 +2080,65 @@ def check_running_game(exe, res):
     fatal = bool(path) and _log_has_fatal(path)
     if p.poll() is None and not fatal:
         return None
+    killed = False
     if p.poll() is None:
         _kill_tree(p)
-    out = analyze_runtime_log(path, p.returncode)
+        killed = fatal          # si seguía vivo y lo cerramos por [FATAL], lo cerró el supervisor
+    out = analyze_runtime_log(path, None if killed else p.returncode)
     out["exit_code"] = p.returncode
+    out["killed"] = killed
     return out
+
+
+class GameRunFailed(Exception):
+    """La prueba del juego falló (se cerró con error o lo cerró el supervisor). Hace que el paso «Probar el
+    juego» figure como ✖ en vez de ✔. No es un error del programa, así que no se imprime su traza."""
+    quiet = True
+
+
+CASE_LABEL = {
+    "game_terminated": "el juego terminó",
+    "supervisor_killed": "el supervisor cerró el proceso (vio [FATAL])",
+    "crash_unconfirmed": "causa pendiente de confirmar (0xC0000409 sin [FATAL])",
+}
+
+
+def attempt_result(res):
+    """Clasifica UN intento para el Taller y el launcher, sin mezclar casos. Devuelve:
+      ok     → el juego terminó bien (se cerró solo, sin error).
+      case   → 'game_terminated' | 'supervisor_killed' | 'crash_unconfirmed'
+      cause  → 'utf8_deferred' | 'guest_av' | 'unregistered' | 'abort_no_fatal' | 'fatal' | 'crash' | ''
+      first_error, exit_code, seconds.
+
+    Distingue «el juego terminó», «el supervisor cerró el proceso» (al ver [FATAL]) y «causa pendiente de
+    confirmar» (0xC0000409 sin [FATAL] ni firma del juego). El intento 105 (0xC0000409 sin fatal) cae en
+    'crash_unconfirmed' y NO se mezcla con los de UTF-8 hasta que haya evidencia de causa común.
+    """
+    kind = res.get("kind", "")
+    killed = bool(res.get("killed", False))
+    utf8 = bool(res.get("utf8", False))
+    first = res.get("first_error", "")
+    crash = res.get("crash", "") or ""
+    out = {"first_error": first, "exit_code": res.get("exit_code"), "seconds": res.get("seconds")}
+    if kind == "clean" and not killed:
+        return {**out, "ok": True, "case": "game_terminated", "cause": ""}
+    if kind == "unregistered":
+        return {**out, "ok": False, "case": ("supervisor_killed" if killed else "game_terminated"),
+                "cause": "unregistered"}
+    if kind == "guest_av":
+        return {**out, "ok": False, "case": ("supervisor_killed" if killed else "game_terminated"),
+                "cause": "guest_av"}
+    if kind == "fatal" or killed:
+        return {**out, "ok": False, "case": ("supervisor_killed" if killed else "game_terminated"),
+                "cause": ("utf8_deferred" if utf8 else "fatal")}
+    if kind == "crash":
+        if utf8:
+            return {**out, "ok": False, "case": "game_terminated", "cause": "utf8_deferred"}
+        if "0xC0000409" in crash:
+            # Aborto del runtime sin [FATAL] ni firma del juego en el log: caso aparte, causa por confirmar.
+            return {**out, "ok": False, "case": "crash_unconfirmed", "cause": "abort_no_fatal"}
+        return {**out, "ok": False, "case": "game_terminated", "cause": "crash"}
+    return {**out, "ok": (kind in ("running", "clean")), "case": "game_terminated", "cause": kind}
 
 
 def ext_build_failed(lines):

@@ -1253,6 +1253,14 @@ class GuideMenu {
   bool open() const { return open_; }
 
   void Draw(ImGuiIO& io) {
+    // Hitos de ReForge: si el overlay se dibuja, el juego presentó un fotograma (runtime arriba, código del
+    // título en ejecución). Se escriben una vez al log; el launcher los lee. No usa APIs del SDK.
+    { static bool rf_once = false; if (!rf_once) { rf_once = true;
+        std::fprintf(stderr, "[milestone] RUNTIME_INIT overlay de ReForge activo\n");
+        std::fprintf(stderr, "[milestone] FIRST_TITLE_FUNC codigo del titulo en ejecucion\n");
+        std::fprintf(stderr, "[milestone] FIRST_FRAME overlay dibujado sobre un fotograma presentado\n");
+        std::fprintf(stderr, "[render] presented %.0fx%.0f\n", io.DisplaySize.x, io.DisplaySize.y);
+        std::fflush(stderr); } }
     clock_.MaybeSave();
     slots_.Init(runtime_);
     if (!Config().guide_menu) return;
@@ -1262,6 +1270,9 @@ class GuideMenu {
     const bool home_key = ImGui::IsKeyPressed(ImGuiKey_Home, false);
     if ((pressed & kGuideButton) || home_key) {
       SetOpen(!open_);
+      if (open_) { static bool rf_menu = false; if (!rf_menu) { rf_menu = true;
+        std::fprintf(stderr, "[milestone] INTERACTIVE_MENU menu Guia abierto con el mando\n");
+        std::fflush(stderr); } }
     } else if (open_ && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
       SetOpen(false);
     }

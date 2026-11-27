@@ -66,13 +66,14 @@ page = SimpleNamespace(
     status_lbl=SimpleNamespace(setText=lambda text: mensajes.append(text)),
     play=lambda auto=False: plays.append(auto),
 )
-WorkshopPage._handle_crash(page, {"kind": "fatal", "path": logp, "lines": []}, o)
+WorkshopPage._handle_crash(page, {"kind": "fatal", "path": logp, "lines": [], "utf8": True}, o)
 for _ in range(60):
     app.processEvents()
     time.sleep(0.02)
-check(o.codegen_opt_level == "safe", "el cierre intermitente deja la optimización en «Segura» (no la apaga)")
-check(plays == [True], "vuelve a abrir el juego solo, sin recompilar")
-check(any("bug conocido del SDK" in m for m in mensajes), "el log explica que es un bug del SDK")
+check(o.codegen_opt_level == "safe", "el cierre por UTF-8 deja la optimización en «Segura» (no la apaga)")
+check(plays == [True], "vuelve a abrir el juego solo (para ver si es constante), sin recompilar")
+check(any("runtime/SDK" in m for m in mensajes),
+      "el log atribuye la causa al runtime/SDK (no al código recompilado), sin venderlo como carrera benigna")
 
 print("El aborto del runtime sin línea en el log tampoco baja la optimización")
 logp2 = os.path.join(TMP, "build", "logs", "juego_002.log")

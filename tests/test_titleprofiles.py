@@ -48,6 +48,26 @@ print("Aislamiento entre juegos: ningún hook/adaptación de Asura se cuela en o
 check(not any("SEH" in a for a in g.adaptations), "el perfil genérico no hereda adaptaciones de Asura")
 check(tp.resolve(otro).title_id != tp.ASURA.title_id, "otro Title ID no resuelve al perfil de Asura")
 
+print("Huella del XEX: dos revisiones del mismo Title ID comparten tema, no sus adaptaciones")
+demo = tp.TitleProfile(
+    id="demo", title_id="43430817", name="Demo", theme=tp.ASURA.theme,
+    adaptations=[
+        tp.Adaptation("Adaptación global (ambas revisiones)."),
+        tp.Adaptation("Parche solo de la revisión A.", variants=("aaaa1111",)),
+        tp.Adaptation("Parche solo de la revisión B.", variants=("bbbb2222",)),
+    ])
+revA = {"title_id": "43430817", "media_id": "", "version": "", "fingerprint": "aaaa1111"}
+revB = {"title_id": "43430817", "media_id": "", "version": "", "fingerprint": "bbbb2222"}
+adaptA = [a.text for a in demo.adaptations_for(revA)]
+adaptB = [a.text for a in demo.adaptations_for(revB)]
+check("Adaptación global (ambas revisiones)." in adaptA and "Adaptación global (ambas revisiones)." in adaptB,
+      "ambas revisiones reciben la adaptación global (y el mismo tema)")
+check("Parche solo de la revisión A." in adaptA and "Parche solo de la revisión A." not in adaptB,
+      "la revisión A recibe solo su parche")
+check("Parche solo de la revisión B." in adaptB and "Parche solo de la revisión B." not in adaptA,
+      "la revisión B recibe solo su parche")
+check(demo.theme is tp.ASURA.theme, "el tema se comparte entre revisiones")
+
 print("status muestra los DOS resultados por separado")
 tp.identity = lambda root: {"title_id": "43430817", "media_id": "", "version": ""}
 st = tp.status(root, p)
