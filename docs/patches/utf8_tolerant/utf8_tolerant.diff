@@ -1,0 +1,58 @@
+--- a/src/core/utf8.cpp
++++ b/src/core/utf8.cpp
+@@ -13,6 +13,7 @@
+ #include <cstdint>
+ #include <locale>
+ #include <numeric>
++#include <iterator>
+ #include <tuple>
+
+ #include <rex/string/utf8.h>
+@@ -23,16 +24,28 @@
+ namespace utfcpp = utf8;
+
+ using citer = std::string_view::const_iterator;
+-using utf8_citer = utfcpp::iterator<std::string_view::const_iterator>;
++using utf8_citer = utfcpp::unchecked::iterator<std::string_view::const_iterator>;
+
+ namespace rex::string {
+
+ std::string to_utf8(const std::u16string_view source) {
+-  return utfcpp::utf16to8(source);
++  // Tolerante: nunca lanzar por UTF-16 invalido (surrogates sueltos); caer a la version unchecked.
++  try {
++    return utfcpp::utf16to8(source);
++  } catch (...) {
++    std::string result;
++    utfcpp::unchecked::utf16to8(source.begin(), source.end(), std::back_inserter(result));
++    return result;
++  }
+ }
+
+ std::u16string to_utf16(const std::string_view source) {
+-  return utfcpp::utf8to16(source);
++  // Tolerante: reemplaza las secuencias UTF-8 invalidas por U+FFFD en vez de lanzar utf8::invalid_utf8.
++  // Un nombre de contenido (DLC/partida/TU) con bytes invalidos ya no tumba el hilo de despacho.
++  std::string sanitized;
++  sanitized.reserve(source.size());
++  utfcpp::replace_invalid(source.begin(), source.end(), std::back_inserter(sanitized));
++  return utfcpp::utf8to16(sanitized);
+ }
+
+ std::string to_string(char32_t c) {
+@@ -54,13 +67,11 @@ bool equal_ascii_case(const uint32_t l, const uint32_t r) {
+ }
+
+ std::pair<utf8_citer, utf8_citer> make_citer(const std::string_view view) {
+-  return {utf8_citer(view.cbegin(), view.cbegin(), view.cend()),
+-          utf8_citer(view.cend(), view.cbegin(), view.cend())};
++  return {utf8_citer(view.cbegin()), utf8_citer(view.cend())};
+ }
+
+ std::pair<utf8_citer, utf8_citer> make_citer(const utf8_citer begin, const utf8_citer end) {
+-  return {utf8_citer(begin.base(), begin.base(), end.base()),
+-          utf8_citer(end.base(), begin.base(), end.base())};
++  return {utf8_citer(begin.base()), utf8_citer(end.base())};
+ }
+
+ size_t byte_length(utf8_citer begin, utf8_citer end) {
