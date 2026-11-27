@@ -117,11 +117,10 @@ std::atomic<uint64_t> rf_deferred_counter{1};
 #define RF_RETURN_ADDRESS() __builtin_return_address(0)
 
 '@) -replace "`r`n","`n"
-$sig = (@'
-void KernelState::CompleteOverlappedDeferredEx(
-    std::function<X_RESULT(uint32_t&, uint32_t&)> completion_callback, uint32_t overlapped_ptr,
-'@) -replace "`r`n","`n"
-Apply1 $sig ($state + $sig) 'estado-de-traza'
+# El bucle del hilo de despacho y su REX_FATAL estan ANTES de CompleteOverlappedDeferredEx, asi que el estado de
+# traza se declara a ambito de archivo (tras este include), para estar en alcance tanto en el fatal como en el lambda.
+$ksInc = '#include <rex/system/kernel_state.h>'
+Apply1 $ksInc ($ksInc + "`n" + $state) 'estado-de-traza'
 # -- encolar: id/ra + log de encolado, justo antes del push_back --
 $enqOld = (@'
   auto global_lock = global_critical_region_.Acquire();
@@ -132,7 +131,7 @@ $enqNew = (@'
   const void* rf_ra = RF_RETURN_ADDRESS();
   REXSYS_WARN("[deferred] enqueue id={} ra={:016X} thread={:08X} overlapped={:08X}", rf_task_id,
               reinterpret_cast<uintptr_t>(rf_ra),
-              static_cast<uint32_t>(reinterpret_cast<uintptr_t>(XThread::GetCurrentThreadHandle())),
+              XThread::GetCurrentThreadHandle(),
               overlapped_ptr);
   auto global_lock = global_critical_region_.Acquire();
   dispatch_queue_.push_back(
