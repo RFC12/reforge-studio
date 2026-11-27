@@ -158,6 +158,9 @@ orig = os.path.join(rt, "AuthorLauncher.exe")
 open(orig, "wb").write(b"\0" * 100)
 abierto = {}
 cp.subprocess.Popen = lambda args, **k: abierto.update(args=args)
+# En Windows open_original usa os.startfile; en otros, Popen. Interceptar ambos caminos.
+if hasattr(cp.os, "startfile"):
+    cp.os.startfile = lambda p: abierto.update(args=[p])
 ok4, _ = cp.open_original(up, orig)
 check(ok4 and abierto.get("args", [None])[0] == orig, "abre el runtime original tal cual (su propio .exe/lanzador)")
 check(cp.saved_exe(up) == orig, "recuerda la ruta del runtime")
