@@ -202,7 +202,7 @@ $env:PATH = "$clang;$(Split-Path $ninjaExe);$env:PATH"
 # stderr se convierte en un error TERMINANTE (NativeCommandError) y aborta el script aunque el exit sea 0.
 # Mandamos SOLO por el codigo de salida: bajamos a 'Continue' durante las llamadas nativas y lo restauramos.
 $prevEAP = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-& $cmakeExe -S $sdkc -B $build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DREXGLUE_ENABLE_FIDELITYFX=$fx `
+& $cmakeExe -S $sdkc -B $build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo "-DREXGLUE_ENABLE_FIDELITYFX=$fx" `
         -DREXGLUE_BUILD_TESTS=OFF -DCMAKE_MAKE_PROGRAM="$ninjaExe" `
         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ 2>&1 | Tee-Object (Join-Path $diag 'cmake_configure.txt')
 $cfgExit = $LASTEXITCODE
