@@ -372,6 +372,149 @@ def apply_mouseaim(src):
     ])
 
 
+# ---------------------------------------------------------------- utf8 tolerante
+# El cierre/cuelgue `Dispatch thread: deferred completion threw 'Invalid UTF-8'` al enumerar contenido
+# (pantalla «Comprobando descargas de contenido…») viene de src/core/utf8.cpp: la API checked de utfcpp
+# LANZA utf8::invalid_utf8 cuando un nombre de contenido (DLC/TU/partida) o un nombre de archivo interno
+# del paquete trae bytes UTF-8 invalidos. El iterador checked lanza (crash) y el unchecked sobre-avanza
+# pasado el final (cuelgue). Este parche sustituye utf8_citer por un iterador propio TOLERANTE y acotado
+# (decodifica leniente: secuencia invalida/truncada -> U+FFFD avanzando solo los bytes disponibles, sin
+# pasar nunca de [start,end); nunca lanza, nunca entra en bucle) y hace to_utf16/to_utf8 tolerantes.
+# Va en rexruntime.dll. Imprescindible: si el nombre llega inválido, sin esto el juego no arranca.
+UTF8_INCLUDE_ANCHOR = "#include <tuple>\n"
+UTF8_INCLUDE_HOOK = "#include <iterator>\n#include <tuple>\n"
+
+UTF8_ITER_ANCHOR = "using utf8_citer = utfcpp::iterator<std::string_view::const_iterator>;\n"
+UTF8_ITER_HOOK = """\
+// --- ReForge: iterador UTF-8 TOLERANTE y acotado --------------------------------------------
+// Reemplaza a utfcpp::iterator (checked, que lanzaba utf8::invalid_utf8 ante bytes invalidos y
+// tumbaba el hilo de despacho al enumerar contenido con nombres mal formados) y evita tambien el
+// sobre-avance del iterador unchecked (que leia pasado el final y colgaba/crasheaba). Decodifica
+// de forma leniente: una secuencia invalida o truncada produce U+FFFD y avanza SOLO los bytes
+// disponibles, sin pasar nunca de [start, end). Nunca lanza, nunca entra en bucle.
+namespace rf_detail {
+inline int rf_seq_len(unsigned char c) {
+  if (c < 0x80) return 1;
+  if ((c & 0xE0) == 0xC0) return 2;
+  if ((c & 0xF0) == 0xE0) return 3;
+  if ((c & 0xF8) == 0xF0) return 4;
+  return 1;  // byte de continuacion suelto o lider invalido
+}
+}  // namespace rf_detail
+
+class utf8_citer {
+ public:
+  using iterator_category = std::bidirectional_iterator_tag;
+  using value_type = char32_t;
+  using difference_type = std::ptrdiff_t;
+  using pointer = const char32_t*;
+  using reference = char32_t;
+  using octet_iterator = std::string_view::const_iterator;
+
+  utf8_citer() = default;
+  utf8_citer(octet_iterator it, octet_iterator start, octet_iterator end)
+      : it_(it), start_(start), end_(end) {}
+
+  octet_iterator base() const { return it_; }
+
+  char32_t operator*() const {
+    unsigned char c0 = static_cast<unsigned char>(*it_);
+    int len = rf_detail::rf_seq_len(c0);
+    if (len == 1) return c0 < 0x80 ? char32_t(c0) : char32_t(0xFFFD);
+    char32_t cp = static_cast<char32_t>(c0 & (0x3F >> (len - 1)));
+    octet_iterator q = it_;
+    ++q;
+    for (int i = 1; i < len; ++i) {
+      if (q == end_) return 0xFFFD;
+      unsigned char cc = static_cast<unsigned char>(*q);
+      if ((cc & 0xC0) != 0x80) return 0xFFFD;
+      cp = (cp << 6) | (cc & 0x3F);
+      ++q;
+    }
+    return cp;
+  }
+
+  utf8_citer& operator++() {
+    int len = rf_detail::rf_seq_len(static_cast<unsigned char>(*it_));
+    ++it_;  // siempre avanza al menos 1 byte
+    for (int i = 1; i < len && it_ != end_; ++i) {
+      if ((static_cast<unsigned char>(*it_) & 0xC0) != 0x80) break;  // continuacion rota
+      ++it_;
+    }
+    return *this;
+  }
+  utf8_citer operator++(int) { utf8_citer t = *this; ++(*this); return t; }
+
+  utf8_citer& operator--() {
+    --it_;  // retrocede al inicio del codepoint anterior (salta hasta 3 bytes de continuacion)
+    for (int i = 0; i < 3 && it_ != start_ &&
+                    (static_cast<unsigned char>(*it_) & 0xC0) == 0x80;
+         ++i) {
+      --it_;
+    }
+    return *this;
+  }
+  utf8_citer operator--(int) { utf8_citer t = *this; --(*this); return t; }
+
+  bool operator==(const utf8_citer& o) const { return it_ == o.it_; }
+  bool operator!=(const utf8_citer& o) const { return it_ != o.it_; }
+
+ private:
+  octet_iterator it_{};
+  octet_iterator start_{};
+  octet_iterator end_{};
+};
+"""
+
+UTF8_TO8_ANCHOR = """\
+std::string to_utf8(const std::u16string_view source) {
+  return utfcpp::utf16to8(source);
+}
+"""
+UTF8_TO8_HOOK = """\
+std::string to_utf8(const std::u16string_view source) {
+  // ReForge: tolerante. Nunca lanzar por UTF-16 invalido (surrogates sueltos); caer a unchecked.
+  try {
+    return utfcpp::utf16to8(source);
+  } catch (...) {
+    std::string result;
+    utfcpp::unchecked::utf16to8(source.begin(), source.end(), std::back_inserter(result));
+    return result;
+  }
+}
+"""
+
+UTF8_TO16_ANCHOR = """\
+std::u16string to_utf16(const std::string_view source) {
+  return utfcpp::utf8to16(source);
+}
+"""
+UTF8_TO16_HOOK = """\
+std::u16string to_utf16(const std::string_view source) {
+  // ReForge: tolerante. Reemplaza las secuencias UTF-8 invalidas por U+FFFD en vez de lanzar
+  // utf8::invalid_utf8: un nombre de contenido con bytes invalidos ya no tumba el hilo de despacho.
+  std::string sanitized;
+  sanitized.reserve(source.size());
+  utfcpp::replace_invalid(source.begin(), source.end(), std::back_inserter(sanitized));
+  return utfcpp::utf8to16(sanitized);
+}
+"""
+
+
+def apply_utf8_tolerant(src):
+    """utf8.cpp tolerante: un nombre de contenido (DLC/TU/partida) con bytes UTF-8 invalidos ya no tumba
+    ni cuelga el hilo de despacho al enumerar contenido. Va en rexruntime.dll."""
+    path = os.path.join(src, "src", "core", "utf8.cpp")
+    if not os.path.isfile(path):
+        raise PatchFileMissing("src/core/utf8.cpp no está donde se esperaba (SDK reorganizado)")
+    return _patch_text(path, [
+        (UTF8_INCLUDE_ANCHOR, UTF8_INCLUDE_HOOK, "#include <iterator>"),
+        (UTF8_ITER_ANCHOR, UTF8_ITER_HOOK, "class utf8_citer"),
+        (UTF8_TO8_ANCHOR, UTF8_TO8_HOOK, "ReForge: tolerante. Nunca lanzar por UTF-16"),
+        (UTF8_TO16_ANCHOR, UTF8_TO16_HOOK, "utfcpp::replace_invalid(source.begin()"),
+    ])
+
+
 # (clave, función, ¿imprescindible?). Un parche no imprescindible que no encaje en una versión nueva
 # del SDK se salta con un aviso en vez de tumbar toda la compilación: así ReForge sigue sirviendo con las
 # versiones nuevas de rexglue aunque un parche cosmético haya quedado desfasado por un cambio del código.
@@ -381,6 +524,7 @@ PATCHES = (
     ("compilación de shaders en segundo plano", apply_asyncpso, False),
     ("puntería con el ratón", apply_mouseaim, False),
     ("el arranque tolera funciones fuera del módulo", apply_funcmap_tolerant, True),
+    ("nombres de contenido UTF-8 inválidos no tumban el runtime", apply_utf8_tolerant, True),
     ("un resolve vacío no aborta el frame", apply_resolve_noop, False),
     ("precompilar shaders al cargar (AOT)", apply_shader_prewarm, False),
 )
