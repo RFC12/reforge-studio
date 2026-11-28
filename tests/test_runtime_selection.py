@@ -141,4 +141,28 @@ cfg_ok = FakeCfg(_sdk_prefix("rex::runtime"))
 ok_flag, needed, prefix = sdkcompat.check(cfg_ok, _project("rex::runtime"))
 check(ok_flag is True and needed == {"rex::runtime"}, "SDK que provee rex::runtime pasa sin cambios")
 
+
+# ----------------------------------------------------------------------------- C) SDK -fsr en caché
+# El agujero de "instalación con un -fsr anterior": ReForge solo compila el runtime con los parches cuando
+# construye el -fsr. Si ya hay uno instalado (compilado antes del fix), hay que detectarlo para ofrecer
+# recompilarlo; si no, seguiría copiando un rexruntime.dll sin las correcciones.
+from reforge import fidelityfx, sdk_patch  # noqa: E402
+
+print("C) Un -fsr instalado con parches anteriores se detecta como desfasado")
+pfx = tempfile.mkdtemp(prefix="reforge-fsr-")
+check(fidelityfx.patchset_of(pfx) == 0, "sin marca → patchset 0 (desconocido)")
+check(fidelityfx.fsr_outdated("0.10.0.24-dev.gbd833a2-fsr", pfx) is True,
+      "-fsr sin marca → desfasado (hay que recompilarlo para traer el fix)")
+with open(os.path.join(pfx, fidelityfx.PATCHSET_MARKER), "w", encoding="utf-8") as f:
+    f.write("1")
+check(fidelityfx.fsr_outdated("0.10.0.24-dev.gbd833a2-fsr", pfx) is True,
+      "-fsr con patchset 1 < actual → desfasado")
+with open(os.path.join(pfx, fidelityfx.PATCHSET_MARKER), "w", encoding="utf-8") as f:
+    f.write(str(sdk_patch.PATCHSET_VERSION))
+check(fidelityfx.patchset_of(pfx) == sdk_patch.PATCHSET_VERSION, "lee la marca de patchset grabada")
+check(fidelityfx.fsr_outdated("0.10.0.24-dev.gbd833a2-fsr", pfx) is False,
+      "-fsr al día (patchset == actual) → NO desfasado")
+check(fidelityfx.fsr_outdated("0.10.0.24-dev.gbd833a2", pfx) is False,
+      "un SDK que no es -fsr nunca se marca como desfasado por esto")
+
 print(f"\nTodas las pruebas pasaron ({ok}).")

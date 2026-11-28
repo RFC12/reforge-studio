@@ -593,15 +593,27 @@ class EnvPage(QWidget):
         version = os.path.basename(os.path.dirname(prefix)) if prefix else ""
         if not version:
             return QMessageBox.information(self, "FSR / CAS", "Primero instala o elige un SDK de rexglue.")
-        if fidelityfx.is_fsr_version(version):
-            return QMessageBox.information(self, "FSR / CAS", f"Ya usas rexglue {version}, con FSR y CAS.")
-        r = QMessageBox.question(
-            self, "Compilar rexglue con FSR / CAS",
-            f"Se compilará rexglue {version} con AMD FidelityFX (FSR 1 y CAS dentro de los juegos).\n\n"
-            "• Una sola vez por PC: unos 20-40 minutos y unos 10 GB libres en el disco.\n"
-            "• Necesita internet (código de rexglue, sus dependencias y FidelityFX).\n"
-            "• Deja una copia en Documentos\\ReForgeStudio\\Respaldo para reinstalar sin compilar.\n\n"
-            "Después, cada juego se recompila solo la próxima vez que pulses ▶ Jugar.\n\n¿Empezar?")
+        stale = fidelityfx.fsr_outdated(version, prefix)
+        if fidelityfx.is_fsr_version(version) and not stale:
+            return QMessageBox.information(self, "FSR / CAS", f"Ya usas rexglue {version}, con FSR y CAS al día.")
+        if stale:
+            # -fsr ya instalado pero compilado con una versión anterior de los parches de ReForge: su
+            # rexruntime.dll no trae las correcciones nuevas. Se ofrece recompilarlo para incorporarlas.
+            r = QMessageBox.question(
+                self, "Actualizar rexglue FSR / CAS",
+                f"Tu rexglue {version} (con FSR/CAS) se compiló con una versión anterior de los parches de "
+                "ReForge, así que su rexruntime.dll no trae las correcciones más nuevas del runtime (p. ej. "
+                "el arreglo del cierre al «Comprobar descargas de contenido»).\n\n"
+                "Para incorporarlas hay que recompilarlo (~20-40 min, una vez; necesita internet). Tus "
+                "partidas, DLC y configuración no se tocan.\n\n¿Recompilar ahora?")
+        else:
+            r = QMessageBox.question(
+                self, "Compilar rexglue con FSR / CAS",
+                f"Se compilará rexglue {version} con AMD FidelityFX (FSR 1 y CAS dentro de los juegos).\n\n"
+                "• Una sola vez por PC: unos 20-40 minutos y unos 10 GB libres en el disco.\n"
+                "• Necesita internet (código de rexglue, sus dependencias y FidelityFX).\n"
+                "• Deja una copia en Documentos\\ReForgeStudio\\Respaldo para reinstalar sin compilar.\n\n"
+                "Después, cada juego se recompila solo la próxima vez que pulses ▶ Jugar.\n\n¿Empezar?")
         if r != QMessageBox.StandardButton.Yes:
             return
 

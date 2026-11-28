@@ -19,6 +19,27 @@ from . import toolchain
 
 REPO_URL = "https://github.com/rexglue/rexglue-sdk"
 FSR_SUFFIX = "-fsr"
+# Marca con la versión del juego de parches (sdk_patch.PATCHSET_VERSION) con que se compiló un -fsr.
+PATCHSET_MARKER = "reforge_patchset.txt"
+
+
+def patchset_of(prefix):
+    """Versión del juego de parches con que se compiló el -fsr instalado en `prefix` (0 si no hay marca)."""
+    try:
+        with open(os.path.join(prefix, PATCHSET_MARKER), encoding="utf-8") as f:
+            return int((f.read() or "0").strip())
+    except (OSError, ValueError):
+        return 0
+
+
+def fsr_outdated(version, prefix):
+    """¿El -fsr instalado en `prefix` se compiló con una versión de parches anterior a la actual?
+
+    True solo para un -fsr realmente desfasado (hay correcciones del runtime que aún no trae). Un -fsr al
+    día, o un SDK que no es -fsr, devuelven False.
+    """
+    from . import sdk_patch
+    return is_fsr_version(version) and patchset_of(prefix) < sdk_patch.PATCHSET_VERSION
 
 
 def vulkan_sdk_present(env=None):
@@ -202,6 +223,15 @@ def build(cfg, version, ctx):
     if not runtime or not any(b"Guest output effect: bilinear, cas, fsr" in open(p, "rb").read() for p in runtime):
         raise RuntimeError("El SDK se compiló pero sin FidelityFX (revisa el log de cmake: puede faltar una "
                            "dependencia de AMD FidelityFX).")
+    # Marca de la versión del juego de parches con que se compiló este runtime. Se escribe DENTRO del árbol
+    # instalado para que viaje también en el zip de respaldo (así un reinstalar-sin-compilar no "pierde" la
+    # versión y no parece desfasado). Permite a ReForge detectar un -fsr viejo y ofrecer recompilarlo.
+    from . import sdk_patch
+    try:
+        with open(os.path.join(installed, PATCHSET_MARKER), "w", encoding="utf-8") as f:
+            f.write(str(sdk_patch.PATCHSET_VERSION))
+    except OSError:
+        pass
     # zip de respaldo (para reinstalar sin compilar, también tras formatear) e instalación en ReForge
     os.makedirs(backup_dir(), exist_ok=True)
     fsr_version = str(version).removesuffix(FSR_SUFFIX) + FSR_SUFFIX

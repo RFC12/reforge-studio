@@ -15,6 +15,13 @@ Idempotente: se puede aplicar varias veces sobre el mismo árbol.
 import os
 import shutil
 
+# Versión del juego de parches. Se sube cuando se añade o cambia un parche que va en el runtime y que
+# conviene que llegue a los usuarios con un -fsr ya instalado. fidelityfx.build la graba junto al SDK
+# -fsr que compila; si un -fsr instalado quedó con una versión menor, ReForge lo detecta y ofrece
+# recompilarlo (si no, un -fsr viejo seguiría copiando un rexruntime.dll sin las correcciones nuevas).
+#   v2: parche utf8 tolerante (apply_utf8_tolerant) — arregla el cierre 'Invalid UTF-8' al enumerar contenido.
+PATCHSET_VERSION = 2
+
 HERE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sdk_patches")
 TEXSWAP_TAG = "reforge_texswap"
 INCLUDE_ANCHOR = "#include <rex/graphics/pipeline/texture/util.h>\n"
