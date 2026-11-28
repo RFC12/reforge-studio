@@ -418,6 +418,7 @@ class utf8_citer {
   octet_iterator base() const { return it_; }
 
   char32_t operator*() const {
+    if (it_ == end_) return 0xFFFD;  // defensivo: nunca derefenciar end
     unsigned char c0 = static_cast<unsigned char>(*it_);
     int len = rf_detail::rf_seq_len(c0);
     if (len == 1) return c0 < 0x80 ? char32_t(c0) : char32_t(0xFFFD);
@@ -431,10 +432,15 @@ class utf8_citer {
       cp = (cp << 6) | (cc & 0x3F);
       ++q;
     }
+    // Rechaza como U+FFFD: overlong (por debajo del minimo para esa longitud),
+    // fuera del rango Unicode (> U+10FFFF) y los surrogates D800..DFFF codificados en UTF-8.
+    static const char32_t kMin[5] = {0, 0, 0x80, 0x800, 0x10000};
+    if (cp < kMin[len] || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return 0xFFFD;
     return cp;
   }
 
   utf8_citer& operator++() {
+    if (it_ == end_) return *this;  // defensivo
     int len = rf_detail::rf_seq_len(static_cast<unsigned char>(*it_));
     ++it_;  // siempre avanza al menos 1 byte
     for (int i = 1; i < len && it_ != end_; ++i) {
@@ -446,6 +452,7 @@ class utf8_citer {
   utf8_citer operator++(int) { utf8_citer t = *this; ++(*this); return t; }
 
   utf8_citer& operator--() {
+    if (it_ == start_) return *this;  // no hay codepoint anterior: no leer antes de [start]
     --it_;  // retrocede al inicio del codepoint anterior (salta hasta 3 bytes de continuacion)
     for (int i = 0; i < 3 && it_ != start_ &&
                     (static_cast<unsigned char>(*it_) & 0xC0) == 0x80;
@@ -473,14 +480,46 @@ std::string to_utf8(const std::u16string_view source) {
 """
 UTF8_TO8_HOOK = """\
 std::string to_utf8(const std::u16string_view source) {
-  // ReForge: tolerante. Nunca lanzar por UTF-16 invalido (surrogates sueltos); caer a unchecked.
-  try {
-    return utfcpp::utf16to8(source);
-  } catch (...) {
-    std::string result;
-    utfcpp::unchecked::utf16to8(source.begin(), source.end(), std::back_inserter(result));
-    return result;
+  // ReForge: tolerante y ACOTADO. UTF-16 -> UTF-8 sin lanzar, codificando cada codepoint a mano.
+  // Un surrogate alto aislado o truncado al final, o un surrogate bajo aislado, produce U+FFFD en vez
+  // de una secuencia invalida (lo que hacia utfcpp::unchecked::utf16to8, que no valida los surrogates).
+  std::string out;
+  out.reserve(source.size());
+  auto emit = [&out](char32_t cp) {
+    if (cp < 0x80) {
+      out.push_back(static_cast<char>(cp));
+    } else if (cp < 0x800) {
+      out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+      out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else if (cp < 0x10000) {
+      out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+      out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+      out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else {
+      out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+      out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+      out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+      out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    }
+  };
+  for (size_t i = 0; i < source.size();) {
+    char16_t u = source[i++];
+    char32_t cp;
+    if (u >= 0xD800 && u <= 0xDBFF) {  // surrogate alto
+      if (i < source.size() && source[i] >= 0xDC00 && source[i] <= 0xDFFF) {
+        char16_t lo = source[i++];
+        cp = 0x10000u + ((static_cast<char32_t>(u - 0xD800) << 10) | (lo - 0xDC00));
+      } else {
+        cp = 0xFFFD;  // alto aislado o truncado al final
+      }
+    } else if (u >= 0xDC00 && u <= 0xDFFF) {
+      cp = 0xFFFD;  // bajo aislado
+    } else {
+      cp = u;
+    }
+    emit(cp);
   }
+  return out;
 }
 """
 
@@ -510,7 +549,7 @@ def apply_utf8_tolerant(src):
     return _patch_text(path, [
         (UTF8_INCLUDE_ANCHOR, UTF8_INCLUDE_HOOK, "#include <iterator>"),
         (UTF8_ITER_ANCHOR, UTF8_ITER_HOOK, "class utf8_citer"),
-        (UTF8_TO8_ANCHOR, UTF8_TO8_HOOK, "ReForge: tolerante. Nunca lanzar por UTF-16"),
+        (UTF8_TO8_ANCHOR, UTF8_TO8_HOOK, "ReForge: tolerante y ACOTADO. UTF-16 -> UTF-8"),
         (UTF8_TO16_ANCHOR, UTF8_TO16_HOOK, "utfcpp::replace_invalid(source.begin()"),
     ])
 

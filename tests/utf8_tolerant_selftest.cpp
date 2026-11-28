@@ -1,13 +1,13 @@
-// Prueba de comportamiento del iterador UTF-8 TOLERANTE que el parche sdk_patch.apply_utf8_tolerant
-// inserta en src/core/utf8.cpp. Ejercita secuencias UTF-8 invalidas y truncadas y comprueba que:
-//   - nunca lanza,
-//   - una secuencia invalida/truncada produce U+FFFD,
-//   - operator++ NUNCA avanza mas alla de end (la causa del cuelgue con el iterador unchecked),
-//   - recorrer un buffer arbitrario (incluido basura) SIEMPRE termina en end exacto,
-//   - operator-- vuelve al inicio del codepoint anterior.
-// La clase es identica a la que inserta el parche: si alguien la cambia y la rompe, esto lo caza.
+// Prueba de comportamiento del iterador UTF-8 TOLERANTE y de to_utf8 acotado que el parche
+// sdk_patch.apply_utf8_tolerant inserta en src/core/utf8.cpp. La clase y to_utf8 son copia textual
+// de lo que inserta el parche: si alguien los cambia y los rompe, esto lo caza.
+// Comprueba, sin lanzar ni pasar de los limites:
+//   - validos decodifican bien y operator++ avanza los bytes correctos,
+//   - invalido/truncado/overlong/fuera de rango/surrogate -> U+FFFD,
+//   - operator++ NUNCA pasa de end (causa del cuelgue con unchecked); recorrer basura SIEMPRE termina,
+//   - operator-- no lee antes de [start] y hace round-trip en datos validos,
+//   - to_utf8: par surrogate valido -> 4 bytes; alto aislado/truncado o bajo aislado -> U+FFFD.
 // Compila sin rexglue ni utfcpp:  c++ -std=c++20 utf8_tolerant_selftest.cpp -o x && ./x
-#include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <iterator>
@@ -42,6 +42,7 @@ class utf8_citer {
   octet_iterator base() const { return it_; }
 
   char32_t operator*() const {
+    if (it_ == end_) return 0xFFFD;
     unsigned char c0 = static_cast<unsigned char>(*it_);
     int len = rf_detail::rf_seq_len(c0);
     if (len == 1) return c0 < 0x80 ? char32_t(c0) : char32_t(0xFFFD);
@@ -55,10 +56,13 @@ class utf8_citer {
       cp = (cp << 6) | (cc & 0x3F);
       ++q;
     }
+    static const char32_t kMin[5] = {0, 0, 0x80, 0x800, 0x10000};
+    if (cp < kMin[len] || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return 0xFFFD;
     return cp;
   }
 
   utf8_citer& operator++() {
+    if (it_ == end_) return *this;
     int len = rf_detail::rf_seq_len(static_cast<unsigned char>(*it_));
     ++it_;
     for (int i = 1; i < len && it_ != end_; ++i) {
@@ -70,6 +74,7 @@ class utf8_citer {
   utf8_citer operator++(int) { utf8_citer t = *this; ++(*this); return t; }
 
   utf8_citer& operator--() {
+    if (it_ == start_) return *this;
     --it_;
     for (int i = 0; i < 3 && it_ != start_ &&
                     (static_cast<unsigned char>(*it_) & 0xC0) == 0x80;
@@ -88,86 +93,84 @@ class utf8_citer {
   octet_iterator start_{};
   octet_iterator end_{};
 };
-// ---- FIN: copia del iterador del parche ----
+// ---- FIN iterador ----
 
-static std::pair<utf8_citer, utf8_citer> make_citer(std::string_view v) {
-  return {utf8_citer(v.cbegin(), v.cbegin(), v.cend()),
-          utf8_citer(v.cend(), v.cbegin(), v.cend())};
+// ---- INICIO: copia textual de to_utf8 del parche (debe coincidir con UTF8_TO8_HOOK) ----
+static std::string to_utf8(std::u16string_view source) {
+  std::string out;
+  out.reserve(source.size());
+  auto emit = [&out](char32_t cp) {
+    if (cp < 0x80) { out.push_back(static_cast<char>(cp)); }
+    else if (cp < 0x800) { out.push_back(static_cast<char>(0xC0 | (cp >> 6))); out.push_back(static_cast<char>(0x80 | (cp & 0x3F))); }
+    else if (cp < 0x10000) { out.push_back(static_cast<char>(0xE0 | (cp >> 12))); out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F))); out.push_back(static_cast<char>(0x80 | (cp & 0x3F))); }
+    else { out.push_back(static_cast<char>(0xF0 | (cp >> 18))); out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F))); out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F))); out.push_back(static_cast<char>(0x80 | (cp & 0x3F))); }
+  };
+  for (size_t i = 0; i < source.size();) {
+    char16_t u = source[i++];
+    char32_t cp;
+    if (u >= 0xD800 && u <= 0xDBFF) {
+      if (i < source.size() && source[i] >= 0xDC00 && source[i] <= 0xDFFF) { char16_t lo = source[i++]; cp = 0x10000u + ((static_cast<char32_t>(u - 0xD800) << 10) | (lo - 0xDC00)); }
+      else { cp = 0xFFFD; }
+    } else if (u >= 0xDC00 && u <= 0xDFFF) { cp = 0xFFFD; }
+    else { cp = u; }
+    emit(cp);
+  }
+  return out;
 }
+// ---- FIN to_utf8 ----
 
+static std::pair<utf8_citer, utf8_citer> mk(std::string_view v) {
+  return {utf8_citer(v.cbegin(), v.cbegin(), v.cend()), utf8_citer(v.cend(), v.cbegin(), v.cend())};
+}
 static int fails = 0;
-static void check(bool c, const char* m) {
-  std::printf(c ? "  ok  %s\n" : "  FAIL %s\n", m);
-  if (!c) ++fails;
-}
-
-// Decodifica un solo codepoint y devuelve (cp, bytes_avanzados).
-static std::pair<char32_t, long> one(std::string_view v) {
-  auto [b, e] = make_citer(v);
-  char32_t cp = *b;
-  auto nb = b;
-  ++nb;
-  return {cp, nb.base() - b.base()};
-}
+static void check(bool c, const char* m) { std::printf(c ? "  ok  %s\n" : "  FAIL %s\n", m); if (!c) ++fails; }
+static char32_t one(std::string_view v) { auto [b, e] = mk(v); (void)e; return *b; }
+static long adv(std::string_view v) { auto [b, e] = mk(v); (void)e; auto n = b; ++n; return n.base() - b.base(); }
 
 int main() {
-  // 1) Validos: codepoint y avance correctos
-  { auto [cp, n] = one("A"); check(cp == U'A' && n == 1, "ASCII 'A' -> 1 byte"); }
-  { auto [cp, n] = one("\xC3\xA9"); check(cp == 0xE9 && n == 2, "'e aguda' (C3 A9) -> U+00E9, 2 bytes"); }
-  { auto [cp, n] = one("\xE2\x82\xAC"); check(cp == 0x20AC && n == 3, "euro (E2 82 AC) -> U+20AC, 3 bytes"); }
-  { auto [cp, n] = one("\xF0\x9D\x84\x9E"); check(cp == 0x1D11E && n == 4, "clave de sol -> U+1D11E, 4 bytes"); }
-
-  // 2) Invalidos: U+FFFD y avance de 1 byte (no se come bytes buenos de mas)
-  { auto [cp, n] = one("\xA9"); check(cp == 0xFFFD && n == 1, "continuacion suelta (A9) -> U+FFFD, 1 byte"); }
-  { auto [cp, n] = one("\xFF"); check(cp == 0xFFFD && n == 1, "0xFF (lider invalido) -> U+FFFD, 1 byte"); }
-
-  // 3) TRUNCADO: lider de 3 bytes con solo 2 disponibles antes de end.
-  //    operator* -> U+FFFD; operator++ NO pasa de end (esto colgaba con unchecked).
+  // validos
+  check(one("A") == U'A' && adv("A") == 1, "ASCII 'A' -> 1 byte");
+  check(one("\xC3\xA9") == 0xE9 && adv("\xC3\xA9") == 2, "C3 A9 -> U+00E9, 2 bytes");
+  check(one("\xE2\x82\xAC") == 0x20AC && adv("\xE2\x82\xAC") == 3, "euro -> U+20AC, 3 bytes");
+  check(one("\xF0\x9D\x84\x9E") == 0x1D11E && adv("\xF0\x9D\x84\x9E") == 4, "clave de sol -> U+1D11E, 4 bytes");
+  // invalidos simples
+  check(one(std::string_view("\xA9", 1)) == 0xFFFD, "continuacion suelta -> U+FFFD");
+  check(one(std::string_view("\xFF", 1)) == 0xFFFD, "0xFF lider invalido -> U+FFFD");
+  // overlong
+  check(one(std::string_view("\xC0\x80", 2)) == 0xFFFD, "overlong C0 80 -> U+FFFD");
+  check(one(std::string_view("\xE0\x80\x80", 3)) == 0xFFFD, "overlong E0 80 80 -> U+FFFD");
+  // surrogate codificado en UTF-8 (ED A0 80 = U+D800)
+  check(one(std::string_view("\xED\xA0\x80", 3)) == 0xFFFD, "surrogate ED A0 80 -> U+FFFD");
+  // fuera del rango Unicode
+  check(one(std::string_view("\xF4\x90\x80\x80", 4)) == 0xFFFD, "fuera de rango F4 90 -> U+FFFD");
+  check(one(std::string_view("\xF5\x80\x80\x80", 4)) == 0xFFFD, "fuera de rango F5 -> U+FFFD");
+  // truncado: lider de 3 con solo 2 bytes -> U+FFFD y ++ no pasa de end
   {
-    std::string_view v("\xE2\x82", 2);
-    auto [b, e] = make_citer(v);
-    check(*b == 0xFFFD, "truncado (E2 82) -> U+FFFD");
-    ++b;
-    check(b.base() <= e.base(), "++ sobre truncado no pasa de end");
-    check(b == e, "++ sobre truncado llega EXACTO a end");
+    std::string_view v("\xE2\x82", 2); auto [b, e] = mk(v);
+    check(*b == 0xFFFD, "truncado E2 82 -> U+FFFD"); ++b;
+    check(b.base() <= e.base() && b == e, "++ sobre truncado llega EXACTO a end (sin pasar)");
   }
-  // lider que pide continuacion pero el siguiente byte NO es continuacion
+  // E2 seguido de no-continuacion: FFFD y la 'A' no se consume
+  { std::string_view v("\xE2\x41\x42", 3); auto [b, e] = mk(v); (void)e; check(*b == 0xFFFD, "E2 roto -> U+FFFD"); ++b; check(*b == U'A', "la 'A' no se comio"); }
+  // basura arbitraria: recorrer siempre termina en end, nunca pasa de end
   {
-    std::string_view v("\xE2\x41\x42", 3);  // E2 (pide 2 mas) seguido de 'A' 'B'
-    auto [b, e] = make_citer(v);
-    check(*b == 0xFFFD, "E2 seguido de no-continuacion -> U+FFFD");
-    ++b;
-    check(*b == U'A', "tras E2 roto, el siguiente es 'A' (no se comio la 'A')");
-  }
-
-  // 4) Recorrer basura arbitraria SIEMPRE termina en end exacto y nunca pasa de end.
-  {
-    std::vector<unsigned char> bytes;
-    for (int i = 0; i < 2000; ++i) bytes.push_back((unsigned char)((i * 2654435761u) >> 13));
+    std::vector<unsigned char> bytes; for (int i = 0; i < 3000; ++i) bytes.push_back((unsigned char)((i * 2654435761u) >> 11));
     std::string_view v(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-    auto [b, e] = make_citer(v);
-    long steps = 0, maxsteps = (long)bytes.size() + 8;
-    bool overran = false;
-    for (; b != e && steps < maxsteps; ++b, ++steps) {
-      (void)*b;                         // no debe lanzar ni leer fuera
-      if (b.base() > e.base()) { overran = true; break; }
-    }
-    check(!overran, "basura: base() nunca pasa de end");
-    check(b == e, "basura: el recorrido termina EXACTO en end (sin bucle infinito)");
-    check(steps <= (long)bytes.size(), "basura: pasos <= bytes (cada paso avanza >=1)");
+    auto [b, e] = mk(v); long steps = 0; bool over = false;
+    for (; b != e && steps < (long)bytes.size() + 8; ++b, ++steps) { (void)*b; if (b.base() > e.base()) { over = true; break; } }
+    check(!over && b == e && steps <= (long)bytes.size(), "basura: termina EXACTO en end, sin pasar, sin bucle");
   }
-
-  // 5) operator-- vuelve al inicio del codepoint anterior (datos validos)
+  // operator-- no lee antes de start y hace round-trip en datos validos
   {
-    std::string_view v("A\xE2\x82\xAC""Z");  // 'A', euro(3B), 'Z'
-    auto [b, e] = make_citer(v);
-    auto it = b; ++it; ++it;                  // b=A, +1=euro, +1=Z
-    check(*it == U'Z', "posicionado en 'Z'");
-    --it;                                      // debe volver al euro (saltando 2 continuacion)
-    check(*it == 0x20AC, "-- vuelve al euro (inicio del codepoint anterior)");
-    --it;
-    check(*it == U'A', "-- vuelve a 'A'");
+    std::string_view v("A\xE2\x82\xAC""Z"); auto [b, e] = mk(v); (void)e; auto it = b; ++it; ++it;
+    check(*it == U'Z', "en Z"); --it; check(*it == 0x20AC, "-- euro"); --it; check(*it == U'A', "-- A");
+    --it; check(it == b, "-- en start es no-op (no lee antes de [start])");
   }
+  // to_utf8 acotado
+  { char16_t s[] = {0xD834, 0xDD1E}; check(to_utf8(std::u16string_view(s, 2)) == "\xF0\x9D\x84\x9E", "to_utf8 par surrogate -> clave de sol"); }
+  { char16_t s[] = {0xD834, 0x0041}; check(to_utf8(std::u16string_view(s, 2)) == "\xEF\xBF\xBD""A", "to_utf8 alto aislado -> U+FFFD + 'A'"); }
+  { char16_t s[] = {0xDD1E};        check(to_utf8(std::u16string_view(s, 1)) == "\xEF\xBF\xBD", "to_utf8 bajo aislado -> U+FFFD"); }
+  { char16_t s[] = {0xD834};        check(to_utf8(std::u16string_view(s, 1)) == "\xEF\xBF\xBD", "to_utf8 alto truncado al final -> U+FFFD"); }
 
   std::printf(fails ? "\nFALLARON %d\n" : "\nTodas las pruebas C++ pasaron\n", fails);
   return fails ? 1 : 0;

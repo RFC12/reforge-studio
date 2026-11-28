@@ -44,7 +44,7 @@ changed = sdk_patch.apply_utf8_tolerant(src)
 txt = open(u8, encoding="utf-8").read()
 check(changed is True, "apply_utf8_tolerant cambia el archivo")
 for marker in ("#include <iterator>", "class utf8_citer", "rf_detail::rf_seq_len",
-               "utfcpp::replace_invalid(source.begin()", "ReForge: tolerante. Nunca lanzar por UTF-16"):
+               "utfcpp::replace_invalid(source.begin()", "ReForge: tolerante y ACOTADO. UTF-16 -> UTF-8"):
     check(marker in txt, f"marcador presente: {marker!r}")
 check("using utf8_citer = utfcpp::iterator<" not in txt, "el iterador checked viejo fue reemplazado")
 
